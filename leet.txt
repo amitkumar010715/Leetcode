@@ -1,0 +1,114 @@
+Sure! Let's break down and solve the **Unique Length-3 Palindromic Subsequences** problem:
+
+---
+
+### 1. **Short Summary**
+
+Given a string, find **the number of unique palindromic subsequences of length 3** (i.e., strings of the form `aba`). Each such sequence should only be counted once, no matter how many ways to form it.
+
+---
+
+### 2. **Constraints & Edge Cases**
+
+- String length: 3 ≤ s.length ≤ 10⁵ — must be O(N) solution, no brute-force.
+- Only lowercase letters.
+- Need to count unique sequences (`aba` is the same no matter which 'b' is chosen).
+- Edge Cases:
+    - String of less than 3 characters → zero answer.
+    - Input with all characters the same ("aaa...") → only one unique palindrome 'aaa'.
+    - Input with no repeating characters ("abc") → answer is 0.
+
+---
+
+### 3. **Optimal Algorithm**
+
+#### **Observations:**
+- A palindromic length-3 subsequence is of the form `aba` where `a` is any letter, `b` any letter (can be same as or different from `a`), and you can delete any number of characters between them.
+- For `aba` to exist, the string must have at least two occurrences of `a` with a `b` between them.
+
+#### **Approach:**
+
+For each possible pair `(a, b)` (where `a` and `b` range over 'a' to 'z'):
+1. Find, for each letter `a`, the **first and last index** it appears at in `s`.
+2. For each letter `a`, if it appears at least twice (`first[a] < last[a]`), check for all possible `b` if there is at least one occurrence of `b` **between** `first[a]+1` and `last[a]-1` (as the middle character).
+3. For each such triplet `(a, b, a)` found, count it as a unique palindrome.
+
+#### **Implementation Plan:**
+- For each letter `a`, store its first and last occurrence.
+- Preprocess prefix sums (or use a hash set or array) for characters between each pair.
+- For each `a`, for each `b`, check if `b` appears in between.
+
+**This is O(26*26 + N), which is efficient.**
+
+---
+
+### 4. **C++ Solution**
+
+```cpp
+#include <vector>
+#include <string>
+#include <unordered_set>
+using namespace std;
+
+class Solution {
+public:
+    int countPalindromicSubsequence(string s) {
+        // Record first and last index for each character
+        vector<int> first(26, -1), last(26, -1);
+        int n = s.size();
+        for (int i = 0; i < n; ++i) {
+            int c = s[i] - 'a';
+            if (first[c] == -1)
+                first[c] = i;
+            last[c] = i;
+        }
+        
+        int res = 0;
+        // For each potential palindrome edge character
+        for (int a = 0; a < 26; ++a) {
+            if (first[a] == -1 || first[a] == last[a]) continue; // less than 2 occur
+            unordered_set<char> mid;
+            // Collect all unique characters between first[a]+1 and last[a]-1 (exclusive)
+            for (int k = first[a] + 1; k < last[a]; ++k) {
+                mid.insert(s[k]);
+            }
+            res += mid.size();
+        }
+        return res;
+    }
+};
+```
+
+---
+
+### 5. **Explanation with Example**
+
+**Example:** `s = "bbcbaba"`
+
+- Let's work for each character `a`:
+    - For 'b':
+        - `first = 0`, `last = 5` (`b` at 0, 1, 3, 5)
+        - Middle region: `s[1:5]` → 'b', 'c', 'b', 'a'
+        - Unique: {'b', 'c', 'a'} → palindromes: "bbb", "bcb", "bab"
+    - For 'a':
+        - `first = 4`, `last = 6`
+        - Middle region: `s[5:6]` → 'b'
+        - Unique: {'b'} → palindrome: "aba"
+    - Other letters have no repeat or not enough room.
+
+Altogether: "bbb", "bcb", "bab", "aba" → 4 unique palindromic subsequences.
+
+---
+
+## **Summary Table**
+
+| Step                          | Description                                |
+|-------------------------------|--------------------------------------------|
+| Preprocess first/last indices | O(N) time                                  |
+| For each letter a             | For each unique b between first/last       |
+| Add to result                 | Unique (a,b,a) palindromes                 |
+| Total runtime                 | O(26*N) = O(N)                             |
+
+---
+
+**Let me know if you need further clarifications or a Python version!**
