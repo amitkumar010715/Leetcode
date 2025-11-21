@@ -26,6 +26,37 @@ jobs:
       - name: Run Solver
         run: python daily_leetcode_solver.py
 
+      - name: Send Email Notification
+        run: |
+          pip install yagmail
+          python - << 'EOF'
+          import yagmail
+          import os
+
+          yag = yagmail.SMTP(
+              user=os.environ["EMAIL_HOST_USER"],
+              password=os.environ["EMAIL_HOST_PASSWORD"],
+              host=os.environ["EMAIL_HOST"],
+              port=os.environ["EMAIL_PORT"],
+          )
+
+          # Read solution file
+          content = "Daily LeetCode Solution is attached."
+
+          yag.send(
+              to=os.environ["EMAIL_TO"],
+              subject="Your Daily LeetCode Solution",
+              contents=[content, 'leet.txt'],
+          )
+          print("Email sent!")
+          EOF
+        env:
+          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+          EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+          EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+
       - name: Commit and push results
         run: |
           git config --global user.name "github-actions"
