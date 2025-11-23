@@ -8,6 +8,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
 
@@ -28,7 +29,6 @@ jobs:
 
       - name: Send Email Notification
         run: |
-          pip install yagmail
           python - << 'EOF'
           import yagmail
           import os
@@ -37,7 +37,7 @@ jobs:
               user=os.environ["EMAIL_HOST_USER"],
               password=os.environ["EMAIL_HOST_PASSWORD"],
               host=os.environ["EMAIL_HOST"],
-              port=os.environ["EMAIL_PORT"],
+              port=int(os.environ["EMAIL_PORT"]),
           )
 
           # Read solution file
@@ -48,6 +48,7 @@ jobs:
               subject="Your Daily LeetCode Solution",
               contents=[content, 'leet.txt'],
           )
+
           print("Email sent!")
           EOF
         env:
