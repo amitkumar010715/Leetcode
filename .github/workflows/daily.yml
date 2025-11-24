@@ -5,6 +5,10 @@ on:
     - cron: "30 4 * * *"
   workflow_dispatch:
 
+# ADD THIS PERMISSIONS BLOCK - FIXES THE 403 ERROR
+permissions:
+  contents: write
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -22,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install yagmail  # Ensure yagmail is installed
+          pip install yagmail
 
       - name: Create .env file from Github Secret
         run: |
@@ -55,52 +59,23 @@ jobs:
           
           try:
               print("🚀 Starting email process...")
-              
-              # Get environment variables
               email_user = os.environ["EMAIL_HOST_USER"]
               email_password = os.environ["EMAIL_HOST_PASSWORD"]
-              email_host = os.environ["EMAIL_HOST"]
-              email_port = int(os.environ["EMAIL_PORT"])
               email_to = os.environ["EMAIL_TO"]
               
-              print(f"📧 Sending from {email_user} to {email_to} via {email_host}:{email_port}")
+              print(f"📧 Sending from {email_user} to {email_to}")
               
-              # FIX: Add proper TLS/SSL configuration
-              if email_port == 587:
-                  # Use TLS (for Gmail, Outlook, Yahoo)
-                  yag = yagmail.SMTP(
-                      user=email_user,
-                      password=email_password,
-                      host=email_host,
-                      port=email_port,
-                      smtp_starttls=True,  # ← CRITICAL FIX
-                      smtp_ssl=False
-                  )
-              elif email_port == 465:
-                  # Use SSL
-                  yag = yagmail.SMTP(
-                      user=email_user,
-                      password=email_password,
-                      host=email_host,
-                      port=email_port,
-                      smtp_starttls=False,
-                      smtp_ssl=True
-                  )
-              else:
-                  # Default to TLS
-                  yag = yagmail.SMTP(
-                      user=email_user,
-                      password=email_password,
-                      host=email_host,
-                      port=email_port,
-                      smtp_starttls=True
-                  )
+              yag = yagmail.SMTP(
+                  user=email_user,
+                  password=email_password,
+                  host='smtp.gmail.com',
+                  port=587,
+                  smtp_starttls=True,
+              )
               
               print("✅ Connected to email server!")
               
-              # Read solution file
               content = "Daily LeetCode Solution is attached."
-              
               yag.send(
                   to=email_to,
                   subject="Your Daily LeetCode Solution",
@@ -114,8 +89,6 @@ jobs:
               sys.exit(1)
           EOF
         env:
-          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
           EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
           EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
