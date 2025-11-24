@@ -5,7 +5,6 @@ on:
     - cron: "30 4 * * *"
   workflow_dispatch:
 
-# ADD THIS PERMISSIONS BLOCK - FIXES THE 403 ERROR
 permissions:
   contents: write
 
@@ -26,7 +25,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install yagmail
 
       - name: Create .env file from Github Secret
         run: |
@@ -39,12 +37,8 @@ jobs:
 
       - name: Verify Solution File
         run: |
-          echo "📁 Checking generated files:"
-          ls -la
           if [ -f "leet.txt" ]; then
             echo "✅ leet.txt found!"
-            echo "📝 Preview:"
-            head -5 leet.txt
           else
             echo "❌ leet.txt not found!"
             exit 1
@@ -53,40 +47,30 @@ jobs:
       - name: Send Email Notification
         run: |
           python - << 'EOF'
-          import yagmail
+          import smtplib
           import os
-          import sys
           
           try:
-              print("🚀 Starting email process...")
               email_user = os.environ["EMAIL_HOST_USER"]
               email_password = os.environ["EMAIL_HOST_PASSWORD"]
               email_to = os.environ["EMAIL_TO"]
               
-              print(f"📧 Sending from {email_user} to {email_to}")
+              server = smtplib.SMTP('smtp.gmail.com', 587)
+              server.starttls()
+              server.login(email_user, email_password)
               
-              yag = yagmail.SMTP(
-                  user=email_user,
-                  password=email_password,
-                  host='smtp.gmail.com',
-                  port=587,
-                  smtp_starttls=True,
-              )
+              with open('leet.txt', 'r') as f:
+                  solution = f.read()
               
-              print("✅ Connected to email server!")
+              body = f"Subject: Your Daily LeetCode Solution\n\n{solution}"
+              server.sendmail(email_user, email_to, body)
+              server.quit()
               
-              content = "Daily LeetCode Solution is attached."
-              yag.send(
-                  to=email_to,
-                  subject="Your Daily LeetCode Solution",
-                  contents=[content, 'leet.txt'],
-              )
-              
-              print("🎉 Email sent successfully!")
+              print("✅ Email sent successfully!")
               
           except Exception as e:
-              print(f"💥 Error sending email: {e}")
-              sys.exit(1)
+              print(f"❌ Error: {e}")
+              exit(1)
           EOF
         env:
           EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
