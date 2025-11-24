@@ -23,8 +23,7 @@ jobs:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Create .env file from Github Secret
         run: |
@@ -39,6 +38,8 @@ jobs:
         run: |
           if [ -f "leet.txt" ]; then
             echo "✅ leet.txt found!"
+            echo "📝 Checking for special characters..."
+            file leet.txt
           else
             echo "❌ leet.txt not found!"
             exit 1
@@ -48,6 +49,7 @@ jobs:
         run: |
           python - << 'EOF'
           import smtplib
+          from email.mime.text import MIMEText
           import os
           
           try:
@@ -59,11 +61,16 @@ jobs:
               server.starttls()
               server.login(email_user, email_password)
               
-              with open('leet.txt', 'r') as f:
+              # FIX: UTF-8 encoding for special characters
+              with open('leet.txt', 'r', encoding='utf-8') as f:
                   solution = f.read()
               
-              body = f"Subject: Your Daily LeetCode Solution\n\n{solution}"
-              server.sendmail(email_user, email_to, body)
+              msg = MIMEText(solution, 'plain', 'utf-8')
+              msg['Subject'] = 'Your Daily LeetCode Solution'
+              msg['From'] = email_user
+              msg['To'] = email_to
+              
+              server.send_message(msg)
               server.quit()
               
               print("✅ Email sent successfully!")
