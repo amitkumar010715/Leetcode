@@ -1,106 +1,96 @@
-Let's walk through the solution step by step:
+Let's go step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a binary array, build the prefix number for each index as a binary number and check if that number is divisible by 5. Return a boolean array where each element is `true` if corresponding prefix is divisible by 5.
+Given an integer `k`, find the length of the smallest positive integer `n` made **only of digit '1'** (e.g. 1, 11, 111, ...) such that `n` is divisible by `k`. Return its length, or `-1` if such a number doesn't exist.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### **Constraints**
-- `1 <= nums.length <= 10^5`: The array can be quite large, so O(n) solutions are needed.
-- `nums[i]` is `0` or `1`.
-
-### **Edge Cases**
-- All zeros: e.g., `[0, 0, 0]` - should all be `true` (since 0 is divisible by 5).
-- First bits zero: e.g., `[0, 1, 0, 1]`.
-- All ones: e.g., `[1, 1, 1, 1]`.
-- Mixed pattern.
-- Very long arrays.
+- **Constraints:**
+  - `1 <= k <= 10^5`
+- **Edge Cases:**
+  - If `k` is even or divisible by 5, such `n` does **not exist** (because numbers with only digit '1' are not divisible by 2 or 5).
+  - k=1: The answer is 1.
+  - For some values of k, the repeating remainder cycle guarantees an answer ≤ k, or we know it's impossible.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Key Insight:
+### Key Insights
 
-#### Avoid Huge Numbers:
-- Instead of actually forming the complete number (which may be too large for 64-bits), we keep the prefix modulo 5 (`num % 5`).
-- With each additional bit, the prefix number forms as:  
-    `num_next = num_prev*2 + nums[i]`
-- So,
-    `num_next % 5 = ((num_prev % 5) * 2 + nums[i]) % 5`
-- Just keep the current value modulo 5.
+- The numbers considered (`n`) are: 1, 11, 111, 1111, ...
+- We can't construct `n` directly (it's too big), but we can work with their **remainders modulo k**.
+- At each step:
+  - Let `rem` be the remainder of the number so far.
+  - New remainder: `rem = (rem * 10 + 1) % k`
+  - If at any point `rem == 0`, we've found our answer.
+- **Cycle detection**: There are at most `k` unique possible remainders (`0..k-1`). If we repeat a remainder (excluding 0), there is an infinite loop (impossible case).
 
 ### Steps
-1. Initialize `prefix_mod` to 0.
-2. For each bit in `nums`:
-    - `prefix_mod = (prefix_mod * 2 + nums[i]) % 5`
-    - If `prefix_mod == 0`, append `true`, else `false`.
 
-**Time Complexity:** O(n), single scan.
+1. If `k` is divisible by 2 or 5, return `-1`.
+2. Initialize `rem = 0`.
+3. For up to `k` steps (length from 1 to k):
+   - `rem = (rem * 10 + 1) % k`
+   - If `rem == 0`, return current length.
+4. If no such remainder found, return `-1`.
+
+#### Time Complexity:
+
+- **O(k)**
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-using namespace std;
-
 class Solution {
 public:
-    vector<bool> prefixesDivBy5(vector<int>& nums) {
-        vector<bool> result;
-        int prefix_mod = 0;
-        for (int bit : nums) {
-            prefix_mod = ((prefix_mod << 1) | bit) % 5;
-            result.push_back(prefix_mod == 0);
+    int smallestRepunitDivByK(int k) {
+        // If k is even or divisible by 5, impossible
+        if (k % 2 == 0 || k % 5 == 0) return -1;
+        
+        int rem = 0;
+        for (int length = 1; length <= k; ++length) {
+            rem = (rem * 10 + 1) % k;
+            if (rem == 0) return length;
         }
-        return result;
+        return -1;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-### Input:
-`nums = [0, 1, 1]`
+**Input:** `k = 3`
 
-**Step-by-step:**
+- Let's simulate:
+  - Length 1: rem = (0 * 10 + 1) % 3 = 1
+  - Length 2: rem = (1 * 10 + 1) % 3 = 11 % 3 = 2
+  - Length 3: rem = (2 * 10 + 1) % 3 = 21 % 3 = 0
 
-- `i=0`:  
-  - prefix: 0 (binary "0")  
-  - 0 % 5 = 0 → `true`
-- `i=1`:  
-  - previous prefix = 0  
-  - New: (0 * 2) + 1 = 1 (binary "01")  
-  - 1 % 5 = 1 → `false`
-- `i=2`:  
-  - previous prefix = 1  
-  - New: (1 * 2) + 1 = 3 (binary "011")  
-  - 3 % 5 = 3 → `false`
-
-**Output:** `[true, false, false]`
+When length is 3, remainder is 0.  
+So, the smallest such number is "111" (which is 111 / 3 = 37), and its length is **3**.
 
 ---
 
-### **Summary Table**
+### **Summary Table for k = 3**
 
-| Index | Prefix (binary) | Prefix (decimal) | %5 | Output |
-|-------|-----------------|------------------|----|--------|
-| 0     |        0        |        0         |  0 | true   |
-| 1     |       01        |        1         |  1 | false  |
-| 2     |       011       |        3         |  3 | false  |
+| Step | Build Number | Remainder Calculation | Remainder |
+|------|--------------|-----------------------|-----------|
+| 1    | 1           | 1 % 3                 | 1         |
+| 2    | 11          | (1*10+1)%3 = 11 % 3   | 2         |
+| 3    | 111         | (2*10+1)%3 = 21 % 3   | 0         |
+
+At length 3, remainder is 0 → **return 3**.
 
 ---
 
-## **Final Notes**
-
-- Only the current remainder (mod 5) needs to be stored and updated for each bit.
-- The solution is efficient and handles all edge and size constraints.
+Let me know if you need a Python solution or further discussion!
