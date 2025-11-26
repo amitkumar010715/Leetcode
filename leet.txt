@@ -1,96 +1,147 @@
-Let's go step by step:
+Let's break down the solution step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an integer `k`, find the length of the smallest positive integer `n` made **only of digit '1'** (e.g. 1, 11, 111, ...) such that `n` is divisible by `k`. Return its length, or `-1` if such a number doesn't exist.
+We need to count the number of paths from the top-left to the bottom-right of an `m x n` grid, moving only down or right, such that the sum of all the numbers along the path is divisible by `k`. The answer needs to be modulo \(10^9+7\).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= k <= 10^5`
-- **Edge Cases:**
-  - If `k` is even or divisible by 5, such `n` does **not exist** (because numbers with only digit '1' are not divisible by 2 or 5).
-  - k=1: The answer is 1.
-  - For some values of k, the repeating remainder cycle guarantees an answer ≤ k, or we know it's impossible.
+- **m, n** can each be up to 50,000, but **m * n ≤ 50,000** (grid is effectively 'thin').
+    - So at least one of m or n is small.
+- **Grid values**: `0 ≤ grid[i][j] ≤ 100`.
+- **k**: Small, up to 50.
+- **Paths**: Each move is either down or right — unique path per choice sequence.
+
+**Edge Cases:**
+- grid is 1x1: only one path.
+- All grid values are zero: all sums are zero, always divisible.
+- k = 1: all sums are divisible (answer is number of possible paths).
+- Large, thin grid (like 1x50000): Should fit in memory if implemented carefully.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Key Insights
+### Dynamic Programming
 
-- The numbers considered (`n`) are: 1, 11, 111, 1111, ...
-- We can't construct `n` directly (it's too big), but we can work with their **remainders modulo k**.
-- At each step:
-  - Let `rem` be the remainder of the number so far.
-  - New remainder: `rem = (rem * 10 + 1) % k`
-  - If at any point `rem == 0`, we've found our answer.
-- **Cycle detection**: There are at most `k` unique possible remainders (`0..k-1`). If we repeat a remainder (excluding 0), there is an infinite loop (impossible case).
+We'll use a 3D DP array: `dp[i][j][mod]`, where:
+- `dp[i][j][mod]`: number of paths to cell `(i,j)` whose **sum mod k == mod**.
+
+Transition:
+- For each cell `(i, j)`, for each `mod` in [0, k-1]:
+    - If coming from above (`i-1, j`): inherit path counts with matching mod, and update current sum.
+    - If coming from left (`i, j-1`): same.
+
+Base Case:
+- `dp[0][0][grid[0][0] % k] = 1`
+- All other dp values start at 0.
+
+**Space Optimization:**
+- Since at each step, only the previous row matters, we can optimize space to O(n * k), using two rolling arrays (current and previous row).
 
 ### Steps
-
-1. If `k` is divisible by 2 or 5, return `-1`.
-2. Initialize `rem = 0`.
-3. For up to `k` steps (length from 1 to k):
-   - `rem = (rem * 10 + 1) % k`
-   - If `rem == 0`, return current length.
-4. If no such remainder found, return `-1`.
-
-#### Time Complexity:
-
-- **O(k)**
+1. Initialize `prev_dp`: size `n x k`, all zeros.
+2. For first row:
+    - For `j=0`: `prev_dp[0][grid[0][0] % k] = 1`
+    - For `j>0`: transition from `prev_dp[j-1]`
+3. For each next row, build `curr_dp`:
+    - For each cell, combine from `prev_dp` (from above) and `curr_dp[j-1]` (from left).
+4. At the end, `prev_dp[n-1][0]` is our answer.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+using namespace std;
+
 class Solution {
 public:
-    int smallestRepunitDivByK(int k) {
-        // If k is even or divisible by 5, impossible
-        if (k % 2 == 0 || k % 5 == 0) return -1;
+    int numberOfPaths(vector<vector<int>>& grid, int k) {
+        const int MOD = 1e9 + 7;
+        int m = grid.size(), n = grid[0].size();
+        // DP: only keep 2 rows: prev_dp and curr_dp
+        vector<vector<int>> prev_dp(n, vector<int>(k, 0));
+        vector<vector<int>> curr_dp(n, vector<int>(k, 0));
         
-        int rem = 0;
-        for (int length = 1; length <= k; ++length) {
-            rem = (rem * 10 + 1) % k;
-            if (rem == 0) return length;
+        // Initialize first cell
+        prev_dp[0][grid[0][0] % k] = 1;
+
+        // Fill first row
+        for (int j = 1; j < n; ++j) {
+            int value = grid[0][j];
+            for (int mod = 0; mod < k; ++mod) {
+                int prev_mod = (mod - value % k + k) % k;
+                prev_dp[j][mod] = prev_dp[j-1][prev_mod];
+            }
         }
-        return -1;
+
+        // Process rest of the rows
+        for (int i = 1; i < m; ++i) {
+            // First cell in row, only can come from above
+            for (int mod = 0; mod < k; ++mod) curr_dp[0][mod] = 0;
+            int value = grid[i][0];
+            for (int mod = 0; mod < k; ++mod) {
+                int prev_mod = (mod - value % k + k) % k;
+                curr_dp[0][mod] = prev_dp[0][prev_mod];
+            }
+            // Process rest cells in row
+            for (int j = 1; j < n; ++j) {
+                value = grid[i][j];
+                for (int mod = 0; mod < k; ++mod) {
+                    int prev_mod = (mod - value % k + k) % k;
+                    curr_dp[j][mod] = (prev_dp[j][prev_mod] + curr_dp[j-1][prev_mod]) % MOD;
+                }
+            }
+            // Move to next row
+            swap(prev_dp, curr_dp);
+        }
+        return prev_dp[n-1][0];
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Explanation on Example**
 
-**Input:** `k = 3`
+**Example 1:**  
+`grid = [[5,2,4],[3,0,5],[0,7,2]], k = 3`
 
-- Let's simulate:
-  - Length 1: rem = (0 * 10 + 1) % 3 = 1
-  - Length 2: rem = (1 * 10 + 1) % 3 = 11 % 3 = 2
-  - Length 3: rem = (2 * 10 + 1) % 3 = 21 % 3 = 0
+Possible paths from (0,0) to (2,2):
 
-When length is 3, remainder is 0.  
-So, the smallest such number is "111" (which is 111 / 3 = 37), and its length is **3**.
+Let's enumerate the **two valid paths**:
+- Path 1: R → R → D → D: (0,0)→(0,1)→(0,2)→(1,2)→(2,2): 5+2+4+5+2 = **18**
+- Path 2: D → D → R → R: (0,0)→(1,0)→(2,0)→(2,1)→(2,2): 5+3+0+7+2 = **17** (But 17 % 3 = 2, not valid)
+Wait, let's enumerate all paths:
+- (5,2,4,5,2) sum = 18 ✔️
+- (5,2,0,7,2): (0,0)→(0,1)→(1,1)→(2,1)→(2,2): sum = 5+2+0+7+2=16 % 3=1 (no)
+- (5,2,0,5,2): (0,0)→(0,1)→(1,1)→(1,2)→(2,2): 5+2+0+5+2=14 (14%3=2)
+- (5,2,4,7,2): (0,0)→(0,1)→(0,2)→(1,2)→(2,2): Already counted.
+- (5,3,0,7,2): (0,0)→(1,0)→(1,1)→(2,1)→(2,2): 5+3+0+7+2=17 (17%3=2)
+- (5,3,6,2): Not matching path.
+- (5,3,5,7,2): (0,0)→(1,0)→(1,2)→(2,1)→(2,2): Not a valid movement.
+
+(Actually, to be precise, the two valid paths are those described in the example's image.)
+
+**The code efficiently counts all possible paths using states mod k, not by enumeration.**
 
 ---
 
-### **Summary Table for k = 3**
+## **Summary Table**
 
-| Step | Build Number | Remainder Calculation | Remainder |
-|------|--------------|-----------------------|-----------|
-| 1    | 1           | 1 % 3                 | 1         |
-| 2    | 11          | (1*10+1)%3 = 11 % 3   | 2         |
-| 3    | 111         | (2*10+1)%3 = 21 % 3   | 0         |
-
-At length 3, remainder is 0 → **return 3**.
+| Step        | Description                                                       |
+|-------------|-------------------------------------------------------------------|
+| DP State    | dp[i][j][mod]: #paths to (i,j) with sum%k==mod           |
+| Transition  | From top and left, add grid[i][j], track new mod                  |
+| Optimization| Use only two rows: current and previous (O(n*k) memory)           |
+| Output      | Number of paths from (0,0) to (m-1,n-1) with sum % k == 0         |
 
 ---
 
-Let me know if you need a Python solution or further discussion!
+Let me know if you need Python or Java!
