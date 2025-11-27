@@ -1,147 +1,161 @@
-Let's break down the solution step by step:
+Let's work through each step:
 
 ---
 
 ## 1. **Short Summary**
 
-We need to count the number of paths from the top-left to the bottom-right of an `m x n` grid, moving only down or right, such that the sum of all the numbers along the path is divisible by `k`. The answer needs to be modulo \(10^9+7\).
+Given an array `nums` and integer `k`, **find the maximum sum of any non-empty subarray of length divisible by `k`**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **m, n** can each be up to 50,000, but **m * n ≤ 50,000** (grid is effectively 'thin').
-    - So at least one of m or n is small.
-- **Grid values**: `0 ≤ grid[i][j] ≤ 100`.
-- **k**: Small, up to 50.
-- **Paths**: Each move is either down or right — unique path per choice sequence.
+- `1 <= k <= nums.length <= 2 * 10^5`
+- Each `nums[i]` can be in `[-10^9, 10^9]`
+- Subarrays must be contiguous, and their **length is a multiple of `k`**
+- Must handle **negative numbers** (max sum might be negative)
+- **k == 1**: Any subarray length allowed
+- **nums** could be all negative, all positive, or mixed.
 
 **Edge Cases:**
-- grid is 1x1: only one path.
-- All grid values are zero: all sums are zero, always divisible.
-- k = 1: all sums are divisible (answer is number of possible paths).
-- Large, thin grid (like 1x50000): Should fit in memory if implemented carefully.
+- All numbers negative: should pick the least negative sum with a length divisible by `k`.
+- k == nums.length: Only the whole array is valid.
+- k == 1: Like classical Maximum Subarray Sum problem (Kadane's).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Dynamic Programming
+This problem is a variation of the **maximum subarray sum**, with an added length constraint.
 
-We'll use a 3D DP array: `dp[i][j][mod]`, where:
-- `dp[i][j][mod]`: number of paths to cell `(i,j)` whose **sum mod k == mod**.
+**Key Observations:**
 
-Transition:
-- For each cell `(i, j)`, for each `mod` in [0, k-1]:
-    - If coming from above (`i-1, j`): inherit path counts with matching mod, and update current sum.
-    - If coming from left (`i, j-1`): same.
+- For a subarray `nums[i..j]`, the length is `(j - i + 1)`. 
+- We want to maximize sum of `nums[i..j]` with `(j - i + 1) % k == 0`.
 
-Base Case:
-- `dp[0][0][grid[0][0] % k] = 1`
-- All other dp values start at 0.
+**Reformulation:**
+- Use prefix sums: `pref[0] = 0`, `pref[i] = nums[0] + ... + nums[i-1]`
+- Subarray `nums[l..r]`: Sum is `pref[r+1] - pref[l]`
+- Length is `(r - l + 1)`. So `(r - l + 1) % k == 0` ⟹ `(r + 1) % k == l % k`
 
-**Space Optimization:**
-- Since at each step, only the previous row matters, we can optimize space to O(n * k), using two rolling arrays (current and previous row).
+**So, for any end index `r`, and any prefix starting at `l`, the subarray `nums[l..r]` is valid iff**
+> `(r + 1) % k == l % k`
 
-### Steps
-1. Initialize `prev_dp`: size `n x k`, all zeros.
-2. For first row:
-    - For `j=0`: `prev_dp[0][grid[0][0] % k] = 1`
-    - For `j>0`: transition from `prev_dp[j-1]`
-3. For each next row, build `curr_dp`:
-    - For each cell, combine from `prev_dp` (from above) and `curr_dp[j-1]` (from left).
-4. At the end, `prev_dp[n-1][0]` is our answer.
+Thus:
+- For each possible prefix index `i`, keep **minimum prefix sum** for each `i % k`.
+- For each end index `j`, try `pref[j+1] - min_pref[j % k]`.
+
+**Algorithm:**
+
+1. Compute prefix sums.
+2. For each modulo class `m = 0..k-1`, maintain the **minimum prefix sum** seen so far for that modulo.
+3. For each index, compute candidate subarray sum ending here with matching `(j + 1) % k`, and update the answer.
+
+**Time Complexity:**  
+- O(n), only a constant extra work per element.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
+#include <climits>
 using namespace std;
 
 class Solution {
 public:
-    int numberOfPaths(vector<vector<int>>& grid, int k) {
-        const int MOD = 1e9 + 7;
-        int m = grid.size(), n = grid[0].size();
-        // DP: only keep 2 rows: prev_dp and curr_dp
-        vector<vector<int>> prev_dp(n, vector<int>(k, 0));
-        vector<vector<int>> curr_dp(n, vector<int>(k, 0));
+    long long maximumSubarraySum(vector<int>& nums, int k) {
+        int n = nums.size();
+        vector<long long> pref(n+1, 0);
+        for (int i = 0; i < n; ++i)
+            pref[i+1] = pref[i] + nums[i];
         
-        // Initialize first cell
-        prev_dp[0][grid[0][0] % k] = 1;
+        // For each modulo, track the minimal prefix
+        vector<long long> min_pref(k, LLONG_MAX);
+        min_pref[0] = 0; // empty prefix
 
-        // Fill first row
-        for (int j = 1; j < n; ++j) {
-            int value = grid[0][j];
-            for (int mod = 0; mod < k; ++mod) {
-                int prev_mod = (mod - value % k + k) % k;
-                prev_dp[j][mod] = prev_dp[j-1][prev_mod];
-            }
+        long long res = LLONG_MIN;
+        for (int j = 1; j <= n; ++j) {
+            int mod = j % k;
+            if (min_pref[mod] != LLONG_MAX)  // valid minimum to compare
+                res = max(res, pref[j] - min_pref[mod]);
+            // Update minimal prefix for current mod class
+            min_pref[mod] = min(min_pref[mod], pref[j]);
         }
-
-        // Process rest of the rows
-        for (int i = 1; i < m; ++i) {
-            // First cell in row, only can come from above
-            for (int mod = 0; mod < k; ++mod) curr_dp[0][mod] = 0;
-            int value = grid[i][0];
-            for (int mod = 0; mod < k; ++mod) {
-                int prev_mod = (mod - value % k + k) % k;
-                curr_dp[0][mod] = prev_dp[0][prev_mod];
-            }
-            // Process rest cells in row
-            for (int j = 1; j < n; ++j) {
-                value = grid[i][j];
-                for (int mod = 0; mod < k; ++mod) {
-                    int prev_mod = (mod - value % k + k) % k;
-                    curr_dp[j][mod] = (prev_dp[j][prev_mod] + curr_dp[j-1][prev_mod]) % MOD;
-                }
-            }
-            // Move to next row
-            swap(prev_dp, curr_dp);
-        }
-        return prev_dp[n-1][0];
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Explanation on Example**
+## 5. **Example Explanation**
 
-**Example 1:**  
-`grid = [[5,2,4],[3,0,5],[0,7,2]], k = 3`
+Let's use Example 3:
 
-Possible paths from (0,0) to (2,2):
+**Input:** `nums = [-5, 1, 2, -3, 4]`, `k = 2`
 
-Let's enumerate the **two valid paths**:
-- Path 1: R → R → D → D: (0,0)→(0,1)→(0,2)→(1,2)→(2,2): 5+2+4+5+2 = **18**
-- Path 2: D → D → R → R: (0,0)→(1,0)→(2,0)→(2,1)→(2,2): 5+3+0+7+2 = **17** (But 17 % 3 = 2, not valid)
-Wait, let's enumerate all paths:
-- (5,2,4,5,2) sum = 18 ✔️
-- (5,2,0,7,2): (0,0)→(0,1)→(1,1)→(2,1)→(2,2): sum = 5+2+0+7+2=16 % 3=1 (no)
-- (5,2,0,5,2): (0,0)→(0,1)→(1,1)→(1,2)→(2,2): 5+2+0+5+2=14 (14%3=2)
-- (5,2,4,7,2): (0,0)→(0,1)→(0,2)→(1,2)→(2,2): Already counted.
-- (5,3,0,7,2): (0,0)→(1,0)→(1,1)→(2,1)→(2,2): 5+3+0+7+2=17 (17%3=2)
-- (5,3,6,2): Not matching path.
-- (5,3,5,7,2): (0,0)→(1,0)→(1,2)→(2,1)→(2,2): Not a valid movement.
+Walkthrough:
 
-(Actually, to be precise, the two valid paths are those described in the example's image.)
+### Step 1: Prefix sums
 
-**The code efficiently counts all possible paths using states mod k, not by enumeration.**
+| Index | Prefix Sum | j    | j%k = j%2 |
+|-------|------------|------|-----------|
+|   0   |     0      |  0   |     0     |
+|   1   |    -5      |  1   |     1     |
+|   2   |    -4      |  2   |     0     |
+|   3   |    -2      |  3   |     1     |
+|   4   |    -5      |  4   |     0     |
+|   5   |    -1      |  5   |     1     |
+
+### Step 2: min_pref[0] = 0, min_pref[1] = LLONG_MAX, res = LLONG_MIN
+
+Iterate j = 1 to 5:
+
+- j=1, mod=1: min_pref[1]=LLONG_MAX ⇒ no update  
+  Update min_pref[1]=-5
+
+- j=2, mod=0: min_pref[0]=0 ⇒  
+  sum = pref[2]-min_pref[0] = -4-0 = -4, res = max(-4, LLONG_MIN) = -4  
+  Update min_pref[0]=min(0, -4) = -4
+
+- j=3, mod=1: min_pref[1]=-5 ⇒  
+  sum = -2-(-5) = 3, res=max(3, -4)=3  
+  Update min_pref[1]=min(-5, -2)=-5
+
+- j=4, mod=0: min_pref[0]=-4 ⇒  
+  sum = -5-(-4)= -1, res=max(3, -1)=3  
+  Update min_pref[0]=min(-4, -5)=-5
+
+- j=5, mod=1: min_pref[1]=-5  
+  sum = -1-(-5)=4, res=max(3,4)=**4**  
+  Update min_pref[1]=min(-5, -1)=-5
+
+Final answer: **4**
+
+This corresponds to subarray `[1,2,-3,4]` (length 4, divisible by 2, sum=4).
 
 ---
 
 ## **Summary Table**
 
-| Step        | Description                                                       |
-|-------------|-------------------------------------------------------------------|
-| DP State    | dp[i][j][mod]: #paths to (i,j) with sum%k==mod           |
-| Transition  | From top and left, add grid[i][j], track new mod                  |
-| Optimization| Use only two rows: current and previous (O(n*k) memory)           |
-| Output      | Number of paths from (0,0) to (m-1,n-1) with sum % k == 0         |
+| Step | j | pref[j] | mod | min_pref[mod] | pref[j]-min_pref[mod] | res update  |
+|------|---|---------|-----|-------------- |---------------------- |-------------|
+|  1   | 1 |  -5     |  1  |  LLONG_MAX    |      —                |   —         |
+|  2   | 2 |  -4     |  0  |       0       |     -4                |   -4        |
+|  3   | 3 |  -2     |  1  |      -5       |      3                |    3        |
+|  4   | 4 |  -5     |  0  |      -4       |     -1                |  (keep 3)   |
+|  5   | 5 |  -1     |  1  |      -5       |      4                |    4        |
 
 ---
 
-Let me know if you need Python or Java!
+## **Summary**
+
+- Use prefix sums and track minimum prefix value for each modulo class.
+- At each step, maximum valid sum is `prefix[j] - min_prefix[j % k]`.
+- Time complexity is O(n).
+
+---
+
+**Let me know if you need a Python solution or more test cases!**
