@@ -1,58 +1,58 @@
-Let's work through each step:
+Let's tackle the LeetCode problem "**Maximum Number of K-Divisible Components**".
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given an array `nums` and integer `k`, **find the maximum sum of any non-empty subarray of length divisible by `k`**.
+Given a tree where each node has a value, and an integer **k**, split the tree into the maximum number of components (by cutting edges) so that the sum of values in each component is **divisible by k**. Return that maximum number of components.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= k <= nums.length <= 2 * 10^5`
-- Each `nums[i]` can be in `[-10^9, 10^9]`
-- Subarrays must be contiguous, and their **length is a multiple of `k`**
-- Must handle **negative numbers** (max sum might be negative)
-- **k == 1**: Any subarray length allowed
-- **nums** could be all negative, all positive, or mixed.
-
-**Edge Cases:**
-- All numbers negative: should pick the least negative sum with a length divisible by `k`.
-- k == nums.length: Only the whole array is valid.
-- k == 1: Like classical Maximum Subarray Sum problem (Kadane's).
+- **Tree size:** Up to 30,000 nodes; needs an O(N) solution.
+- **Values:** Up to 1e9 per node.
+- **k:** Arbitrary between 1 and 1e9.
+- **Total sum of all nodes is divisible by k.**
+- **Any set of cuts (including no cuts) is allowed, as long as the sum criterion holds for every component.**
+- **Leaves and single-node components are allowed.**
+- **Edge case:** If all values are divisible by k already, the best is n.
+- **Smallest component: size 1 (single node).**
+- **We can remove as many edges as possible, but only if it results in all subtree sums divisible by k.**
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This problem is a variation of the **maximum subarray sum**, with an added length constraint.
+**Observation:**  
+- Cutting an edge divides the tree into two components: the child subtree and the remaining tree.
+- After cutting, **subtree sums of both parts must be divisible by k**.
 
-**Key Observations:**
+**Approach:**
 
-- For a subarray `nums[i..j]`, the length is `(j - i + 1)`. 
-- We want to maximize sum of `nums[i..j]` with `(j - i + 1) % k == 0`.
+1. **DFS Post-order Traversal:**  
+   Compute the sum of values in each subtree.
 
-**Reformulation:**
-- Use prefix sums: `pref[0] = 0`, `pref[i] = nums[0] + ... + nums[i-1]`
-- Subarray `nums[l..r]`: Sum is `pref[r+1] - pref[l]`
-- Length is `(r - l + 1)`. So `(r - l + 1) % k == 0` ⟹ `(r + 1) % k == l % k`
+2. **Cutting Logic:**  
+   - For any child (subtree) rooted at `v` of `u`,  
+     if the **sum of the subtree rooted at `v` is divisible by k**,  
+     we can "cut" the edge `(u, v)`, because the rest of the tree is also k-divisible  
+     (since overall sum is divisible by k).
+   - After cutting, that subtree becomes a component, and is no longer part of the rest of the DFS.
 
-**So, for any end index `r`, and any prefix starting at `l`, the subarray `nums[l..r]` is valid iff**
-> `(r + 1) % k == l % k`
+3. **Counting Components:**  
+   - For each cut we make, the number of components increases by 1.
+   - Initially, there is one component (the whole tree).
+   - The answer is **number of cuts made + 1**.
 
-Thus:
-- For each possible prefix index `i`, keep **minimum prefix sum** for each `i % k`.
-- For each end index `j`, try `pref[j+1] - min_pref[j % k]`.
+4. **Implementation:**
+   - During DFS, accumulate the sum of the subtree.
+   - For each subtree of child, if sub_sum % k == 0, **count as a valid cut** and don't propagate its sum up.
+   - Otherwise, add its sum up to the parent.
 
-**Algorithm:**
-
-1. Compute prefix sums.
-2. For each modulo class `m = 0..k-1`, maintain the **minimum prefix sum** seen so far for that modulo.
-3. For each index, compute candidate subarray sum ending here with matching `(j + 1) % k`, and update the answer.
-
-**Time Complexity:**  
-- O(n), only a constant extra work per element.
+**Complexity:**  
+- O(N): classic DFS traversal.
+- Space: O(N) for the adjacency list and recursion stack.
 
 ---
 
@@ -60,30 +60,36 @@ Thus:
 
 ```cpp
 #include <vector>
-#include <climits>
 using namespace std;
 
 class Solution {
 public:
-    long long maximumSubarraySum(vector<int>& nums, int k) {
-        int n = nums.size();
-        vector<long long> pref(n+1, 0);
-        for (int i = 0; i < n; ++i)
-            pref[i+1] = pref[i] + nums[i];
-        
-        // For each modulo, track the minimal prefix
-        vector<long long> min_pref(k, LLONG_MAX);
-        min_pref[0] = 0; // empty prefix
-
-        long long res = LLONG_MIN;
-        for (int j = 1; j <= n; ++j) {
-            int mod = j % k;
-            if (min_pref[mod] != LLONG_MAX)  // valid minimum to compare
-                res = max(res, pref[j] - min_pref[mod]);
-            // Update minimal prefix for current mod class
-            min_pref[mod] = min(min_pref[mod], pref[j]);
+    int maxKDivisibleComponents(int n, vector<vector<int>>& edges, vector<int>& values, int k) {
+        vector<vector<int>> tree(n);
+        for (auto& e : edges) {
+            tree[e[0]].push_back(e[1]);
+            tree[e[1]].push_back(e[0]);
         }
-        return res;
+
+        int cuts = 0;
+        function<int(int, int)> dfs = [&](int u, int parent) -> int {
+            int sum = values[u];
+            for (int v : tree[u]) {
+                if (v == parent) continue;
+                int child_sum = dfs(v, u);
+                if (child_sum % k == 0) {
+                    cuts++; // We can cut here
+                    // Don't propagate sum up, this component stands alone
+                } else {
+                    sum += child_sum;
+                }
+            }
+            return sum;
+        };
+
+        dfs(0, -1);
+        // Components = cuts + 1 (the remaining super-component)
+        return cuts + 1;
     }
 };
 ```
@@ -92,70 +98,35 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's use Example 3:
+**Example 1:**  
+`n = 5, edges = [[0,2],[1,2],[1,3],[2,4]], values = [1,8,1,4,4], k = 6`
 
-**Input:** `nums = [-5, 1, 2, -3, 4]`, `k = 2`
+Tree structure:
+```
+      2
+     / \
+    0   1
+        / \
+       3   4
+```
 
-Walkthrough:
-
-### Step 1: Prefix sums
-
-| Index | Prefix Sum | j    | j%k = j%2 |
-|-------|------------|------|-----------|
-|   0   |     0      |  0   |     0     |
-|   1   |    -5      |  1   |     1     |
-|   2   |    -4      |  2   |     0     |
-|   3   |    -2      |  3   |     1     |
-|   4   |    -5      |  4   |     0     |
-|   5   |    -1      |  5   |     1     |
-
-### Step 2: min_pref[0] = 0, min_pref[1] = LLONG_MAX, res = LLONG_MIN
-
-Iterate j = 1 to 5:
-
-- j=1, mod=1: min_pref[1]=LLONG_MAX ⇒ no update  
-  Update min_pref[1]=-5
-
-- j=2, mod=0: min_pref[0]=0 ⇒  
-  sum = pref[2]-min_pref[0] = -4-0 = -4, res = max(-4, LLONG_MIN) = -4  
-  Update min_pref[0]=min(0, -4) = -4
-
-- j=3, mod=1: min_pref[1]=-5 ⇒  
-  sum = -2-(-5) = 3, res=max(3, -4)=3  
-  Update min_pref[1]=min(-5, -2)=-5
-
-- j=4, mod=0: min_pref[0]=-4 ⇒  
-  sum = -5-(-4)= -1, res=max(3, -1)=3  
-  Update min_pref[0]=min(-4, -5)=-5
-
-- j=5, mod=1: min_pref[1]=-5  
-  sum = -1-(-5)=4, res=max(3,4)=**4**  
-  Update min_pref[1]=min(-5, -1)=-5
-
-Final answer: **4**
-
-This corresponds to subarray `[1,2,-3,4]` (length 4, divisible by 2, sum=4).
+- values: 0:[1], 1:[8], 2:[1], 3:[4], 4:[4]
+- Removing edge (1,2):
+  - Left component: 1-3: values[1] + values[3] = 8 + 4 = 12, divisible by 6
+  - Right component: 0-2-4: values[0] + values[2] + values[4] = 1 + 1 + 4 = 6, divisible by 6
+- No way to split into 3 or more valid parts.
+- **Answer: 2**
 
 ---
 
-## **Summary Table**
+### **Summary Table**
 
-| Step | j | pref[j] | mod | min_pref[mod] | pref[j]-min_pref[mod] | res update  |
-|------|---|---------|-----|-------------- |---------------------- |-------------|
-|  1   | 1 |  -5     |  1  |  LLONG_MAX    |      —                |   —         |
-|  2   | 2 |  -4     |  0  |       0       |     -4                |   -4        |
-|  3   | 3 |  -2     |  1  |      -5       |      3                |    3        |
-|  4   | 4 |  -5     |  0  |      -4       |     -1                |  (keep 3)   |
-|  5   | 5 |  -1     |  1  |      -5       |      4                |    4        |
+| Step                | Description                                    | Result |
+|---------------------|------------------------------------------------|--------|
+| DFS `/` Subtree     | Compute sum and possible cuts                  | O(N)   |
+| Count cuts          | For child with %k==0, cut and +1 to `cuts`     |        |
+| Final answer        | cuts + 1                                       |        |
 
 ---
 
-## **Summary**
-
-- Use prefix sums and track minimum prefix value for each modulo class.
-- At each step, maximum valid sum is `prefix[j] - min_prefix[j % k]`.
-- Time complexity is O(n).
-
----
-
-**Let me know if you need a Python solution or more test cases!**
+**This approach ensures O(N) time, gives the maximum components in linear time, and is easily implementable.**
