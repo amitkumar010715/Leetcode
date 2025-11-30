@@ -1,99 +1,137 @@
-Let's address each requirement step by step:
+Let's break down the problem step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums` and an integer `k`, you can decrement any element by 1 any number of times. Return the **minimum number of decrements** needed so that the sum of the array is divisible by `k`.
+Given an array `nums` and an integer `p`, find the length of the **smallest subarray** (possibly empty, but **not the whole array**) to remove so that the sum of the remaining elements is divisible by `p`. If impossible, return -1.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### **Constraints**
-- Array size: **1 ≤ nums.length ≤ 1000**
-- Array values: **1 ≤ nums[i] ≤ 1000**
-- Divisor: **1 ≤ k ≤ 100**
-
-### **Edge Cases**
-- The sum is already divisible by `k`: need 0 operations.
-- The sum is less than `k` but not divisible: you may need to decrement to zero on all elements.
-- Several ways to reduce the sum; but always optimal to subtract the exact remainder, if possible, in a single element.
+- `1 <= nums.length <= 10^5` (large, need O(n) or O(n log n) solution)
+- `1 <= nums[i] <= 10^9` (large values; only care about sum mod `p`!)
+- `1 <= p <= 10^9`
+- **Edge Cases:**
+    - The sum is already divisible by `p`: answer is 0.
+    - It's impossible: answer is -1.
+    - Can't remove the whole array.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Insight**
-- Every operation simply reduces the total sum by 1.
-- We want the first `sum(nums)` divisible by k **with as few decrements as possible**.
-- That means:  
-  - Find the remainder: `rem = sum(nums) % k`
-  - If `rem == 0`, answer is 0.
-  - Otherwise, you need to subtract `rem` from the sum.
+### **Observation & Approach:**
 
-**But** each operation is just decrementing some element by 1.  
-So, the **optimal** is:  
-- Find if any `nums[i] >= rem` exists.
-  - If yes, just decrement this `nums[i]` by exactly `rem`: requires `rem` operations.
-- Otherwise, you need to remove `rem` sum by decrementing any combination so that the sum decreases by exactly `rem`.
+Let `S = sum(nums)`.  
+Let `rem = S % p`. Remove a subarray whose sum % p is equal to `rem`.
 
-But since `nums` values are ≤ 1000 and length up to 1000, always possible.
+Why? Because removing subarray with sum `%p == rem` makes the new sum `%p == 0`.
 
-## **Steps**
-1. Compute `sum = Sum of nums`
-2. Compute `rem = sum % k`
-3. If `rem == 0`, return 0.
-4. Return `rem`.
+**So: Find the **smallest subarray** whose sum % p == rem.**
 
-### **Why?**
-- Decrementing any element by 1 reduces the sum by 1. So, to reduce the sum by `rem`, just need `rem` operations, distributed arbitrarily.
-- It's always possible because the sum is at least `rem` (since `rem < k <= sum`).
+---
+
+### **Algorithm:**
+- Use prefix sums and a hash map to efficiently find subarrays whose sum mod `p` == `rem`.
+- For **each prefix sum**, compute its mod by `p`, and track the earliest index you saw that mod.
+- For current prefix, check if there is a prefix with mod `(current mod - rem+p)%p`.
+- Maintain the minimum length of such subarrays.
+
+### **Steps:**
+
+1. Compute `rem = sum(nums)%p`.
+2. If `rem == 0`, no need to remove anything; return 0.
+3. Use a hash map: `mod -> index` where `mod` is the current prefix sum modulo `p`.
+4. Initialize with `{0: -1}` to handle removal from the start.
+5. While iterating, for each index `i`:
+    - `curr_prefix = (curr_prefix + nums[i]) % p`
+    - Want an earlier prefix such that  
+      `(curr_prefix - prev_prefix) % p == rem`  
+      => `prev_prefix % p == (curr_prefix - rem + p)%p`
+    - If such `mod` exists in the map, potential answer: `i - map[mod]`
+    - Update the map with `curr_prefix -> i`
+6. The minimum answer should _not_ be the size of the entire array.
+7. If not found, return -1.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+#include <unordered_map>
+#include <numeric>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    int minOperations(vector<int>& nums, int k) {
-        int sum = 0;
-        for (int x : nums) sum += x;
-        int rem = sum % k;
-        return rem;
+    int minSubarray(vector<int>& nums, int p) {
+        long long total = 0;
+        for (int a : nums)
+            total = (total + a) % p;
+        int rem = total % p;
+        if (rem == 0) return 0;
+        int n = nums.size();
+        unordered_map<int, int> mod_idx; // mod -> last index
+        mod_idx[0] = -1; // handle prefix from start
+        int res = n;
+        long long prefix = 0;
+        for (int i = 0; i < n; ++i) {
+            prefix = (prefix + nums[i]) % p;
+            // We need prefix sum such that (prefix - prev_prefix) % p == rem
+            // That is, prev_prefix % p == (prefix - rem + p) % p
+            int want = (prefix - rem + p) % p;
+            if (mod_idx.count(want)) {
+                res = min(res, i - mod_idx[want]);
+            }
+            mod_idx[prefix] = i;
+        }
+        return res == n ? -1 : res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explained**
 
-**Example:**  
-`nums = [3,9,7]`, `k = 5`
+Take **Example 1**: `nums = [3,1,4,2]`, `p = 6`
 
-- `sum = 3 + 9 + 7 = 19`
-- `rem = 19 % 5 = 4`
+- `sum = 10`, `rem = 10%6 = 4`
+- Need to remove a subarray with sum mod 6 == 4.
 
-So, minimum number of operations needed: **4**  
-For instance,
-- You can decrement `9` four times (to 5), or distribute the decrements among elements any way, as long as total is 4.
-- After decrementing a total of 4 times, new sum is `19 - 4 = 15`, which is divisible by 5.
+Calculate prefix sums:
+
+| i | nums[i] | prefix_sum | prefix_mod_6 | Map           |
+|---|---------|------------|--------------|---------------|
+| -1|         |    0       |      0       | {0:-1}        |
+|  0|   3     |    3       |      3       | {0:-1,3:0}    |
+|  1|   1     |    4       |      4       | {0:-1,3:0,4:1}|
+|  2|   4     |    8       |      2       | {0:-1,3:0,4:1,2:2}|
+|  3|   2     |    10      |      4       | {0:-1,3:0,4:3,2:2}|
+
+At i=1, prefix_mod=4.  
+Looking for map[ (4-4+6)%6 == 0 ] == map[0] == -1 → i - (-1) == 2, subarray [3,1].  
+But continue!
+
+At i=2, prefix_mod=2.  
+Looking for map[(2-4+6)%6 == 4] == map[4] == 1 → i - 1 == 1, subarray [4].
+
+Take the minimum, so answer is **1** (remove [4]).
 
 ---
 
-### **Summary Table**
+## **Summary Table**
 
-| Step            | Value       |
-|-----------------|------------|
-| Sum of nums     | 19         |
-| k               | 5          |
-| Remainder       | 4          |
-| Answer          | 4          |
-
+| Step      | What we're doing                     | Why                                    |
+|-----------|-------------------------------------|----------------------------------------|
+| sum%p     | Find remainder                      | Needed to find what to remove          |
+| Hash map  | prefix mod p → last index           | Can find subarrays with needed sum mod |
+| Iterate   | Try to match subarrays quickly      | For O(n) time                         |
+| Output    | Min length not whole array, or -1   | Constraints require                    |
 ---
 
-### **Final Note:**
-
-The **minimum number of operations** is simply `sum(nums) % k`. No need for more complex logic, as subtracting from any index reduces the total accordingly.
+### **This algorithm is O(n) time, O(p) space (but p can be large, in practice only up to O(n) distinct prefix mods are needed).**
