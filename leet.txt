@@ -1,137 +1,136 @@
-Let's break down the problem step by step.
+Let's work through your requirements step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums` and an integer `p`, find the length of the **smallest subarray** (possibly empty, but **not the whole array**) to remove so that the sum of the remaining elements is divisible by `p`. If impossible, return -1.
+Given `n` computers and a set of batteries (each with a certain charge), we want to find the **maximum number of minutes** we can run all `n` computers **simultaneously** (using at most one battery at a time per computer, but we can swap batteries between computers at any time). **Batteries cannot be recharged.**
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= nums.length <= 10^5` (large, need O(n) or O(n log n) solution)
-- `1 <= nums[i] <= 10^9` (large values; only care about sum mod `p`!)
-- `1 <= p <= 10^9`
+- **Constraints:**
+  - `1 <= n <= batteries.length <= 1e5`
+  - `1 <= batteries[i] <= 1e9`
 - **Edge Cases:**
-    - The sum is already divisible by `p`: answer is 0.
-    - It's impossible: answer is -1.
-    - Can't remove the whole array.
+  - **More batteries than computers:** But some batteries might be small, so total energy is the key.
+  - **Large single battery:** One giant battery plus many tiny batteries.
+  - **All small batteries:** Uniform small batteries, i.e. `[1,1,1,...]`.
+  - **A computer runs out first:** If the energy can't be distributed equally, the weakest link limits the total time.
+  - **Not enough total energy:** Total battery sum < n, then the answer is obviously 0.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Observation & Approach:**
+### **Observation**
 
-Let `S = sum(nums)`.  
-Let `rem = S % p`. Remove a subarray whose sum % p is equal to `rem`.
+- We want to maximize `T` (minutes) such that **sum of all battery energy** ≥ `n * T`.
+- But no computer can ever be powered for longer than the total battery supply divided evenly.
+- The trickiest part: **No battery can be used by multiple computers at the same time**.
 
-Why? Because removing subarray with sum `%p == rem` makes the new sum `%p == 0`.
+### **Approach**
 
-**So: Find the **smallest subarray** whose sum % p == rem.**
+- **Key Insight:**  
+  At any time, a computer is powered by some battery (swap is allowed at 0 cost).  
+  The best we can do is to **distribute all available energy as evenly as possible** among the `n` computers, i.e. `T <= totalEnergy / n`.
+
+  However, **no single computer can use more total energy than all the batteries combined**—but we must watch out for *the largest batteries*.
+
+- **Binary Search Solution:**
+
+  1. Compute the total sum of all batteries.
+  2. Set search range for maximum possible running time from `1` up to `sum / n`.
+  3. For a candidate time `T`, **can we keep all `n` computers on for `T` minutes?**
+     - For each battery, compute how much it can contribute (max `T` per battery because a battery can't be used by multiple computers at the same time).
+     - Sum up all contributions and check if it's at least `n * T`.
+
+### **Pseudocode for Check:**
+```cpp
+bool canRun(vector<int>& batteries, long long T, int n) {
+    long long total = 0;
+    for (int b : batteries)
+        total += min((long long)b, T);
+    return total >= T * n;
+}
+```
 
 ---
 
-### **Algorithm:**
-- Use prefix sums and a hash map to efficiently find subarrays whose sum mod `p` == `rem`.
-- For **each prefix sum**, compute its mod by `p`, and track the earliest index you saw that mod.
-- For current prefix, check if there is a prefix with mod `(current mod - rem+p)%p`.
-- Maintain the minimum length of such subarrays.
-
-### **Steps:**
-
-1. Compute `rem = sum(nums)%p`.
-2. If `rem == 0`, no need to remove anything; return 0.
-3. Use a hash map: `mod -> index` where `mod` is the current prefix sum modulo `p`.
-4. Initialize with `{0: -1}` to handle removal from the start.
-5. While iterating, for each index `i`:
-    - `curr_prefix = (curr_prefix + nums[i]) % p`
-    - Want an earlier prefix such that  
-      `(curr_prefix - prev_prefix) % p == rem`  
-      => `prev_prefix % p == (curr_prefix - rem + p)%p`
-    - If such `mod` exists in the map, potential answer: `i - map[mod]`
-    - Update the map with `curr_prefix -> i`
-6. The minimum answer should _not_ be the size of the entire array.
-7. If not found, return -1.
-
----
-
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <unordered_map>
-#include <numeric>
 #include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int minSubarray(vector<int>& nums, int p) {
-        long long total = 0;
-        for (int a : nums)
-            total = (total + a) % p;
-        int rem = total % p;
-        if (rem == 0) return 0;
-        int n = nums.size();
-        unordered_map<int, int> mod_idx; // mod -> last index
-        mod_idx[0] = -1; // handle prefix from start
-        int res = n;
-        long long prefix = 0;
-        for (int i = 0; i < n; ++i) {
-            prefix = (prefix + nums[i]) % p;
-            // We need prefix sum such that (prefix - prev_prefix) % p == rem
-            // That is, prev_prefix % p == (prefix - rem + p) % p
-            int want = (prefix - rem + p) % p;
-            if (mod_idx.count(want)) {
-                res = min(res, i - mod_idx[want]);
+    long long maxRunTime(int n, vector<int>& batteries) {
+        long long left = 1, right = 0;
+        for (int b : batteries) right += b;
+        
+        right /= n; // No need to try longer than sum(batteries) / n
+        
+        long long ans = 0;
+        while (left <= right) {
+            long long mid = left + (right - left) / 2;
+            
+            long long total = 0;
+            for (int b : batteries)
+                total += min((long long)b, mid);
+            if (total >= mid * n) {
+                ans = mid;
+                left = mid + 1;
+            } else {
+                right = mid - 1;
             }
-            mod_idx[prefix] = i;
         }
-        return res == n ? -1 : res;
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Walkthrough of Example**
 
-Take **Example 1**: `nums = [3,1,4,2]`, `p = 6`
+### **Example 1**
 
-- `sum = 10`, `rem = 10%6 = 4`
-- Need to remove a subarray with sum mod 6 == 4.
+**Input:**  
+`n = 2`, `batteries = [3,3,3]`
 
-Calculate prefix sums:
+**Total energy:** 3 + 3 + 3 = 9  
+**Max possible time:** 9 / 2 = 4 (because 9/2 = 4.5, but cannot power for 5 full minutes)
 
-| i | nums[i] | prefix_sum | prefix_mod_6 | Map           |
-|---|---------|------------|--------------|---------------|
-| -1|         |    0       |      0       | {0:-1}        |
-|  0|   3     |    3       |      3       | {0:-1,3:0}    |
-|  1|   1     |    4       |      4       | {0:-1,3:0,4:1}|
-|  2|   4     |    8       |      2       | {0:-1,3:0,4:1,2:2}|
-|  3|   2     |    10      |      4       | {0:-1,3:0,4:3,2:2}|
+- Try T=4:  
+  - Each battery can contribute at most 4 minutes, so total = 3 + 3 + 3 = 9 (since all are less than 4, nothing is capped).
+  - Leftover is enough: 9 >= 2*4 = 8.
+- T=5:  
+  - Each battery can contribute at most 5, but each has 3, so sum = 3 + 3 + 3 = 9.
+  - 9 < 2*5 = 10, so can't do 5.
+- **Maximum T we can achieve is 4.**
 
-At i=1, prefix_mod=4.  
-Looking for map[ (4-4+6)%6 == 0 ] == map[0] == -1 → i - (-1) == 2, subarray [3,1].  
-But continue!
-
-At i=2, prefix_mod=2.  
-Looking for map[(2-4+6)%6 == 4] == map[4] == 1 → i - 1 == 1, subarray [4].
-
-Take the minimum, so answer is **1** (remove [4]).
+**How:**  
+Run two computers for 4 minutes by swapping batteries as needed, as shown in the problem's image.
 
 ---
 
 ## **Summary Table**
 
-| Step      | What we're doing                     | Why                                    |
-|-----------|-------------------------------------|----------------------------------------|
-| sum%p     | Find remainder                      | Needed to find what to remove          |
-| Hash map  | prefix mod p → last index           | Can find subarrays with needed sum mod |
-| Iterate   | Try to match subarrays quickly      | For O(n) time                         |
-| Output    | Min length not whole array, or -1   | Constraints require                    |
+| Battery Swap Allowed? | Binary Search? | Main Challenge                   |
+|----------------------|:--------------:|----------------------------------|
+| Yes                  |      Yes       | Distributable but limited supply |
+
 ---
 
-### **This algorithm is O(n) time, O(p) space (but p can be large, in practice only up to O(n) distinct prefix mods are needed).**
+## **Conclusion**
+
+- We use **binary search on time**, distributing as much battery as possible to each computer.
+- For each time candidate, check if the **sum of min(battery, time) for all batteries** is at least `n * time`.
+- Key insight: can't use more energy per battery than it has, and total energy must be split across all computers.
+
+---
+
+Let me know if you want the code explained step-by-step, or a Python version!
