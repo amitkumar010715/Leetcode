@@ -1,136 +1,146 @@
-Let's work through your requirements step by step:
+Let's address each requirement step-by-step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given `n` computers and a set of batteries (each with a certain charge), we want to find the **maximum number of minutes** we can run all `n` computers **simultaneously** (using at most one battery at a time per computer, but we can swap batteries between computers at any time). **Batteries cannot be recharged.**
+Given a list of unique points, **count the number of quadruples (sets of 4 distinct points) that form a convex quadrilateral with at least one pair of horizontal sides** (sides parallel to the x-axis, so they share the same `y` coordinate).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-  - `1 <= n <= batteries.length <= 1e5`
-  - `1 <= batteries[i] <= 1e9`
+    - `4 <= points.length <= 1e5` &mdash; Must be linear or O(N log N); can't enumerate all quadruples.
+    - All points are distinct.
+    - `-1e8 <= x_i, y_i <= 1e8`.
+
 - **Edge Cases:**
-  - **More batteries than computers:** But some batteries might be small, so total energy is the key.
-  - **Large single battery:** One giant battery plus many tiny batteries.
-  - **All small batteries:** Uniform small batteries, i.e. `[1,1,1,...]`.
-  - **A computer runs out first:** If the energy can't be distributed equally, the weakest link limits the total time.
-  - **Not enough total energy:** Total battery sum < n, then the answer is obviously 0.
+    - Multiple points may have the same `y` but different `x`, so many horizontal segments possible per `y`.
+    - All points in a single horizontal line (no quadrilateral).
+    - Only two unique `y` values: can only pair rows to make horizontal sides.
+    - Expected count should be modulo `1e9 + 7`.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Observation**
+### **Key Insight**
 
-- We want to maximize `T` (minutes) such that **sum of all battery energy** ≥ `n * T`.
-- But no computer can ever be powered for longer than the total battery supply divided evenly.
-- The trickiest part: **No battery can be used by multiple computers at the same time**.
+For horizontal sides, **edges must have both endpoints with the same `y` value**.
 
-### **Approach**
+Count the number of quadruples with at least **one pair of horizontal sides** (i.e., two points with one y-coordinate and two points with a different y-coordinate).
 
-- **Key Insight:**  
-  At any time, a computer is powered by some battery (swap is allowed at 0 cost).  
-  The best we can do is to **distribute all available energy as evenly as possible** among the `n` computers, i.e. `T <= totalEnergy / n`.
+#### **Step-by-step Approach**
 
-  However, **no single computer can use more total energy than all the batteries combined**—but we must watch out for *the largest batteries*.
+1. **Group x-coordinates by y-coordinate.**
+    - For each unique y, store pts on that row.
+    - For row y, if there are k points: the number of ways to choose 2 to form a horizontal line is C(k,2).
 
-- **Binary Search Solution:**
+2. **For each pair of different rows y1, y2:**
+    - Pick **two points from y1 (horizontal edge)**: C(k1, 2)
+    - Pick two points from y2: C(k2, 2)
+    - These 4 points form a quadrilateral with both top and bottom horizontal.
+    - Each such pair forms `C(k1,2) * C(k2,2)` quadrilaterals.
 
-  1. Compute the total sum of all batteries.
-  2. Set search range for maximum possible running time from `1` up to `sum / n`.
-  3. For a candidate time `T`, **can we keep all `n` computers on for `T` minutes?**
-     - For each battery, compute how much it can contribute (max `T` per battery because a battery can't be used by multiple computers at the same time).
-     - Sum up all contributions and check if it's at least `n * T`.
+3. **Total number: sum over all unordered (y1, y2), y1 != y2, of `C(k1,2)*C(k2,2)`**
 
-### **Pseudocode for Check:**
-```cpp
-bool canRun(vector<int>& batteries, long long T, int n) {
-    long long total = 0;
-    for (int b : batteries)
-        total += min((long long)b, T);
-    return total >= T * n;
-}
-```
+    - Instead of iterating over all pairs:
+        - Let’s pre-calculate C(k, 2) for all y.
+        - If `row_pairs` is the array of all `C(k_y, 2)`, then the sum over all unordered pairs is:
+          ```
+          total = (sum(row_pairs) ^ 2 - sum(row_pairs^2)) / 2
+          ```
+          (Standard "sum of all pairs" trick.)
+
+**Why is this correct?**  
+Given two rows, we choose two points on each, and these give us a unique set of 4 points (since all points are distinct). The only requirement is that the sides formed on both rows are horizontal (i.e., parallel to x-axis). Since at least one pair of horizontal sides is required, this covers all cases (if there were more than two horizontal sides, it's still included).
+
+**Convexity**: It's guaranteed for points with different y-values forming two segments (no three points are co-linear vertically, so quadrilaterals made this way are convex and valid).
+
+#### **Implementation Details**
+
+- Use `unordered_map<int, int>` to count number of points per y-coordinate.
+- For each y, compute `C(cnt, 2)`.
+- Use prefix sum trick above.
+- Watch for zeros (when fewer than 2 points in a row).
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
+#include <unordered_map>
 using namespace std;
 
 class Solution {
 public:
-    long long maxRunTime(int n, vector<int>& batteries) {
-        long long left = 1, right = 0;
-        for (int b : batteries) right += b;
-        
-        right /= n; // No need to try longer than sum(batteries) / n
-        
-        long long ans = 0;
-        while (left <= right) {
-            long long mid = left + (right - left) / 2;
-            
-            long long total = 0;
-            for (int b : batteries)
-                total += min((long long)b, mid);
-            if (total >= mid * n) {
-                ans = mid;
-                left = mid + 1;
-            } else {
-                right = mid - 1;
+    int countTrapezoids(vector<vector<int>>& points) {
+        const int MOD = 1e9 + 7;
+        unordered_map<int, int> y_count;
+        for (auto& p : points) {
+            y_count[p[1]]++;
+        }
+        vector<long long> pairs;
+        long long sum_pairs = 0, sum_pairs_sq = 0;
+
+        for (const auto& [y, cnt] : y_count) {
+            if (cnt >= 2) {
+                long long val = (1LL * cnt * (cnt - 1) / 2) % MOD;
+                pairs.push_back(val);
             }
         }
-        return ans;
+        for (long long x : pairs) {
+            sum_pairs = (sum_pairs + x) % MOD;
+            sum_pairs_sq = (sum_pairs_sq + x * x % MOD) % MOD;
+        }
+        // Compute (sum^2 - sum_of_squares) / 2, modulo MOD.
+        long long ans = ((sum_pairs * sum_pairs % MOD - sum_pairs_sq + MOD) % MOD) * ((MOD + 1) / 2) % MOD;
+        return (int)ans;
     }
 };
 ```
 
 ---
 
-## 5. **Walkthrough of Example**
+## 5. **Example Explained**
 
-### **Example 1**
+For  
+**Input:** `points = [[1,0],[2,0],[3,0],[2,2],[3,2]]`
 
-**Input:**  
-`n = 2`, `batteries = [3,3,3]`
+Unique y’s:  
+- y = 0: [1,0], [2,0], [3,0] (**3 points**)
+- y = 2: [2,2], [3,2] (**2 points**)
 
-**Total energy:** 3 + 3 + 3 = 9  
-**Max possible time:** 9 / 2 = 4 (because 9/2 = 4.5, but cannot power for 5 full minutes)
+C(3,2) = 3, C(2,2) = 1
 
-- Try T=4:  
-  - Each battery can contribute at most 4 minutes, so total = 3 + 3 + 3 = 9 (since all are less than 4, nothing is capped).
-  - Leftover is enough: 9 >= 2*4 = 8.
-- T=5:  
-  - Each battery can contribute at most 5, but each has 3, so sum = 3 + 3 + 3 = 9.
-  - 9 < 2*5 = 10, so can't do 5.
-- **Maximum T we can achieve is 4.**
+Total # of pairs:
+- sum_pairs = 3 + 1 = 4
+- sum_pairs_sq = 3^2 + 1^2 = 9 + 1 = 10
 
-**How:**  
-Run two computers for 4 minutes by swapping batteries as needed, as shown in the problem's image.
+Total: (4^2 - 10)/2 = (16 - 10)/2 = 6/2 = 3
+
+**So, the answer is 3.**
 
 ---
 
-## **Summary Table**
+### **Summary Table**
 
-| Battery Swap Allowed? | Binary Search? | Main Challenge                   |
-|----------------------|:--------------:|----------------------------------|
-| Yes                  |      Yes       | Distributable but limited supply |
+| y-value | points         | #points | C(k,2) |
+|---------|---------------|---------|--------|
+| 0       | 1,2,3         | 3       |   3    |
+| 2       | 2,3           | 2       |   1    |
 
----
-
-## **Conclusion**
-
-- We use **binary search on time**, distributing as much battery as possible to each computer.
-- For each time candidate, check if the **sum of min(battery, time) for all batteries** is at least `n * time`.
-- Key insight: can't use more energy per battery than it has, and total energy must be split across all computers.
+All trapezoids made by choosing 2 on y=0 and 2 on y=2 (single pair of horizontal sides).
 
 ---
 
-Let me know if you want the code explained step-by-step, or a Python version!
+## **Final Notes**
+
+- **Time Complexity:** O(N) for grouping and O(R) for final calculation (R = # unique y), both << N.
+- **Space Complexity:** O(R) for storing y-groups.
+
+---
+
+**If you need any optimizations or more explanation, feel free to ask!**
