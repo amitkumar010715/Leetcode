@@ -1,103 +1,163 @@
-Let's address each requirement step-by-step:
+Let's break down **LeetCode: Count Number of Trapezoids II**.
 
 ---
 
 ## 1. **Short Summary**
 
-Given a list of unique points, **count the number of quadruples (sets of 4 distinct points) that form a convex quadrilateral with at least one pair of horizontal sides** (sides parallel to the x-axis, so they share the same `y` coordinate).
+Given up to 500 distinct points in the plane, count the number of unique sets of 4 points that form a **trapezoid**: a convex quadrilateral with **at least one pair** of parallel sides (two segments with equal slopes).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `4 <= points.length <= 1e5` &mdash; Must be linear or O(N log N); can't enumerate all quadruples.
-    - All points are distinct.
-    - `-1e8 <= x_i, y_i <= 1e8`.
-
-- **Edge Cases:**
-    - Multiple points may have the same `y` but different `x`, so many horizontal segments possible per `y`.
-    - All points in a single horizontal line (no quadrilateral).
-    - Only two unique `y` values: can only pair rows to make horizontal sides.
-    - Expected count should be modulo `1e9 + 7`.
+- \( 4 \leq n \leq 500 \)
+- All points are distinct.
+- Coordinates in \([-1000, 1000]\).
+- A quadrilateral must be convex.
+- Trapezoid: **at least** one pair of parallel sides (can be parallelogram).
+- Don't count the same set of 4 points more than once (order doesn't matter).
+- Degenerate or concave quadrilaterals are not valid.
+- Must avoid double-counting (e.g., if a parallelogram is counted as a trapezoid, it still should be counted only once for each set of 4 points).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Insight**
+### **Key Observations**
+1. **Pairs of Parallel Segments:**  
+   Any pair of non-overlapping segments \((a, b)\) and \((c, d)\) with equal slope can be two parallel sides of a trapezoid.
+2. **Convex Quadrilaterals only:**  
+   Need to check if the four points form a convex quadrilateral.
+3. **Efficiency:**  
+   Brute-force over all \(O(n^4)\) 4-tuples is too slow.  
+   Instead:  
+   - Group all unordered pairs of points by their slope.
+   - For each group with \(k\) pairs (\(k \geq 2\)), for each pair of pairs (with disjoint points), check if the 4 points form a convex quadrilateral.
 
-For horizontal sides, **edges must have both endpoints with the same `y` value**.
+### **Steps**
+1. For each unordered pair of points \((i, j)\), compute reduced slope, and group all pairs by slope.
+2. For each group:
+   - For every pair of pairs \((a, b), (c, d)\) (with disjoint points):
+     - Get the 4 points.
+     - Check if they form a convex quadrilateral.
+3. Store each 4-point set in a set (e.g., sort and insert), to avoid duplicates.
+4. Return the size of the set.
 
-Count the number of quadruples with at least **one pair of horizontal sides** (i.e., two points with one y-coordinate and two points with a different y-coordinate).
+### **Convex Quadrilateral Check**
+Given 4 points, in all 24 orderings, at most 2 are convex.  
+But if you consider all cyclic permutations and flips, you can pick any ordering and check if it is convex.
 
-#### **Step-by-step Approach**
+- Let's sort the points in cyclic order (convex hull in O(1) for 4 points), and check convexity using cross products (orientation check).
 
-1. **Group x-coordinates by y-coordinate.**
-    - For each unique y, store pts on that row.
-    - For row y, if there are k points: the number of ways to choose 2 to form a horizontal line is C(k,2).
+Or, for each permutation of 4 points, check if all interior angles < 180° (cross products with same sign).
 
-2. **For each pair of different rows y1, y2:**
-    - Pick **two points from y1 (horizontal edge)**: C(k1, 2)
-    - Pick two points from y2: C(k2, 2)
-    - These 4 points form a quadrilateral with both top and bottom horizontal.
-    - Each such pair forms `C(k1,2) * C(k2,2)` quadrilaterals.
-
-3. **Total number: sum over all unordered (y1, y2), y1 != y2, of `C(k1,2)*C(k2,2)`**
-
-    - Instead of iterating over all pairs:
-        - Let’s pre-calculate C(k, 2) for all y.
-        - If `row_pairs` is the array of all `C(k_y, 2)`, then the sum over all unordered pairs is:
-          ```
-          total = (sum(row_pairs) ^ 2 - sum(row_pairs^2)) / 2
-          ```
-          (Standard "sum of all pairs" trick.)
-
-**Why is this correct?**  
-Given two rows, we choose two points on each, and these give us a unique set of 4 points (since all points are distinct). The only requirement is that the sides formed on both rows are horizontal (i.e., parallel to x-axis). Since at least one pair of horizontal sides is required, this covers all cases (if there were more than two horizontal sides, it's still included).
-
-**Convexity**: It's guaranteed for points with different y-values forming two segments (no three points are co-linear vertically, so quadrilaterals made this way are convex and valid).
-
-#### **Implementation Details**
-
-- Use `unordered_map<int, int>` to count number of points per y-coordinate.
-- For each y, compute `C(cnt, 2)`.
-- Use prefix sum trick above.
-- Watch for zeros (when fewer than 2 points in a row).
+But since we'll be considering only a potentially small number of cases per candidate, it's fine.
 
 ---
 
-## 4. **Clean C++ Solution**
+### **Complexity**
+
+- Pairing: \(O(n^2)\) pairs.
+- For each unique slope, group all pairs sharing that slope.
+    - For each pair of pairs: \(O(k^2)\) per group.
+- In total, bottleneck is \(O(\text{number of parallel pair pairs}) \leq O(n^4)\), but in practice much less.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <unordered_map>
+#include <map>
+#include <algorithm>
+#include <tuple>
+#include <set>
 using namespace std;
 
 class Solution {
 public:
-    int countTrapezoids(vector<vector<int>>& points) {
-        const int MOD = 1e9 + 7;
-        unordered_map<int, int> y_count;
-        for (auto& p : points) {
-            y_count[p[1]]++;
+    typedef pair<int,int> pii;
+    struct Slope {
+        int dy, dx;
+        Slope(int a, int b) {
+            // Reduce slope a/b
+            int g = __gcd(a,b);
+            a /= g; b /= g;
+            if (b<0) { a = -a; b = -b; }
+            dy = a; dx = b;
         }
-        vector<long long> pairs;
-        long long sum_pairs = 0, sum_pairs_sq = 0;
+        bool operator<(const Slope& s) const {
+            return tie(dy,dx) < tie(s.dy,s.dx);
+        }
+    };
+    
+    bool isConvexQuad(vector<pii> &ps) {
+        // Sort as per convex hull order
+        // For 4 points, smallest lexicographical order is sufficient
+        sort(ps.begin(), ps.end());
+        // Now, generate the cyclic permutations of ps
+        vector<int> perm = {0,1,2,3};
+        do {
+            bool good = true;
+            long long signs[4];
+            for (int i = 0; i < 4; ++i) {
+                auto &a = ps[perm[i]];
+                auto &b = ps[perm[(i+1)%4]];
+                auto &c = ps[perm[(i+2)%4]];
+                long long x1 = b.first-a.first, y1 = b.second-a.second;
+                long long x2 = c.first-b.first, y2 = c.second-b.second;
+                signs[i] = x1*y2 - x2*y1;
+            }
+            bool pos = true, neg = true;
+            for (int i=0; i<4; ++i) {
+                if (signs[i] < 0) pos = false;
+                if (signs[i] > 0) neg = false;
+            }
+            // Convex if all cross products have same nonzero sign
+            if ((pos || neg) && !(signs[0]==0 || signs[1]==0 || signs[2]==0 || signs[3]==0)) {
+                return true;
+            }
+        } while (next_permutation(perm.begin(), perm.end()));
+        return false;
+    }
 
-        for (const auto& [y, cnt] : y_count) {
-            if (cnt >= 2) {
-                long long val = (1LL * cnt * (cnt - 1) / 2) % MOD;
-                pairs.push_back(val);
+    int countTrapezoids(vector<vector<int>>& points) {
+        int n = points.size();
+        vector<pii> pts(n);
+        for (int i=0; i<n; ++i) pts[i] = {points[i][0], points[i][1]};
+        map<Slope, vector<pair<int,int>>> slopePairs;
+        // Collect all pairs for each slope
+        for (int i=0; i<n; ++i) {
+            for (int j=i+1; j<n; ++j) {
+                int dy = pts[j].second - pts[i].second;
+                int dx = pts[j].first - pts[i].first;
+                if (dx == 0 && dy == 0) continue; // skip degenerate
+                Slope s(dy, dx);
+                slopePairs[s].push_back({i, j});
             }
         }
-        for (long long x : pairs) {
-            sum_pairs = (sum_pairs + x) % MOD;
-            sum_pairs_sq = (sum_pairs_sq + x * x % MOD) % MOD;
+        set<vector<int>> used; // set of unique sorted 4-pt indices
+        for (auto& kv : slopePairs) {
+            auto &v = kv.second;
+            int sz = v.size();
+            for (int i=0; i<sz; ++i) {
+                for (int j=i+1; j<sz; ++j) {
+                    int a = v[i].first, b = v[i].second;
+                    int c = v[j].first, d = v[j].second;
+                    // All indices must be distinct
+                    set<int> s = {a, b, c, d};
+                    if (s.size() != 4) continue;
+                    vector<int> quad = {a, b, c, d};
+                    sort(quad.begin(), quad.end());
+                    if (used.count(quad)) continue;
+                    // Check for convexity
+                    vector<pii> p4 = {pts[a], pts[b], pts[c], pts[d]};
+                    if (!isConvexQuad(p4)) continue;
+                    used.insert(quad);
+                }
+            }
         }
-        // Compute (sum^2 - sum_of_squares) / 2, modulo MOD.
-        long long ans = ((sum_pairs * sum_pairs % MOD - sum_pairs_sq + MOD) % MOD) * ((MOD + 1) / 2) % MOD;
-        return (int)ans;
+        return used.size();
     }
 };
 ```
@@ -106,41 +166,33 @@ public:
 
 ## 5. **Example Explained**
 
-For  
-**Input:** `points = [[1,0],[2,0],[3,0],[2,2],[3,2]]`
+### **Input:** `points = [[-3,2],[3,0],[2,3],[3,2],[2,-3]]`
+Let points be labeled [P0,P1,P2,P3,P4].
 
-Unique y’s:  
-- y = 0: [1,0], [2,0], [3,0] (**3 points**)
-- y = 2: [2,2], [3,2] (**2 points**)
+Look for all quadruples that form a convex quadrilateral and have at least one pair of parallel sides.
 
-C(3,2) = 3, C(2,2) = 1
+One such is:  
+- Points [-3,2], [2,3], [3,2], [2,-3]  
+- Corresponds to indices 0,2,3,4
+- The segment [-3,2]→[2,3] is parallel to [2,-3]→[3,2].
 
-Total # of pairs:
-- sum_pairs = 3 + 1 = 4
-- sum_pairs_sq = 3^2 + 1^2 = 9 + 1 = 10
+Another such set:  
+- [2,3], [3,2], [3,0], [2,-3]
+- Indices 2,3,1,4
 
-Total: (4^2 - 10)/2 = (16 - 10)/2 = 6/2 = 3
-
-**So, the answer is 3.**
-
----
-
-### **Summary Table**
-
-| y-value | points         | #points | C(k,2) |
-|---------|---------------|---------|--------|
-| 0       | 1,2,3         | 3       |   3    |
-| 2       | 2,3           | 2       |   1    |
-
-All trapezoids made by choosing 2 on y=0 and 2 on y=2 (single pair of horizontal sides).
+Thus, output is **2**.
 
 ---
 
-## **Final Notes**
+## **Summary Table**
 
-- **Time Complexity:** O(N) for grouping and O(R) for final calculation (R = # unique y), both << N.
-- **Space Complexity:** O(R) for storing y-groups.
+| Step        | Approach            |
+|-------------|--------------------|
+| Model       | Group all point pairs by reduced slope |
+| Candidate   | For each group, try all disjoint pair pairs |
+| Valid?      | All points distinct, form convex quadrilateral |
+| Count       | Unique such quadruples |
 
 ---
 
-**If you need any optimizations or more explanation, feel free to ask!**
+**This algorithm efficiently counts all convex quadrilaterals with at least one pair of parallel sides without duplicates.**
