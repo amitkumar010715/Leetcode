@@ -1,112 +1,125 @@
-Let's break down the problem and provide a thorough solution as requested.
+Let's solve **LeetCode: Count Partitions With Max-Min Difference at Most K** step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums`, we are to count indices (partitions) such that the difference between the sum of the left part `[0, i]` and the right part `[i+1, n-1]` is **even**. That is, `sum_left - sum_right` should be even.
+Given an array `nums` and integer `k`, count the number of ways to partition `nums` into contiguous non-empty subarrays **such that for each subarray, `max - min ≤ k`**. Return this count modulo 1e9+7.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-  - `2 <= n == nums.length <= 100`
-  - `1 <= nums[i] <= 100`
-- **Edge Cases:**
-  - All values are even → all partitions are valid.
-  - All values are odd → depends on the count of odds accumulated in sum_left and sum_right.
-  - Minimal length (`n=2`): Only 1 possible partition.
-  - No partition is valid (e.g., [1,2,2]).
-  - All partitions are valid (e.g., [2,4,6,8]).
+    - `2 ≤ nums.length ≤ 5 * 10^4` – the array is too large for brute-force enumeration.
+    - `1 ≤ nums[i] ≤ 10^9`
+    - `0 ≤ k ≤ 10^9`
+- **Edge cases:**
+    - If `k` is very large (≥ max(nums) - min(nums)), any partition is valid (all possible contiguous segmentations of array).
+    - If `k == 0`, only segments with all elements equal are valid.
+    - Arrays with all elements the same: every possible partition is allowed (classic partitioning count: 2^{n-1}).
+    - Repeated elements and decreasing/increasing sequences.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Insight**
+### **Observation**
 
-Let `S` be the total sum. For an index `i`:
-- `left_sum = prefix_sum[i]`
-- `right_sum = S - prefix_sum[i]`
-- The difference: `D = left_sum - right_sum = 2 * left_sum - S`
+Let `dp[i]` = number of valid ways to partition `nums[0..i-1]`.
 
-We require `D` to be **even**.
+We want to compute `dp[n]`.
 
-- `2 * left_sum - S` even ⇨ since `2 * left_sum` is always even, `S` must be **even** for the sum to be even.
-- Therefore, the difference is **even iff the total sum S is even**.
+- Initialize `dp[0] = 1` (empty prefix, 1 way).
+- For every position `i` (from 1 to n), consider all partitions where the last segment starts at `j` and ends at `i - 1`.
+    - So, `dp[i] += dp[j]` **if** subarray `nums[j..i-1]` has `max - min ≤ k`.
 
-But let's formalize this:
-- `D = 2 * prefix_sum[i] - S`
-- `D even` ⇔ `2 * prefix_sum[i] - S` is even
-- `2 * prefix_sum[i]` is always even, so difference is even iff `S` is even
+Because we only care about *contiguous* partitions, for each `i`, we want to find all possible `j` where the segment `[j, i - 1]` satisfies the constraint.
 
-#### **Conclusion**
-- If `S` is **odd**, it's **impossible** to get an even difference for any partition (since subtracting an odd number from an even gives odd).
-- If `S` is **even**, then for all `i` where `prefix_sum[i]` is integer:
-    - `D is even` always, so **all partitions are valid**.
+### **How to make this efficient?**
 
-**Wait, is this correct? Let's test with the given example [1,2,2]:**
+- **Sliding window + mono deque:** For every `i`, use a window `[l, i-1]` such that all segments ending at `i-1` with starting index in `[l, i-1]` are valid.
+    - Keep the window where `max(nums[l...i-1]) - min(nums[l...i-1]) ≤ k`.
+    - For DP, `dp[i] = sum(dp[l]...dp[i-1])` for this window.
+    - Rolling sum can be maintained.
 
-Total sum = 5 (odd). So, **no valid partitions** — confirmed by example.
+#### **Algorithm:**
 
-For [2,4,6,8]: sum = 20 (even), so **all partitions are valid** — confirmed.
+1. Initialize `dp[0] = 1` and `prefix_dp[0] = 1`.
+2. Use two monotonic deques to maintain max and min in the current window.
+3. For each `right = 1...n`:
+    - Slide `left` forward as long as `max - min > k`.
+    - For each position, `dp[right] = sum(dp[left] ... dp[right-1])`.
+    - Can be computed as `prefix_dp[right-1] - prefix_dp[left-1]`.
+    - Update `prefix_dp`.
+4. Return `dp[n]`.
 
 ---
 
 ## 4. **C++ Solution**
 
-Given the approach, the steps are:
-1. Compute the total sum `S`.
-2. If `S` is odd, return 0.
-3. Otherwise, count all possible partitions (`n-1`).
-
-**C++ Implementation:**
-
 ```cpp
+#include <vector>
+#include <deque>
+using namespace std;
+
 class Solution {
 public:
-    int countPartitions(vector<int>& nums) {
+    int countPartitions(vector<int>& nums, int k) {
+        const int MOD = 1e9+7;
         int n = nums.size();
-        int S = 0;
-        for (int x : nums) S += x;
-        // If total sum is odd, no valid partitions
-        if (S % 2 != 0) return 0;
-        // Otherwise, all n-1 partitions are valid
-        return n - 1;
+        vector<int> dp(n+1, 0), prefix_dp(n+1, 0);
+        dp[0] = 1;
+        prefix_dp[0] = 1;
+
+        int l = 0;
+        deque<int> min_q, max_q;
+        for (int r = 1; r <= n; ++r) {
+            // slide window [l, r-1]
+            while (!min_q.empty() && nums[r-1] <= nums[min_q.back()])
+                min_q.pop_back();
+            min_q.push_back(r-1);
+            while (!max_q.empty() && nums[r-1] >= nums[max_q.back()])
+                max_q.pop_back();
+            max_q.push_back(r-1);
+
+            // move l to satisfy max - min <= k
+            while (nums[max_q.front()] - nums[min_q.front()] > k) {
+                ++l;
+                if (!min_q.empty() && min_q.front() < l) min_q.pop_front();
+                if (!max_q.empty() && max_q.front() < l) max_q.pop_front();
+            }
+
+            // dp[r] = sum(dp[l]...dp[r-1])
+            dp[r] = (prefix_dp[r-1] - (l > 0 ? prefix_dp[l-1] : 0) + MOD) % MOD;
+            prefix_dp[r] = (prefix_dp[r-1] + dp[r]) % MOD;
+        }
+        return dp[n];
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-**Example 1:**
+**Example:**  
+`nums = [9,4,1,3,7], k = 4`
 
-`nums = [10,10,3,7,6]`  
-Total sum: 10+10+3+7+6 = **36** (even)
+Let's walk through:
 
-Possible partitions (indices 0...n-2):
+```
+i = 0: (dp[0]=1): empty prefix
+i = 1: [9] valid → dp[1] = 1
+i = 2: [4], [9,4], but [9,4] diff=5>4 so just [4] → dp[2]=dp[1]=1
+i = 3: [1], [4,1]=3<4, [9,4,1]=8>4 not valid
+- [1]: dp[2]=1, [4,1]: dp[1]=1, so dp[3]=1+1=2
+i = 4: [3], [1,3]=2, [4,1,3]=3, [9,4,1,3]=8>4
+- [3]: dp[3]=2, [1,3]:dp[2]=1, [4,1,3]:dp[1]=1; → dp[4]=2+1+1=4
+i = 5: [7], [3,7]=4, [1,3,7]=6>4, [4,1,3,7]=6>4...
+- [7]: dp[4]=4, [3,7]:dp[3]=2; dp[5]=4+2=6
+```
 
-- Partition at i = 0: left = [10], right = [10,3,7,6], difference = 10 - 26 = -16 (even)
-- Partition at i = 1: left = [10,10], right = [3,7,6], difference = 20 - 16 = 4 (even)
-- Partition at i = 2: left = [10,10,3], right = [7,6], difference = 23 - 13 = 10 (even)
-- Partition at i = 3: left = [10,10,3,7], right = [6], difference = 30 - 6 = 24 (even)
-
-All 4 possible partitions are valid, **answer: 4**.
-
----
-
-## **Summary Table**
-
-| Total sum even? | # Valid Partitions         |
-|-----------------|---------------------------|
-| Yes             | n-1 (all possible splits) |
-| No              | 0                         |
+**So `ans = dp[5] = 6`**
 
 ---
-
-## **Complete**
-
-If you have further constraints (such as needing to check partial sums or other properties), let me know. But per examples, this logic suffices.
