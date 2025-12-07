@@ -1,125 +1,68 @@
-Let's solve **LeetCode: Count Partitions With Max-Min Difference at Most K** step by step.
+Sure! Let’s address your requirements step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums` and integer `k`, count the number of ways to partition `nums` into contiguous non-empty subarrays **such that for each subarray, `max - min ≤ k`**. Return this count modulo 1e9+7.
+Given two non-negative integers `low` and `high`, return the count of **odd numbers** in the closed interval `[low, high]` (i.e., both endpoints included).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `2 ≤ nums.length ≤ 5 * 10^4` – the array is too large for brute-force enumeration.
-    - `1 ≤ nums[i] ≤ 10^9`
-    - `0 ≤ k ≤ 10^9`
-- **Edge cases:**
-    - If `k` is very large (≥ max(nums) - min(nums)), any partition is valid (all possible contiguous segmentations of array).
-    - If `k == 0`, only segments with all elements equal are valid.
-    - Arrays with all elements the same: every possible partition is allowed (classic partitioning count: 2^{n-1}).
-    - Repeated elements and decreasing/increasing sequences.
+- Constraints: `0 <= low <= high <= 10^9`
+- The interval can be very large, so **a brute-force iteration is not feasible**.
+- Edge Cases:
+    - The range includes only one number (i.e., `low == high`).
+    - The interval includes all even numbers or all odd numbers.
+    - Both `low` and `high` can be even or odd (check endpoints).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Observation**
+**Observation:**
+- Every two consecutive numbers have **one odd** and **one even**.
+- The count of numbers in `[low, high]` is `(high - low + 1)`.
+    - In that count, about half will be odd (rounded up if odd).
+- Formula:
+    - **Number of odd numbers = (high - low + 1 + (low % 2) + (high % 2)) // 2**
+    - But actually, it can be simplified as:  
+      **(high + 1) // 2 - (low) // 2**
+    - This counts how many odds are ≤ `high`, and subtract how many odds are < `low`.
 
-Let `dp[i]` = number of valid ways to partition `nums[0..i-1]`.
-
-We want to compute `dp[n]`.
-
-- Initialize `dp[0] = 1` (empty prefix, 1 way).
-- For every position `i` (from 1 to n), consider all partitions where the last segment starts at `j` and ends at `i - 1`.
-    - So, `dp[i] += dp[j]` **if** subarray `nums[j..i-1]` has `max - min ≤ k`.
-
-Because we only care about *contiguous* partitions, for each `i`, we want to find all possible `j` where the segment `[j, i - 1]` satisfies the constraint.
-
-### **How to make this efficient?**
-
-- **Sliding window + mono deque:** For every `i`, use a window `[l, i-1]` such that all segments ending at `i-1` with starting index in `[l, i-1]` are valid.
-    - Keep the window where `max(nums[l...i-1]) - min(nums[l...i-1]) ≤ k`.
-    - For DP, `dp[i] = sum(dp[l]...dp[i-1])` for this window.
-    - Rolling sum can be maintained.
-
-#### **Algorithm:**
-
-1. Initialize `dp[0] = 1` and `prefix_dp[0] = 1`.
-2. Use two monotonic deques to maintain max and min in the current window.
-3. For each `right = 1...n`:
-    - Slide `left` forward as long as `max - min > k`.
-    - For each position, `dp[right] = sum(dp[left] ... dp[right-1])`.
-    - Can be computed as `prefix_dp[right-1] - prefix_dp[left-1]`.
-    - Update `prefix_dp`.
-4. Return `dp[n]`.
+**Why does this work?**
+- All odd numbers up to `x` are exactly `(x + 1) // 2`
+- So, odd numbers in `[low, high]` are:  
+  - Odds ≤ `high` minus odds < `low` -> `(high + 1) // 2 - (low // 2)`
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <deque>
-using namespace std;
-
 class Solution {
 public:
-    int countPartitions(vector<int>& nums, int k) {
-        const int MOD = 1e9+7;
-        int n = nums.size();
-        vector<int> dp(n+1, 0), prefix_dp(n+1, 0);
-        dp[0] = 1;
-        prefix_dp[0] = 1;
-
-        int l = 0;
-        deque<int> min_q, max_q;
-        for (int r = 1; r <= n; ++r) {
-            // slide window [l, r-1]
-            while (!min_q.empty() && nums[r-1] <= nums[min_q.back()])
-                min_q.pop_back();
-            min_q.push_back(r-1);
-            while (!max_q.empty() && nums[r-1] >= nums[max_q.back()])
-                max_q.pop_back();
-            max_q.push_back(r-1);
-
-            // move l to satisfy max - min <= k
-            while (nums[max_q.front()] - nums[min_q.front()] > k) {
-                ++l;
-                if (!min_q.empty() && min_q.front() < l) min_q.pop_front();
-                if (!max_q.empty() && max_q.front() < l) max_q.pop_front();
-            }
-
-            // dp[r] = sum(dp[l]...dp[r-1])
-            dp[r] = (prefix_dp[r-1] - (l > 0 ? prefix_dp[l-1] : 0) + MOD) % MOD;
-            prefix_dp[r] = (prefix_dp[r-1] + dp[r]) % MOD;
-        }
-        return dp[n];
+    int countOdds(int low, int high) {
+        return (high + 1) / 2 - (low / 2);
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Explanation of an Example**
 
-**Example:**  
-`nums = [9,4,1,3,7], k = 4`
+### Example: `low = 3`, `high = 7`
 
-Let's walk through:
-
-```
-i = 0: (dp[0]=1): empty prefix
-i = 1: [9] valid → dp[1] = 1
-i = 2: [4], [9,4], but [9,4] diff=5>4 so just [4] → dp[2]=dp[1]=1
-i = 3: [1], [4,1]=3<4, [9,4,1]=8>4 not valid
-- [1]: dp[2]=1, [4,1]: dp[1]=1, so dp[3]=1+1=2
-i = 4: [3], [1,3]=2, [4,1,3]=3, [9,4,1,3]=8>4
-- [3]: dp[3]=2, [1,3]:dp[2]=1, [4,1,3]:dp[1]=1; → dp[4]=2+1+1=4
-i = 5: [7], [3,7]=4, [1,3,7]=6>4, [4,1,3,7]=6>4...
-- [7]: dp[4]=4, [3,7]:dp[3]=2; dp[5]=4+2=6
-```
-
-**So `ans = dp[5] = 6`**
+- All odd numbers in `[3,7]` are **[3, 5, 7]**.
+- Calculation:
+    - `(high + 1) / 2 = (7 + 1) / 2 = 8 / 2 = 4` (count of odds upto 7)
+    - `(low) / 2 = 3 / 2 = 1` (count of odds upto 2)
+    - **Result = 4 - 1 = 3**
+- So, answer is **3** (matching with the actual numbers).
 
 ---
+
+**Summary of Approach:**  
+Just compute `(high + 1) / 2 - (low / 2)` for an O(1) and very efficient solution. No iteration is needed!
