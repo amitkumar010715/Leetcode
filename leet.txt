@@ -1,68 +1,90 @@
-Sure! Let’s address your requirements step by step.
+Let's break down the problem and solution step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given two non-negative integers `low` and `high`, return the count of **odd numbers** in the closed interval `[low, high]` (i.e., both endpoints included).
+Given an integer `n`, you need to calculate the number of integer **triples** `(a, b, c)` where `1 <= a, b, c <= n` and `a^2 + b^2 = c^2`. Both `(a, b, c)` and `(b, a, c)` are counted separately if `a != b`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- Constraints: `0 <= low <= high <= 10^9`
-- The interval can be very large, so **a brute-force iteration is not feasible**.
-- Edge Cases:
-    - The range includes only one number (i.e., `low == high`).
-    - The interval includes all even numbers or all odd numbers.
-    - Both `low` and `high` can be even or odd (check endpoints).
+- **Constraints:**
+  - `1 <= n <= 250`
+- **Edge Cases:**
+  - Small values of `n`, like `n = 1` or `n = 2`, won't have any valid triples.
+  - Do not count triples where `a` or `b` is zero; only use values in `[1, n]`.
+  - Both `(a,b,c)` and `(b,a,c)` can be counted if they are distinct (for example, `(3,4,5)` and `(4,3,5)`).
+  - It’s okay to have `a = b` if the sum of two squares is a perfect square and within the bounds.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Observation:**
-- Every two consecutive numbers have **one odd** and **one even**.
-- The count of numbers in `[low, high]` is `(high - low + 1)`.
-    - In that count, about half will be odd (rounded up if odd).
-- Formula:
-    - **Number of odd numbers = (high - low + 1 + (low % 2) + (high % 2)) // 2**
-    - But actually, it can be simplified as:  
-      **(high + 1) // 2 - (low) // 2**
-    - This counts how many odds are ≤ `high`, and subtract how many odds are < `low`.
+Given the maximal value of `n` is **250**, a brute-force approach is feasible:
 
-**Why does this work?**
-- All odd numbers up to `x` are exactly `(x + 1) // 2`
-- So, odd numbers in `[low, high]` are:  
-  - Odds ≤ `high` minus odds < `low` -> `(high + 1) // 2 - (low // 2)`
+- For each possible value of `c` from `1` to `n`, try all `a` and `b` pairs (`1 <= a, b < c`).
+- Check whether `a^2 + b^2 == c^2`.
+- For all such pairs, increment a counter.
+
+**Pruning/Optimization:**
+- You can iterate `a` and `b` both from `1` to `n`, but `c` must not exceed `n`.
+- If you prefer, you can use `a` and `b` such that both are less than or equal to `n`, and compute `c2 = a^2 + b^2`, and check whether `c = sqrt(c2)` is an integer and `c <= n`.
+
+The second approach avoids unnecessary loops over `c`:
+
+- For all `1 <= a, b <= n`, calculate `c2 = a^2 + b^2`.
+- If `c2` is a perfect square and its root `c` is in `[1, n]`, count it.
+
+Time complexity: **O(n^2)**
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
+#include <cmath>
 class Solution {
 public:
-    int countOdds(int low, int high) {
-        return (high + 1) / 2 - (low / 2);
+    int countTriples(int n) {
+        int count = 0;
+        for (int a = 1; a <= n; ++a) {
+            for (int b = 1; b <= n; ++b) {
+                int c2 = a * a + b * b;
+                int c = sqrt(c2);
+                if (c <= n && c * c == c2) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 };
 ```
 
 ---
 
-## 5. **Explanation of an Example**
+## 5. **Example Explanation**
 
-### Example: `low = 3`, `high = 7`
+### Input: **n = 5**
 
-- All odd numbers in `[3,7]` are **[3, 5, 7]**.
-- Calculation:
-    - `(high + 1) / 2 = (7 + 1) / 2 = 8 / 2 = 4` (count of odds upto 7)
-    - `(low) / 2 = 3 / 2 = 1` (count of odds upto 2)
-    - **Result = 4 - 1 = 3**
-- So, answer is **3** (matching with the actual numbers).
+- All values tried: `1 <= a, b, c <= 5`
+
+Valid triples:
+- (3, 4, 5) because 3² + 4² = 9 + 16 = 25 = 5²
+- (4, 3, 5) because 4² + 3² = 16 + 9 = 25 = 5²
+
+So, **Output = 2**.
+
+**Note:** This counts both orders (`a`, `b`) when `a != b` (since the problem doesn't require `a <= b`).
 
 ---
 
-**Summary of Approach:**  
-Just compute `(high + 1) / 2 - (low / 2)` for an O(1) and very efficient solution. No iteration is needed!
+### **Summary of Approach**
+
+- Loop through all pairs `(a, b)` in `1..n`
+- Calculate `c = sqrt(a^2 + b^2)`
+- If `c` is an integer and `c <= n`, count it.
+
+This method is fast for `n <= 250`.
