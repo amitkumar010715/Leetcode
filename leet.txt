@@ -1,64 +1,84 @@
-Let's break down the problem and solution step by step.
+Let's address the requirements one by one:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given an integer `n`, you need to calculate the number of integer **triples** `(a, b, c)` where `1 <= a, b, c <= n` and `a^2 + b^2 = c^2`. Both `(a, b, c)` and `(b, a, c)` are counted separately if `a != b`.
+Given an array `nums`, count the number of triplets `(i, j, k)` such that `0 <= i < j < k < n`, `nums[i] == nums[j] * 2`, and `nums[k] == nums[j] * 2`. In essence: for each middle element `j`, count the number of elements before `j` equal to `2*nums[j]`, and number of elements after `j` also equal to `2*nums[j]`, then multiply those counts and sum across all `j`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= n <= 250`
-- **Edge Cases:**
-  - Small values of `n`, like `n = 1` or `n = 2`, won't have any valid triples.
-  - Do not count triples where `a` or `b` is zero; only use values in `[1, n]`.
-  - Both `(a,b,c)` and `(b,a,c)` can be counted if they are distinct (for example, `(3,4,5)` and `(4,3,5)`).
-  - It’s okay to have `a = b` if the sum of two squares is a perfect square and within the bounds.
+- `3 <= n <= 1e5`: Array length can be large, so O(n^2) is NOT feasible.
+- `0 <= nums[i] <= 1e5`: Small possible value range, so frequency/counting arrays/maps are possible.
+- Edge Cases:
+  - Duplicates may exist.
+  - `nums[i]` or `nums[j]` can be zero (handle multiplication correctly).
+  - Some elements may not have any valid i or k.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Given the maximal value of `n` is **250**, a brute-force approach is feasible:
+**Observation:**  
+We want, for each fixed `j`, to quickly count:
+- `count_left`: Number of i (`i < j`) with `nums[i] == 2*nums[j]`
+- `count_right`: Number of k (`k > j`) with `nums[k] == 2*nums[j]`
 
-- For each possible value of `c` from `1` to `n`, try all `a` and `b` pairs (`1 <= a, b < c`).
-- Check whether `a^2 + b^2 == c^2`.
-- For all such pairs, increment a counter.
+Total for this `j`: `count_left * count_right`, sum over all `j`.
 
-**Pruning/Optimization:**
-- You can iterate `a` and `b` both from `1` to `n`, but `c` must not exceed `n`.
-- If you prefer, you can use `a` and `b` such that both are less than or equal to `n`, and compute `c2 = a^2 + b^2`, and check whether `c = sqrt(c2)` is an integer and `c <= n`.
+**Steps:**
+1. Build a frequency map (`freq_right`) for all numbers in nums.
+2. Initialize an empty map (`freq_left`) for left side.
+3. For each `j` from left to right:
+    - Before processing, decrement `freq_right[nums[j]]` (move current num from right side to left).
+    - For current `nums[j]`, let `target = nums[j] * 2`.
+    - `count_left` = `freq_left[target]` (before j)
+    - `count_right` = `freq_right[target]` (after j)
+    - Increment answer by `count_left * count_right`
+    - Increment `freq_left[nums[j]]`
+4. Return answer modulo 1e9+7.
 
-The second approach avoids unnecessary loops over `c`:
-
-- For all `1 <= a, b <= n`, calculate `c2 = a^2 + b^2`.
-- If `c2` is a perfect square and its root `c` is in `[1, n]`, count it.
-
-Time complexity: **O(n^2)**
+**Complexity:**  
+O(n), since each position and map operation is O(1) (since nums[i] range is limited, unordered_map or vector works).
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <cmath>
+#include <vector>
+#include <unordered_map>
+using namespace std;
+
 class Solution {
 public:
-    int countTriples(int n) {
-        int count = 0;
-        for (int a = 1; a <= n; ++a) {
-            for (int b = 1; b <= n; ++b) {
-                int c2 = a * a + b * b;
-                int c = sqrt(c2);
-                if (c <= n && c * c == c2) {
-                    count++;
-                }
-            }
+    int countSpecialTriplets(vector<int>& nums) {
+        const int MOD = 1e9 + 7;
+        unordered_map<int, int> freq_left;
+        unordered_map<int, int> freq_right;
+
+        // Build the freq_right map
+        for (int x : nums) freq_right[x]++;
+
+        long long ans = 0;
+        int n = nums.size();
+        for (int j = 0; j < n; ++j) {
+            freq_right[nums[j]]--;  // Move current number out of right side
+            int target = nums[j] * 2;
+
+            // Number of i < j with nums[i] == target
+            int left = freq_left[target];
+
+            // Number of k > j with nums[k] == target
+            int right = freq_right[target];
+
+            ans = (ans + 1LL * left * right) % MOD;
+
+            freq_left[nums[j]]++;
         }
-        return count;
+        return (int)ans;
     }
 };
 ```
@@ -67,24 +87,35 @@ public:
 
 ## 5. **Example Explanation**
 
-### Input: **n = 5**
+**Example:**  
+`nums = [8,4,2,8,4]`
 
-- All values tried: `1 <= a, b, c <= 5`
+Let's walk through step by step:
 
-Valid triples:
-- (3, 4, 5) because 3² + 4² = 9 + 16 = 25 = 5²
-- (4, 3, 5) because 4² + 3² = 16 + 9 = 25 = 5²
+- Build initial freq_right:
+  - {8:2, 4:2, 2:1}
+- freq_left is {}
 
-So, **Output = 2**.
+Iterate j = 0 to 4:
+- j=0, nums[0]=8, target=16
+    - freq_left[16]=0, freq_right[16]=0 → add 0
+    - Move nums[0]=8 to left: freq_left[8]=1, freq_right[8]=1
+- j=1, nums[1]=4, target=8
+    - freq_left[8]=1 (pos 0), freq_right[8]=1 (pos 3, left)
+    - Add 1*1 = 1 to ans (now ans=1)
+    - Move nums[1]=4 to left: freq_left[4]=1, freq_right[4]=1
+- j=2, nums[2]=2, target=4
+    - freq_left[4]=1 (pos 1), freq_right[4]=1 (pos 4, right)
+    - Add 1*1=1 to ans (ans=2)
+    - Move nums[2]=2 to left: freq_left[2]=1, freq_right[2]=0
+- j=3, nums[3]=8, target=16
+    - freq_left[16]=0, freq_right[16]=0 → add 0
+    - Move nums[3]=8 to left: freq_left[8]=2, freq_right[8]=0
+- j=4, nums[4]=4, target=8
+    - freq_left[8]=2, freq_right[8]=0 → add 0
 
-**Note:** This counts both orders (`a`, `b`) when `a != b` (since the problem doesn't require `a <= b`).
+**Total answer: 2**.
 
 ---
 
-### **Summary of Approach**
-
-- Loop through all pairs `(a, b)` in `1..n`
-- Calculate `c = sqrt(a^2 + b^2)`
-- If `c` is an integer and `c <= n`, count it.
-
-This method is fast for `n <= 250`.
+Let me know if you have any more questions!
