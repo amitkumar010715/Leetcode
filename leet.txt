@@ -1,172 +1,177 @@
-Let's break down the solution for **"Count Covered Buildings"**:
+Let's solve the LeetCode **"Count Mentions Per User"** problem comprehensively:
 
 ---
 
-## 1. Summary
+## 1. **Summary**
 
-Given a list of building coordinates in an n x n grid, a building is **"covered"** if there are at least **other buildings** immediately in all four cardinal directions (left/right/up/down). Your task is to count how many buildings are covered.
+You have a series of events involving users:  
+- **MESSAGE**: Mentions users (by name, "ALL", or "HERE" token) at a specific time.
+- **OFFLINE**: A user goes offline for exactly 60 time-units, after which they come back online automatically.
 
----
-
-## 2. Constraints & Edge Cases
-
-- **Constraints:**
-    - n can be up to 1e5 (100,000)
-    - Up to 1e5 buildings, all with unique coordinates
-
-- **Implications:**
-    - Brute-force checking each direction for every building is too slow (O(k²) where k = #buildings).
-    - Need O(k log k) or better.
-
-- **Edge Cases:**
-    - Some buildings may be on edges/corners (so could never be covered).
-    - Some rows or columns may have only one building.
-    - All buildings could be in one row or column.
+You need to **count mentions per user** across all messages, observing the users' online/offline status at each message (for "HERE").  
+Events at the **same timestamp** must process all status changes **before** any messages.
 
 ---
 
-## 3. Optimal Algorithm
+## 2. **Constraints & Edge Cases**
 
-### **Idea**
+- **Users:** 1..100 (small)
+- **Events:** 1..100 (small)
+- **Each user id valid**
+- **Users initially ONLINE.**
+- **OFFLINE**: Only happens if user is online; they cannot be manually brought back online.
+- **Mentions can have duplicates** (i.e., `"id1 id1 id1"` means count +3 for user 1).
+- **"ALL"**: Mentions *all users* (online or offline).
+- **"HERE"**: Mentions *currently online* users only.
+- Status flips (offline→online) happen *before* messages at the same timestamp.
+- There can be simultaneous OFFLINE/MESSAGE events at the same timestamp; order is crucial: **All OFFLINE/ONLINE first, then MESSAGE**.
+- Mentions are per occurrence for each user.
 
-- For each building, to be "covered", it must have:
-    - Another building in the **same row**, with x position **less than** it (left), and **greater than** it (right).
-    - Another building in the **same column**, with y position **less than** it (up), and **greater than** it (down).
+### Edge Cases
 
-- Thus, for each building, we must quickly determine if such buildings exist.
-
-### **Efficient Method**
-
-1. **Store buildings for quick lookup row-wise and column-wise:**
-    - For each row, keep a sorted list of columns with buildings.
-    - For each column, keep a sorted list of rows with buildings.
-
-2. **For each building:**
-    - Using binary search, check for both:
-        - In same row: Is there a building to **left** (col < this_col), and to **right** (col > this_col)?
-        - In same column: Is there a building **above** (row < this_row), and **below** (row > this_row)?
-    - Both must exist for a building to be covered.
-
-This works efficiently even for the largest constraints.
-
-### **Algorithm Steps**
-
-1. For all buildings, group:
-    - For each row **x**: a sorted vector of columns (y's) present.
-    - For each column **y**: a sorted vector of rows (x's) present.
-2. For each building (x, y):
-    - Row x: is there any y' < y? any y' > y?
-    - Column y: is there any x' < x? any x' > x?
-    - Each can be answered with `lower_bound`/`upper_bound` (binary search) in the sorted vectors.
-
-**Time complexity:** O(k log k), with k = #buildings.
+- Multiple users offline at the same time; overlapping intervals.
+- User can go offline multiple times (possible re-entrancy).
+- "HERE" when nobody is online (no mention).
+- "OFFLINE" events far from any MESSAGE events (no effect on count).
+- Multiple offline/online events *at the start*.
 
 ---
 
-## 4. C++ Solution
+## 3. **Optimal Algorithm**
+
+Given **small constraints**, we can do this in a straightforward simulation:
+
+#### Key ideas:
+- Track **online/offline status** for each user at every event.
+- For each "OFFLINE" event, schedule their automatic comeback at timestamp +60.
+- At every event, process **all status changes (OFFLINE/come-back) for current timestamp first**, then process any MESSAGE at that timestamp.
+
+### Steps:
+
+1. **Build a list of all events**, including both input events and scheduled "online-again" events.
+    - For user `i` going offline at `t`, schedule "ONLINE" at `t+60`.
+2. **Sort all events by (timestamp, type):**
+    - For each timestamp:
+        - Process all "OFFLINE" and "ONLINE" changes first (these don't increase the mention count).
+        - Only then, process "MESSAGE" events.
+
+3. **For each MESSAGE:**
+    - If "ALL": add +1 for every user.
+    - If "HERE": add +1 for every user currently online.
+    - Else: parse `"id<ID>"` strings (possibly with duplicates), adding +1 for each occurrence.
+
+### Data structures:
+
+- `vector<int> mentions(numberOfUsers, 0);`
+- `vector<bool> online(numberOfUsers, true);`
+- For scheduled online events: maintain a min-heap or use the sorted event list.
+
+### **Overall Complexity:**
+- O(total events * numberOfUsers) at worst *(acceptable for constraints)*.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <unordered_map>
+#include <string>
+#include <queue>
+#include <sstream>
 #include <algorithm>
-
 using namespace std;
 
 class Solution {
 public:
-    int countCoveredBuildings(int n, vector<vector<int>>& buildings) {
-        unordered_map<int, vector<int>> row_to_cols;
-        unordered_map<int, vector<int>> col_to_rows;
-
-        // Build mappings for quick row/col lookups
-        for (auto& b : buildings) {
-            int x = b[0];
-            int y = b[1];
-            row_to_cols[x].push_back(y);
-            col_to_rows[y].push_back(x);
+    vector<int> countMentions(int numberOfUsers, vector<vector<string>>& events) {
+        // Prepare a combined events vector for: type, timestamp, arg1, is_scheduled_online
+        struct Event {
+            int timestamp;
+            int order; // OFFLINE=0, ONLINE=1, MESSAGE=2 (for order at same timestamp)
+            string type;
+            string arg;
+            int user; // For OFFLINE/ONLINE events
+            int idx;  // Input event order, for stable sorting
+        };
+        vector<Event> allEvents;
+        int idx = 0;
+        for (const auto& e : events) {
+            string type = e[0];
+            int timestamp = stoi(e[1]);
+            if (type == "OFFLINE") {
+                int user = stoi(e[2]);
+                allEvents.push_back({timestamp, 0, "OFFLINE", "", user, idx++}); // priority: 0
+                // Schedule online event
+                allEvents.push_back({timestamp + 60, 1, "ONLINE", "", user, (int)1e9 + idx});
+            } else { // MESSAGE
+                allEvents.push_back({timestamp, 2, "MESSAGE", e[2], -1, idx++}); // priority: 2
+            }
         }
+        // Sort by timestamp, then order (OFFLINE, then ONLINE, then MESSAGE)
+        sort(allEvents.begin(), allEvents.end(), [](const Event& a, const Event& b) {
+            if (a.timestamp != b.timestamp) return a.timestamp < b.timestamp;
+            if (a.order != b.order) return a.order < b.order;
+            return a.idx < b.idx; // stable for input order within type
+        });
 
-        // Sort row/col lists for binary search
-        for (auto& [row, cols] : row_to_cols) sort(cols.begin(), cols.end());
-        for (auto& [col, rows] : col_to_rows) sort(rows.begin(), rows.end());
+        vector<int> mentions(numberOfUsers, 0);
+        vector<bool> online(numberOfUsers, true); // all users online initially
 
-        int covered = 0;
-        for (auto& b : buildings) {
-            int x = b[0], y = b[1];
-            // Row x: y's
-            auto& row = row_to_cols[x];
-            auto it = lower_bound(row.begin(), row.end(), y);
-            bool has_left = (it != row.begin());
-            bool has_right = (it != row.end() && next(it) != row.end());
-
-            // For right, also check if it's not the last element
-            if (it != row.end() && it != row.end() - 1) has_right = true;
-            else has_right = false;
-            
-            // Fix: neater version
-            has_right = (it != row.end() && next(it) != row.end());
-
-            // Column y: x's
-            auto& col = col_to_rows[y];
-            auto it2 = lower_bound(col.begin(), col.end(), x);
-            bool has_up = (it2 != col.begin());
-            bool has_down = (it2 != col.end() && next(it2) != col.end());
-
-            // Clean up: actually, similar to above, but let's check if there's an element before/after
-            // To avoid corner cases, let's check position
-            // If 'it' points to the element, need to check if there is anything before and after
-
-            // Actually, to simplify:
-            has_left = (distance(row.begin(), it) > 0);
-            has_right = (distance(it, row.end()) > 1);
-            has_up = (distance(col.begin(), it2) > 0);
-            has_down = (distance(it2, col.end()) > 1);
-
-            if (has_left && has_right && has_up && has_down)
-                covered++;
+        // Process all events in order
+        for (const auto& e : allEvents) {
+            if (e.type == "OFFLINE") {
+                online[e.user] = false;
+            } else if (e.type == "ONLINE") {
+                online[e.user] = true;
+            } else if (e.type == "MESSAGE") {
+                if (e.arg == "ALL") {
+                    for (int i = 0; i < numberOfUsers; ++i)
+                        mentions[i]++;
+                } else if (e.arg == "HERE") {
+                    for (int i = 0; i < numberOfUsers; ++i)
+                        if (online[i]) mentions[i]++;
+                } else {
+                    // parse "id0 id1 id1" style string
+                    stringstream ss(e.arg);
+                    string tok;
+                    while (ss >> tok) {
+                        if (tok.substr(0, 2) == "id") {
+                            int user = stoi(tok.substr(2));
+                            mentions[user]++;
+                        }
+                    }
+                }
+            }
+            // else: no-op
         }
-        return covered;
+        return mentions;
     }
 };
 ```
 
 ---
 
-## 5. Example Explanation
+## 5. **Example Explanation**
 
-Take **Example 1**:
+### Example 1
 
-```
-n = 3
-buildings = [[1,2],[2,2],[3,2],[2,1],[2,3]]
+> `numberOfUsers = 2, events = [["MESSAGE","10","id1 id0"],["OFFLINE","11","0"],["MESSAGE","71","HERE"]]`
 
-City:
-  (row,column)
-  [1,2]       <- building
-  [2,1] [2,2] [2,3]
-  [3,2]
+Let's process in steps:
 
-For building [2,2]:
-- In row 2: buildings at [2,1], [2,2], [2,3]
-  - Left? [2,1] (yes)
-  - Right? [2,3] (yes)
-- In column 2: buildings at [1,2], [2,2], [3,2]
-  - Above? [1,2] (yes)
-  - Below? [3,2] (yes)
+- **Start:** Both users (0 and 1) are online.
+- **Event 1:** At `10` - MESSAGE "id1 id0"
+    - User 1 and User 0 mentioned → `mentions = [1, 1]`
+- **Event 2:** At `11` - OFFLINE 0
+    - User 0 goes offline
+    - At `71`, user 0 will be online again (automatically scheduled).
+- **Event 3:** At `71`
+    - (First: ONLINE 0, as scheduled) → User 0 is again online.
+    - Then: MESSAGE "HERE"
+        - "HERE" → Both users online → mentions [2, 2]
 
-[2,2] is the only building fully covered, hence answer is **1**.
-```
+**Final answer:** `[2, 2]`
 
 ---
 
-### **Summary Table**
-
-| Building | Left | Right | Up   | Down | Covered? |
-|----------|------|-------|------|------|----------|
-| [1,2]    | N/A  | N/A   | N/A  | [2,2]|   ❌     |
-| [2,2]    |[2,1] |[2,3]  |[1,2] |[3,2] |   ✅     |
-| [3,2]    | N/A  | N/A   |[2,2] | N/A  |   ❌     |
-| [2,1]    | N/A  |[2,2]  | N/A  | N/A  |   ❌     |
-| [2,3]    |[2,2] | N/A   | N/A  | N/A  |   ❌     |
-
----
+Let me know if you'd like code with test scaffolding or a step-through on another example!
