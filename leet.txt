@@ -1,177 +1,145 @@
-Let's solve the LeetCode **"Count Mentions Per User"** problem comprehensively:
+Let's step through your requirements one by one.
 
 ---
 
-## 1. **Summary**
+### 1. **Short Summary**
 
-You have a series of events involving users:  
-- **MESSAGE**: Mentions users (by name, "ALL", or "HERE" token) at a specific time.
-- **OFFLINE**: A user goes offline for exactly 60 time-units, after which they come back online automatically.
-
-You need to **count mentions per user** across all messages, observing the users' online/offline status at each message (for "HERE").  
-Events at the **same timestamp** must process all status changes **before** any messages.
+You are given three arrays describing a set of coupons, each with a code string, business line string, and activity status. A coupon is valid if its code is non-empty and consists only of letters, digits, or underscores, its business line is one of a given four categories, and it is active. Return all **valid codes**, sorted first by the required business line order and then lexicographically.
 
 ---
 
-## 2. **Constraints & Edge Cases**
+### 2. **Constraints & Edge Cases**
 
-- **Users:** 1..100 (small)
-- **Events:** 1..100 (small)
-- **Each user id valid**
-- **Users initially ONLINE.**
-- **OFFLINE**: Only happens if user is online; they cannot be manually brought back online.
-- **Mentions can have duplicates** (i.e., `"id1 id1 id1"` means count +3 for user 1).
-- **"ALL"**: Mentions *all users* (online or offline).
-- **"HERE"**: Mentions *currently online* users only.
-- Status flips (offline→online) happen *before* messages at the same timestamp.
-- There can be simultaneous OFFLINE/MESSAGE events at the same timestamp; order is crucial: **All OFFLINE/ONLINE first, then MESSAGE**.
-- Mentions are per occurrence for each user.
-
-### Edge Cases
-
-- Multiple users offline at the same time; overlapping intervals.
-- User can go offline multiple times (possible re-entrancy).
-- "HERE" when nobody is online (no mention).
-- "OFFLINE" events far from any MESSAGE events (no effect on count).
-- Multiple offline/online events *at the start*.
+- **n (number of coupons):** 1 ≤ n ≤ 100 (small, so brute-force is fine)
+- **code[i], businessLine[i]:** Max length 100, can be empty or have special characters
+- **Code Validity:** must be non-empty, only [a-zA-Z0-9_]
+- **Business Line:** must be in {"electronics", "grocery", "pharmacy", "restaurant"}
+- **isActive:** Must be true
+- **Edge Cases:**
+    - Empty codes
+    - Codes with illegal characters (like @, #, etc.)
+    - Invalid businessLine values
+    - Inactive coupons
+    - Multiple codes in the same business line
+    - All coupons invalid (return empty list)
+    - Codes with different case letters (e.g. `code[i] = "a_B1"` is valid)
 
 ---
 
-## 3. **Optimal Algorithm**
+### 3. **Optimal Algorithm**
+1. **Initialize**: Setup a mapping for business line sort order.
+2. **Iterate once over the arrays**:
+    - For each coupon:
+        - Check **activity** and businessLine validity.
+        - Validate code: non-empty, and all characters are from [a-zA-Z0-9_].
+    - For each valid coupon, **store** its code along with its businessLine.
+3. **Sort** the valid coupons:
+    - By business line (according to given order), then by code lexicographically.
+4. **Output**: Gather sorted codes for output.
 
-Given **small constraints**, we can do this in a straightforward simulation:
-
-#### Key ideas:
-- Track **online/offline status** for each user at every event.
-- For each "OFFLINE" event, schedule their automatic comeback at timestamp +60.
-- At every event, process **all status changes (OFFLINE/come-back) for current timestamp first**, then process any MESSAGE at that timestamp.
-
-### Steps:
-
-1. **Build a list of all events**, including both input events and scheduled "online-again" events.
-    - For user `i` going offline at `t`, schedule "ONLINE" at `t+60`.
-2. **Sort all events by (timestamp, type):**
-    - For each timestamp:
-        - Process all "OFFLINE" and "ONLINE" changes first (these don't increase the mention count).
-        - Only then, process "MESSAGE" events.
-
-3. **For each MESSAGE:**
-    - If "ALL": add +1 for every user.
-    - If "HERE": add +1 for every user currently online.
-    - Else: parse `"id<ID>"` strings (possibly with duplicates), adding +1 for each occurrence.
-
-### Data structures:
-
-- `vector<int> mentions(numberOfUsers, 0);`
-- `vector<bool> online(numberOfUsers, true);`
-- For scheduled online events: maintain a min-heap or use the sorted event list.
-
-### **Overall Complexity:**
-- O(total events * numberOfUsers) at worst *(acceptable for constraints)*.
+_All steps are **O(n log n)** because sorting is on at most 100 elements._
 
 ---
 
-## 4. **C++ Solution**
+### 4. **C++ Solution**
 
 ```cpp
 #include <vector>
 #include <string>
-#include <queue>
-#include <sstream>
+#include <unordered_map>
 #include <algorithm>
+
 using namespace std;
 
 class Solution {
 public:
-    vector<int> countMentions(int numberOfUsers, vector<vector<string>>& events) {
-        // Prepare a combined events vector for: type, timestamp, arg1, is_scheduled_online
-        struct Event {
-            int timestamp;
-            int order; // OFFLINE=0, ONLINE=1, MESSAGE=2 (for order at same timestamp)
-            string type;
-            string arg;
-            int user; // For OFFLINE/ONLINE events
-            int idx;  // Input event order, for stable sorting
+    vector<string> validCoupons(
+        vector<string>& code,
+        vector<string>& businessLine,
+        vector<bool>& isActive
+    ) {
+        // Business line order for sorting
+        unordered_map<string, int> blPriority{
+            {"electronics", 0},
+            {"grocery", 1},
+            {"pharmacy", 2},
+            {"restaurant", 3}
         };
-        vector<Event> allEvents;
-        int idx = 0;
-        for (const auto& e : events) {
-            string type = e[0];
-            int timestamp = stoi(e[1]);
-            if (type == "OFFLINE") {
-                int user = stoi(e[2]);
-                allEvents.push_back({timestamp, 0, "OFFLINE", "", user, idx++}); // priority: 0
-                // Schedule online event
-                allEvents.push_back({timestamp + 60, 1, "ONLINE", "", user, (int)1e9 + idx});
-            } else { // MESSAGE
-                allEvents.push_back({timestamp, 2, "MESSAGE", e[2], -1, idx++}); // priority: 2
-            }
-        }
-        // Sort by timestamp, then order (OFFLINE, then ONLINE, then MESSAGE)
-        sort(allEvents.begin(), allEvents.end(), [](const Event& a, const Event& b) {
-            if (a.timestamp != b.timestamp) return a.timestamp < b.timestamp;
-            if (a.order != b.order) return a.order < b.order;
-            return a.idx < b.idx; // stable for input order within type
-        });
 
-        vector<int> mentions(numberOfUsers, 0);
-        vector<bool> online(numberOfUsers, true); // all users online initially
+        vector<pair<int, string>> valids; // store {businessOrder, code}
 
-        // Process all events in order
-        for (const auto& e : allEvents) {
-            if (e.type == "OFFLINE") {
-                online[e.user] = false;
-            } else if (e.type == "ONLINE") {
-                online[e.user] = true;
-            } else if (e.type == "MESSAGE") {
-                if (e.arg == "ALL") {
-                    for (int i = 0; i < numberOfUsers; ++i)
-                        mentions[i]++;
-                } else if (e.arg == "HERE") {
-                    for (int i = 0; i < numberOfUsers; ++i)
-                        if (online[i]) mentions[i]++;
-                } else {
-                    // parse "id0 id1 id1" style string
-                    stringstream ss(e.arg);
-                    string tok;
-                    while (ss >> tok) {
-                        if (tok.substr(0, 2) == "id") {
-                            int user = stoi(tok.substr(2));
-                            mentions[user]++;
-                        }
-                    }
+        int n = code.size();
+        for (int i = 0; i < n; ++i) {
+            // Check activity
+            if (!isActive[i])
+                continue;
+            // Check businessLine
+            auto it = blPriority.find(businessLine[i]);
+            if (it == blPriority.end())
+                continue;
+            // Check code: non-empty, [A-Za-z0-9_]
+            string& s = code[i];
+            if (s.empty())
+                continue;
+            bool ok = true;
+            for (char c : s) {
+                if (!( (c >= 'a' && c <= 'z') ||
+                       (c >= 'A' && c <= 'Z') ||
+                       (c >= '0' && c <= '9') ||
+                       (c == '_') )) {
+                    ok = false;
+                    break;
                 }
             }
-            // else: no-op
+            if (!ok)
+                continue;
+            // Valid
+            valids.emplace_back(it->second, s);
         }
-        return mentions;
+
+        // Sort: first by business order, then lex code
+        sort(valids.begin(), valids.end(), [](const auto& a, const auto& b){
+            if (a.first != b.first) return a.first < b.first;
+            return a.second < b.second;
+        });
+
+        vector<string> result;
+        for (auto& p : valids)
+            result.push_back(p.second);
+        return result;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+### 5. **Example Walkthrough**
 
-### Example 1
+#### Example 1:
 
-> `numberOfUsers = 2, events = [["MESSAGE","10","id1 id0"],["OFFLINE","11","0"],["MESSAGE","71","HERE"]]`
+**Input:**
+```
+code = ["SAVE20","","PHARMA5","SAVE@20"]
+businessLine = ["restaurant","grocery","pharmacy","restaurant"]
+isActive = [true,true,true,true]
+```
+**Step-by-step:**
+1. `"SAVE20"`: active, in `restaurant`, code is non-empty & valid.
+2. `""`: empty code → INVALID (skipped)
+3. `"PHARMA5"`: active, in `pharmacy`, code is valid.
+4. `"SAVE@20"`: active, in `restaurant`, but code has `@` (invalid char) → INVALID
 
-Let's process in steps:
+Now gather valid (code, businessLine):
 
-- **Start:** Both users (0 and 1) are online.
-- **Event 1:** At `10` - MESSAGE "id1 id0"
-    - User 1 and User 0 mentioned → `mentions = [1, 1]`
-- **Event 2:** At `11` - OFFLINE 0
-    - User 0 goes offline
-    - At `71`, user 0 will be online again (automatically scheduled).
-- **Event 3:** At `71`
-    - (First: ONLINE 0, as scheduled) → User 0 is again online.
-    - Then: MESSAGE "HERE"
-        - "HERE" → Both users online → mentions [2, 2]
+- ("SAVE20", "restaurant")
+- ("PHARMA5", "pharmacy")
 
-**Final answer:** `[2, 2]`
+Sort order of businessLine: electronics < grocery < pharmacy < restaurant
+
+- "pharmacy" comes before "restaurant"
+
+**So output:** `[ "PHARMA5", "SAVE20" ]`
 
 ---
 
-Let me know if you'd like code with test scaffolding or a step-through on another example!
+**Let me know if you want an equivalent Python solution or other clarifications!**
