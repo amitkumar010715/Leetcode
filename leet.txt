@@ -1,145 +1,130 @@
-Let's step through your requirements one by one.
+Let's break down and answer your requirements step by step:
 
 ---
 
 ### 1. **Short Summary**
 
-You are given three arrays describing a set of coupons, each with a code string, business line string, and activity status. A coupon is valid if its code is non-empty and consists only of letters, digits, or underscores, its business line is one of a given four categories, and it is active. Return all **valid codes**, sorted first by the required business line order and then lexicographically.
+Given a corridor represented by a string of seats (`'S'`) and plants (`'P'`), you must divide it into segments, **each with exactly two seats** (but any number of plants per segment). Dividers can go between any two positions, but **each segment must have exactly two seats**. Return the number of ways to place the dividers (modulo 10^9+7).
 
 ---
 
 ### 2. **Constraints & Edge Cases**
 
-- **n (number of coupons):** 1 ≤ n ≤ 100 (small, so brute-force is fine)
-- **code[i], businessLine[i]:** Max length 100, can be empty or have special characters
-- **Code Validity:** must be non-empty, only [a-zA-Z0-9_]
-- **Business Line:** must be in {"electronics", "grocery", "pharmacy", "restaurant"}
-- **isActive:** Must be true
-- **Edge Cases:**
-    - Empty codes
-    - Codes with illegal characters (like @, #, etc.)
-    - Invalid businessLine values
-    - Inactive coupons
-    - Multiple codes in the same business line
-    - All coupons invalid (return empty list)
-    - Codes with different case letters (e.g. `code[i] = "a_B1"` is valid)
+- **1 ≤ n ≤ 1e5**
+- **corridor[i]** is either 'S' or 'P'
+- All seats must be segmented into groups of exactly **two**, with no leftover seats.
+- You **cannot** create a section with more or less than **2 seats**.
+- If the number of 'S' is **not even** or is **zero**, answer is 0.
+- If there are **less than 2 seats**, there's no valid section at all.
 
 ---
 
-### 3. **Optimal Algorithm**
-1. **Initialize**: Setup a mapping for business line sort order.
-2. **Iterate once over the arrays**:
-    - For each coupon:
-        - Check **activity** and businessLine validity.
-        - Validate code: non-empty, and all characters are from [a-zA-Z0-9_].
-    - For each valid coupon, **store** its code along with its businessLine.
-3. **Sort** the valid coupons:
-    - By business line (according to given order), then by code lexicographically.
-4. **Output**: Gather sorted codes for output.
+### 3. **Optimal Algorithm Explanation**
 
-_All steps are **O(n log n)** because sorting is on at most 100 elements._
+#### Key Observations:
+- We must partition the corridor so **each segment contains exactly two 'S'**.
+- Since order doesn't matter, the number of ways depends on the placement of dividers, which is only possible **between valid groups**.
+- Between one group of two 'S's and the next, if there are `k` plants (`'P'`), there are `(k+1)` positions where a divider could be placed — each of them is equivalent (placing or not placing a divider).
+- The **total number of ways** is the **product** of choices between each consecutive pair of seat-groups.
+
+#### Steps:
+1. **Count Total Seats:** If **number of 'S'** is not even, return 0.
+2. **Iterate Corridor:** Group 'S' in pairs (2 by 2).
+3. **Count Options Between Pairs:**
+   - After you finish one group, count how many `'P'` until the next `'S'` (start of next group).
+   - Number of ways to place a divider between previous group and current is (`number of consecutive 'P' + 1`)
+4. **Multiply number of options** for each interval to get final answer.
+
+#### **Time Complexity:** O(n)  
+#### **Space Complexity:** O(1)
 
 ---
 
-### 4. **C++ Solution**
+### 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
 #include <string>
-#include <unordered_map>
-#include <algorithm>
-
 using namespace std;
 
 class Solution {
 public:
-    vector<string> validCoupons(
-        vector<string>& code,
-        vector<string>& businessLine,
-        vector<bool>& isActive
-    ) {
-        // Business line order for sorting
-        unordered_map<string, int> blPriority{
-            {"electronics", 0},
-            {"grocery", 1},
-            {"pharmacy", 2},
-            {"restaurant", 3}
-        };
+    int numberOfWays(string corridor) {
+        const int MOD = 1e9 + 7;
+        int n = corridor.size();
+        int seat_count = 0;
+        for (char c : corridor)
+            if (c == 'S') seat_count++;
 
-        vector<pair<int, string>> valids; // store {businessOrder, code}
+        if (seat_count == 0 || seat_count % 2 == 1) return 0;
 
-        int n = code.size();
-        for (int i = 0; i < n; ++i) {
-            // Check activity
-            if (!isActive[i])
-                continue;
-            // Check businessLine
-            auto it = blPriority.find(businessLine[i]);
-            if (it == blPriority.end())
-                continue;
-            // Check code: non-empty, [A-Za-z0-9_]
-            string& s = code[i];
-            if (s.empty())
-                continue;
-            bool ok = true;
-            for (char c : s) {
-                if (!( (c >= 'a' && c <= 'z') ||
-                       (c >= 'A' && c <= 'Z') ||
-                       (c >= '0' && c <= '9') ||
-                       (c == '_') )) {
-                    ok = false;
-                    break;
-                }
+        long long result = 1;
+        int current_seat = 0;
+        int i = 0;
+        int last_section_end = -1;
+        // Skip to the first seat
+        while (i < n && corridor[i] != 'S') i++;
+
+        // Now, iterate and look for every group of 2 'S'
+        while (i < n) {
+            int section_seat = 0;
+            // Find group of two seats
+            while (i < n && section_seat < 2) {
+                if (corridor[i] == 'S') section_seat++;
+                i++;
             }
-            if (!ok)
-                continue;
-            // Valid
-            valids.emplace_back(it->second, s);
+            // If we've completed a section, count plants until the next seat
+            if (section_seat == 2) {
+                // For the first section, don't multiply
+                if (last_section_end != -1) {
+                    int plant_count = 0;
+                    int j = last_section_end + 1;
+                    while (j < i-1) {
+                        if (corridor[j] == 'P') plant_count++;
+                        j++;
+                    }
+                    result = (result * (plant_count + 1)) % MOD;
+                }
+                last_section_end = i - 1; // end of current group of two seats
+            }
         }
 
-        // Sort: first by business order, then lex code
-        sort(valids.begin(), valids.end(), [](const auto& a, const auto& b){
-            if (a.first != b.first) return a.first < b.first;
-            return a.second < b.second;
-        });
-
-        vector<string> result;
-        for (auto& p : valids)
-            result.push_back(p.second);
-        return result;
+        return (int)result;
     }
 };
 ```
 
 ---
 
-### 5. **Example Walkthrough**
+### 5. **Example Explanation**
 
-#### Example 1:
+#### **Example:** `corridor = "SSPPSPS"`
 
-**Input:**
-```
-code = ["SAVE20","","PHARMA5","SAVE@20"]
-businessLine = ["restaurant","grocery","pharmacy","restaurant"]
-isActive = [true,true,true,true]
-```
-**Step-by-step:**
-1. `"SAVE20"`: active, in `restaurant`, code is non-empty & valid.
-2. `""`: empty code → INVALID (skipped)
-3. `"PHARMA5"`: active, in `pharmacy`, code is valid.
-4. `"SAVE@20"`: active, in `restaurant`, but code has `@` (invalid char) → INVALID
+The total number of 'S' = 4 (even), so possible.
 
-Now gather valid (code, businessLine):
+Groups:
+- **First group:** 'SS'
+- **Second group:** 'S'...'S'
 
-- ("SAVE20", "restaurant")
-- ("PHARMA5", "pharmacy")
+Go step by step:
+- After the first two 'S', the string looks like: `"SS | PPSPS"`
+  - Next group is next two 'S': `"PP S P S"`
 
-Sort order of businessLine: electronics < grocery < pharmacy < restaurant
+There are **2 plants (`PP`)** between the two seat-groups.  
+But in addition, after that, there is only one way for the section at the end.
 
-- "pharmacy" comes before "restaurant"
+**Number of ways** = (number of P's between two groups) + 1 = **2 + 1 = 3**
 
-**So output:** `[ "PHARMA5", "SAVE20" ]`
+So, answer is **3**.
 
 ---
 
-**Let me know if you want an equivalent Python solution or other clarifications!**
+## **Summary Table**
+
+| Step                       | Reasoning                             | Action                                    |
+|----------------------------|---------------------------------------|-------------------------------------------|
+| Even seat count?           | Must group into 2's                   | If not, return 0                          |
+| Divide into seat-pairs     | Find all pairs of 'S'                 | Mark end of each group of 2 seats         |
+| Count 'P' between sections | For every transition between groups   | Multiply ways by (plant count + 1)        |
+| Multiply results           | For each separation                   | Final answer is product of all intervals  |
+
+---
