@@ -1,130 +1,96 @@
-Let's break down and answer your requirements step by step:
+Let's tackle the problem step by step!
 
 ---
 
-### 1. **Short Summary**
+## 1. **Short Summary**
 
-Given a corridor represented by a string of seats (`'S'`) and plants (`'P'`), you must divide it into segments, **each with exactly two seats** (but any number of plants per segment). Dividers can go between any two positions, but **each segment must have exactly two seats**. Return the number of ways to place the dividers (modulo 10^9+7).
-
----
-
-### 2. **Constraints & Edge Cases**
-
-- **1 ≤ n ≤ 1e5**
-- **corridor[i]** is either 'S' or 'P'
-- All seats must be segmented into groups of exactly **two**, with no leftover seats.
-- You **cannot** create a section with more or less than **2 seats**.
-- If the number of 'S' is **not even** or is **zero**, answer is 0.
-- If there are **less than 2 seats**, there's no valid section at all.
+Given an array of stock prices, a "smooth descent period" is any contiguous sequence where each day's price (except the first) is **exactly** 1 less than the previous day's. Each single day is a valid smooth descent period. We are to count all such periods.
 
 ---
 
-### 3. **Optimal Algorithm Explanation**
+## 2. **Constraints & Edge Cases**
 
-#### Key Observations:
-- We must partition the corridor so **each segment contains exactly two 'S'**.
-- Since order doesn't matter, the number of ways depends on the placement of dividers, which is only possible **between valid groups**.
-- Between one group of two 'S's and the next, if there are `k` plants (`'P'`), there are `(k+1)` positions where a divider could be placed — each of them is equivalent (placing or not placing a divider).
-- The **total number of ways** is the **product** of choices between each consecutive pair of seat-groups.
+- **Constraints**:
+  - `1 <= prices.length <= 10^5` — Solution must be *O(n)*.
+  - `1 <= prices[i] <= 10^5`
 
-#### Steps:
-1. **Count Total Seats:** If **number of 'S'** is not even, return 0.
-2. **Iterate Corridor:** Group 'S' in pairs (2 by 2).
-3. **Count Options Between Pairs:**
-   - After you finish one group, count how many `'P'` until the next `'S'` (start of next group).
-   - Number of ways to place a divider between previous group and current is (`number of consecutive 'P' + 1`)
-4. **Multiply number of options** for each interval to get final answer.
-
-#### **Time Complexity:** O(n)  
-#### **Space Complexity:** O(1)
+- **Edge Cases**:
+  - Only one price: `[7]` — answer is 1.
+  - No descent at all: `[5, 5, 5]` — only single-day periods.
+  - Entire array is a descent: `[4,3,2,1]` — many subarrays!
+  - Mixed climbs and flats: ([8,6,7,7], or [1,2,3,2,1]).
+  - Large arrays for performance.
 
 ---
 
-### 4. **Clean C++ Solution**
+## 3. **Optimal Algorithm**
+
+The key realization is:
+- For each position, the **number of descent periods ending at index i** is:
+  - 1 (for the single day itself) + if (i>0 and prices[i-1]-prices[i]==1), add the number that ended at i-1.
+- The total is the sum over all `i`.
+
+**Algorithm:**
+1. Initialize `total = 0`, `cnt = 1` (number of periods ending at previous index).
+2. For each price from 1 to n-1:
+    - If `prices[i-1] - prices[i] == 1`, then `cnt++;` (extend previous trend)
+    - else, reset: `cnt = 1;`
+    - Add `cnt` to `total`.
+3. Return `total`.
+
+This is *O(n)* time and *O(1)* space.
+
+---
+
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <string>
-using namespace std;
-
 class Solution {
 public:
-    int numberOfWays(string corridor) {
-        const int MOD = 1e9 + 7;
-        int n = corridor.size();
-        int seat_count = 0;
-        for (char c : corridor)
-            if (c == 'S') seat_count++;
-
-        if (seat_count == 0 || seat_count % 2 == 1) return 0;
-
-        long long result = 1;
-        int current_seat = 0;
-        int i = 0;
-        int last_section_end = -1;
-        // Skip to the first seat
-        while (i < n && corridor[i] != 'S') i++;
-
-        // Now, iterate and look for every group of 2 'S'
-        while (i < n) {
-            int section_seat = 0;
-            // Find group of two seats
-            while (i < n && section_seat < 2) {
-                if (corridor[i] == 'S') section_seat++;
-                i++;
+    long long getDescentPeriods(vector<int>& prices) {
+        long long total = 1; // first day itself
+        long long cnt = 1;
+        for (int i = 1; i < prices.size(); ++i) {
+            if (prices[i-1] - prices[i] == 1) {
+                cnt++;
+            } else {
+                cnt = 1;
             }
-            // If we've completed a section, count plants until the next seat
-            if (section_seat == 2) {
-                // For the first section, don't multiply
-                if (last_section_end != -1) {
-                    int plant_count = 0;
-                    int j = last_section_end + 1;
-                    while (j < i-1) {
-                        if (corridor[j] == 'P') plant_count++;
-                        j++;
-                    }
-                    result = (result * (plant_count + 1)) % MOD;
-                }
-                last_section_end = i - 1; // end of current group of two seats
-            }
+            total += cnt;
         }
-
-        return (int)result;
+        return total;
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation**
+## 5. **Example Walkthrough**
 
-#### **Example:** `corridor = "SSPPSPS"`
+**Example:** `prices = [3,2,1,4]`
 
-The total number of 'S' = 4 (even), so possible.
+Walkthrough:
+- i=0: `[3]` → cnt=1        (total=1)
+- i=1: 3-2=1 (descent) → cnt=2 → `[2]` and `[3,2]` (total = 1+2=3)
+- i=2: 2-1=1 (descent) → cnt=3 → `[1]`, `[2,1]`, `[3,2,1]` (total = 3+3=6)
+- i=3: 1-4≠1 → cnt=1 → `[4]` (total = 6+1=7)
 
-Groups:
-- **First group:** 'SS'
-- **Second group:** 'S'...'S'
-
-Go step by step:
-- After the first two 'S', the string looks like: `"SS | PPSPS"`
-  - Next group is next two 'S': `"PP S P S"`
-
-There are **2 plants (`PP`)** between the two seat-groups.  
-But in addition, after that, there is only one way for the section at the end.
-
-**Number of ways** = (number of P's between two groups) + 1 = **2 + 1 = 3**
-
-So, answer is **3**.
+**All smooth descent periods:**
+- `[3]`, `[2]`, `[1]`, `[4]`,
+- `[3,2]`, `[2,1]`, `[3,2,1]`
+- **Total = 7**
 
 ---
 
-## **Summary Table**
+## **Summary Table for the Example**
 
-| Step                       | Reasoning                             | Action                                    |
-|----------------------------|---------------------------------------|-------------------------------------------|
-| Even seat count?           | Must group into 2's                   | If not, return 0                          |
-| Divide into seat-pairs     | Find all pairs of 'S'                 | Mark end of each group of 2 seats         |
-| Count 'P' between sections | For every transition between groups   | Multiply ways by (plant count + 1)        |
-| Multiply results           | For each separation                   | Final answer is product of all intervals  |
+| i | prices[i] | descent? | cnt | total so far |
+|---|-----------|----------|-----|--------------|
+| 0 | 3         |  —       |  1  | 1            |
+| 1 | 2         |  yes     |  2  | 3            |
+| 2 | 1         |  yes     |  3  | 6            |
+| 3 | 4         |  no      |  1  | 7            |
 
 ---
+
+**This approach is fast and concise, suitable for competitive programming!**
