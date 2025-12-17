@@ -1,269 +1,164 @@
-Let's break down the problem and solve it step by step.
+Let’s break down the problem:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a company hierarchy (tree) where each employee can buy (at today's price) and sell (tomorrow, at a future price) their own stock, **maximise profit** under a budget. If an employee buys their boss's stock, they get their own at a **discount** (`present/2`). You can buy each stock at most once, and only within budget. Compute the maximum profit you can achieve.
+Given a price array (stock prices per day) and max transaction count `k`, you may do up to `k` "transactions", **where a transaction is either**:
+
+- **Normal transaction:** Buy on day i, sell on later day j (`profit = prices[j] - prices[i]`)
+- **Short selling:** Sell (borrow and sell) on day i, buy back on later day j (`profit = prices[i] - prices[j]`)
+
+**Constraint:** No overlapping transactions. Each transaction must finish before the next begins. **You must have at most `k` total transactions** (of any mix).
+
+**Goal:** Maximize total profit.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `n ≤ 160` (number of employees/nodes) -- manageable for DP
-- `budget ≤ 160`
-- The hierarchy is a **tree** with root 1 (the CEO).
-- Need to consider **dependencies**:
-    - Discount only applies if boss also bought stock.
-    - The set of stocks bought is not independent; discounted child depends on parent.
-- Edge cases:
-    - Tight budgets: Can't afford all stocks, must choose optimally.
-    - Value of discount: Sometimes it's not worth taking parent to get child at discount.
-    - Zero profit stocks.
-    - 1-node edge case: just the CEO.
-    - Budgets too small to buy any stock.
+- `2 <= prices.length <= 1000`
+- `1 <= prices[i] <= 10^9`
+- `1 <= k <= prices.size() / 2`
+- You cannot do multiple transactions at once.
+- You cannot buy/sell (or sell/buyback) on the same day as a previous transaction's sell/buyback.
+- If `k` is very large, it’s still bounded by `prices.length//2` (so can't treat it as "unlimited" simple greedy).
+
+**Edge Cases:**
+- Prices never increase? Only short sells are profitable.
+- Prices never decrease? Only buys then sells are profitable.
+- k=1? Only the best single transaction (of either type).
+- Large prices? No overflows with C++ 64-bit integers.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Dynamic Programming on Tree**
+This is essentially a generalization of the classical "Best Time to Buy and Sell Stock IV" DP, **but allowing each transaction to be either normal or short-selling**.
 
-#### **Observation**
-- Each node (employee) can be **bought** or **skipped**.
-- If the boss is bought:
-    - You can buy subordinate with a discount.
-- If the boss isn't bought:
-    - Subordinates must pay full price if they buy.
+**DP state ideas:**
 
-#### **DP State**
+- Let `dp[i][t][s]` be: max profit by day `i`, with `t` transactions completed, and `s` representing the current state:
+    - `s = 0`: not holding any position
+    - `s = 1`: holding a long position (after a buy, waiting to sell)
+    - `s = 2`: holding a short position (after a short sell, waiting to buy back)
+- The recursion handles moving from one state to another.
 
-For each node, maintain two DP tables:
-- `dp0[b]`: Max profit for this subtree with total cost ≤ `b`; **current node (employee) *NOT* bought**
-- `dp1[b]`: Same, but **current node bought**
+**Transitions:**
 
-#### **Transitions**
+At each day, you can:
+- Do nothing (hold/rest)
+- Start a new transaction (only when s=0): start long or start short
+- Finish a transaction (if in s=1 or s=2): sell (long) or buy back (short), increment t.
 
-- At each node, combine the DP from children.
-- When combining:
-    - If current node is *not bought*, each child can only use its *dp0* (not discounted).
-    - If current node *is bought*:
-        - For each child, decide whether to buy with discount (child's *dp1*), or not buy at all (*dp0*).
+### **Recurrence**
 
-#### **Implementation Sketch**
+- `dp[i][t][0]`:
+    - Rest: `dp[i-1][t][0]`
+    - Finish a **long position**: if previous was long, Sell at current price: `dp[i-1][t][1] + prices[i]`
+    - Finish a **short position**: if previous was short, Buy back: `dp[i-1][t][2] - prices[i]`
+- `dp[i][t][1]`: (holding a long, waiting to sell)
+    - Hold: `dp[i-1][t][1]`
+    - Start new long position today: only if we have not exceeded k, from resting state at previous day; cost to buy: `dp[i-1][t-1][0] - prices[i]`
+- `dp[i][t][2]`: (holding a short, waiting to buy back)
+    - Hold: `dp[i-1][t][2]`
+    - Start new short position today: only if we have not exceeded k; from resting state at previous day; sell to open: `dp[i-1][t-1][0] + prices[i]`
 
-1. **Postorder DFS traversal** of the tree.
-2. At each node:
-    - Initialize `dp0` as DP of not buying this node.
-    - Initialize `dp1` as DP of buying this node (deduct price; profit = future - price).
-3. For children, merge DPs:
-    - For each possible budget, try all ways to allocate budget between node and children.
+**Base Cases:**
 
-#### **Complexity Consideration**
-- Each node: up to `budget+1` entries in dp0, dp1.
-- For N nodes: O(N * budget^2) total.
-    - Feasible: 160 * 160^2 = about 4 million DP transitions.
+- `dp[0][0][0] = 0`
+- `dp[0][0][1] = -prices[0]`  (if allowed: first day can buy, but only if t>0?)
+    - But starting a transaction spends from t-1, so only when t>0.
+- `dp[0][0][2] = prices[0]`   (if allowed: first day can short sell)
+
+**Ultimately, answer is max over all `dp[n-1][t][0]` for 0≤t≤k**: we must end up with no open positions.
+
+**Optimization:**
+- We only need `t` up to `k`, and keep previous/current day (rolling DP arrays).
+- Time: O(n * k), Space: O(n * k) (or reduce to O(k)).
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
 #include <algorithm>
-#include <iostream>
-#include <cstring>
 using namespace std;
 
 class Solution {
 public:
-    // dp0/b: root not bought / budget b. dp1/b, root bought at price (present or discount)
-    // Present, future are zero-based; hierarchy is 1-based
-    int n, budget;
-    vector<int> present, future;
-    vector<vector<int>> tree;
-
-    // dp[node][0/1][b] = max profit for subtree rooted at node, with budget b,
-    // 0/1: node not bought / node bought
-    vector<vector<vector<int>>> dp;
-
-    void dfs(int u, int parent) {
-        // dp[u][0]: node u not bought
-        // dp[u][1]: node u bought
-
-        // Base case: only this node
-        // dp[u][0][0] = 0, can't buy.
-        // dp[u][1][cost] = profit if cost <= budget
-
-        // Initialize
-        dp[u][0] = vector<int>(budget+1, 0);
-        dp[u][1] = vector<int>(budget+1, -1e9);
-
-        // Root price/cost: present[u]
-        int basecost = present[u];
-        int profit = future[u] - present[u];
-
-        // if we buy this node at basecost and have budget
-        if (basecost <= budget) {
-            dp[u][1][basecost] = profit;
+    int maxProfit(vector<int>& prices, int k) {
+        int n = prices.size();
+        // dp[t][s]: t transactions done, s=0/1/2 (idle/long/short)
+        vector<vector<long long>> prev(k+1, vector<long long>(3, LLONG_MIN));
+        vector<vector<long long>> curr(k+1, vector<long long>(3, LLONG_MIN));
+        
+        // Day 0 init: no transaction, idle state = 0 profit
+        prev[0][0] = 0;
+        for (int t = 1; t <= k; ++t) {
+            prev[t][1] = -prices[0];    // start long pos on day 0
+            prev[t][2] = +prices[0];    // start short pos on day 0
         }
-
-        for (int v : tree[u]) {
-            if (v == parent) continue;
-            dfs(v, u);
-
-            // Prepare new result holders
-            vector<int> ndp0(budget+1, 0);
-            vector<int> ndp1(budget+1, -1e9);
-
-            // --- DP0 Merge (current node not bought, can't discount children)
-            for (int b1 = 0; b1 <= budget; ++b1) {
-                if (dp[u][0][b1] >= -1e8) {
-                    // For child, can't be discounted, so only dp[v][0]
-                    for (int b2 = 0; b2 + b1 <= budget; ++b2) {
-                        ndp0[b1+b2] = max(ndp0[b1+b2], dp[u][0][b1] + dp[v][0][b2]);
-                    }
-                }
+        
+        for (int i = 1; i < n; ++i) {
+            for (int t = 0; t <= k; ++t) {
+                // Idle
+                curr[t][0] = prev[t][0];
+                // If holding a long position, can try selling today to be idle
+                if (prev[t][1] != LLONG_MIN)
+                    curr[t][0] = max(curr[t][0], prev[t][1] + prices[i]);
+                // If holding a short position, can try buying back today to be idle
+                if (prev[t][2] != LLONG_MIN)
+                    curr[t][0] = max(curr[t][0], prev[t][2] - prices[i]);
+                
+                // Long position (holding after buying)
+                curr[t][1] = prev[t][1];
+                if (t > 0 && prev[t-1][0] != LLONG_MIN)
+                    curr[t][1] = max(curr[t][1], prev[t-1][0] - prices[i]);
+                
+                // Short position (holding after short sell)
+                curr[t][2] = prev[t][2];
+                if (t > 0 && prev[t-1][0] != LLONG_MIN)
+                    curr[t][2] = max(curr[t][2], prev[t-1][0] + prices[i]);
             }
-
-            // --- DP1 Merge (current node bought, can discount children)
-            for (int b1 = 0; b1 <= budget; ++b1) {
-                if (dp[u][1][b1] >= -1e8) {
-                    for (int b2 = 0; b2 + b1 <= budget; ++b2) {
-                        // For child, choose: not bought (dp0) or bought with discount (dp1_discount)
-                        // Assume v bought at discount: in dp[v][1] table, but at "discounted" price
-                        int best_child = max(dp[v][0][b2], dp[v][1][b2]);
-                        // dp[v][1][b2] already encodes the discounted price setup, see *below
-                        ndp1[b1+b2] = max(ndp1[b1+b2], dp[u][1][b1] + best_child);
-                    }
-                }
-            }
-            dp[u][0] = move(ndp0);
-            dp[u][1] = move(ndp1);
+            swap(prev, curr);
         }
-
-        // Correct discounted case for children, above:
-        // When processing a child, to set up 'dp1', child must record "bought at discounted price".
-        // But in our parent dp[u][1], the child *may* be bought at discount, so we need to build this
-        // so that child's dp[v][1][b] means "bought at discount IF parent bought". To do this, 
-        // process all children as normal, then after merging, for child v, rebuild dp[v][1] to encode
-        // "bought at discounted price" for the parent.
-
-        // Now, at this node, adjust dp1 for discounted children
-        // Only applies when parent is bought (for all children)
-        // For all children, recompute dp[v][1][...cost...] using the discounted price
-        // But, this is handled by structuring transitions as above which merges over dp[v][1] which is 
-        // previously set up for discount, so it's valid as is.
-
-        // But, important: we need to ensure dp1 supports buying this node at discount if parent is bought.
-        // To support this, in DFS, we call for each node for:
-        //   - Not bought (dp0)
-        //   - Bought at normal price (dp1)
-        //   - Bought at discount (by parent, only from parent)
-        // Instead of separate type, when in parent (at node u), when combining to get dp[v][1], we prepare
-        // an alternate dp[v][1*] with discounted price, and use that in combining dp[u][1].
-
-        // However, our transitions above for dp1 choose max(dp[v][0], dp[v][1]) for the child, which is correct.
-    }
-
-    int maximumProfit(int N, vector<int>& present_, vector<int>& future_, vector<vector<int>>& hierarchy, int B) {
-        n = N, budget = B;
-        present = present_; future = future_;
-        tree.resize(n);
-        dp.assign(n, vector<vector<int>>(2));
-
-        // Build tree (1-based to 0-based)
-        for (auto& edge : hierarchy) {
-            int u = edge[0]-1, v = edge[1]-1;
-            tree[u].push_back(v);
-            tree[v].push_back(u);
-        }
-
-        // Adjust the DFS to add support for child discounts:
-        // We will have for each node, a "discounted" option, so we need a helper function to prepare
-        // the dp for "parent bought, so I can buy at discount"
-        // But, this is passed from parent via combining; so we can tweak our combination accordingly.
-
-        // We'll augment the DFS above to do a helper: when merging child to parent,
-        // for parent dp1, allow for 
-        //
-        //  a) Not buy child (use child's dp0)
-        //  b) Buy child at discounted price (prepare temp dp1 with cost = discounted cost)
-
-        // Update: simplest way is for each child v, at each merge to parent, 
-        // prepare a "discounted" dp1 table (i.e., profit for buying v at discounted cost).
-
-        dfs(0, -1);
-
-        // Now, answer is the maximum profit for all budget ≤ budget, either buy root or not.
-        int ans = 0;
-        for (int b = 0; b <= budget; ++b) {
-            ans = max(ans, max(dp[0][0][b], dp[0][1][b]));
-        }
-        return ans;
+        // The answer is the maximum profit at rest state after at most k transactions
+        long long res = 0;
+        for (int t = 0; t <= k; ++t)
+            res = max(res, prev[t][0]);
+        return (int)res;
     }
 };
-
-// To use: 
-/*
-int main() {
-    Solution s;
-    int n = 3;
-    vector<int> present = {4,6,8};
-    vector<int> future = {7,9,11};
-    vector<vector<int>> hierarchy = {{1,2},{1,3}};
-    int budget = 10;
-    cout << s.maximumProfit(n, present, future, hierarchy, budget) << endl; // expected: 10
-}
-*/
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-**Example 4:**
+> **Example 1:**  
+> `prices = [1,7,9,8,2]`, `k=2`
 
-```
-n = 3
-present = [5,2,3]
-future =  [8,5,6]
-hierarchy = [[1,2],[2,3]]
-budget = 7
-```
+- **Best Solution:**
+    - **Transaction 1:** Buy at day 0 (1), sell at day 2 (9), normal transaction. Profit = 9-1=8.
+    - **Transaction 2:** Short sell at day 3 (8), buy back at day 4 (2), profit = 8-2=6
+    - **Total = 8 + 6 = 14**.
 
-- Employee 1 (CEO): price 5, profit 8-5=3
-- Employee 2: price 2, profit 5-2=3. If boss (1) bought, can buy at 1 (2//2), profit 4.
-- Employee 3: price 3, profit 6-3=3. If boss (2) bought, can buy at 1, profit 5.
-
-**Optimal:**
-- Buy 1 @5 (profit 3, budget 2 left).
-- Since 1 bought, buy 2 @1 (profit 4, budget 1 left).
-- Since 2 bought, buy 3 @1 (profit 5, budget 0 left).
-- Total profit = 3+4+5 = **12**.
+The algorithm, via the DP, will try all valid transaction sequences, capturing the best two by following the state transitions.
 
 ---
 
-### **Summary Table**
+### **Summary Table for Example 1**
 
-| Employee | Bought? | Price | Profit | Budget left | Reason           |
-|----------|---------|-------|--------|-------------|------------------|
-| 1        | yes     | 5     | 3      | 2           | root, must buy   |
-| 2        | yes     | 1     | 4      | 1           | discount via 1   |
-| 3        | yes     | 1     | 5      | 0           | discount via 2   |
-
-Total cost: 5+1+1=7
-
----
-
-# **Summary Table / Key Algorithm Points**
-
-- Tree DP, for each node, for every budget, do two scenarios: node bought (allowing children to be discounted) and node not bought (children not discounted).
-- For each child, for parent bought: max of discounted child (dp[v][1]) or not buying child (dp[v][0]).
-- For parent not bought: only not discounted child (dp[v][0]).
+| Day | Action | Position | Transactions Used | Profit |
+|-----|--------|----------|------------------|--------|
+|  0  | Buy    | Long     |       1          |  -1    |
+|  2  | Sell   | Idle     |       1          |  +9    |
+|  3  | Short  | Short    |       2          |  +8    |
+|  4  | BuyBk  | Idle     |       2          |  -2    |
+|     |        |          |                  |   14   |
 
 ---
 
-## **This approach is optimal for given constraints, and runs efficiently within O(N * budget^2).**
-
-Let me know if you'd like the above C++ code in Python or Java!
+**This DP fully and efficiently explores all optimal transaction choices given the constraints.**
