@@ -1,81 +1,94 @@
-Let’s break down the problem:
+Let's break down your request step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a price array (stock prices per day) and max transaction count `k`, you may do up to `k` "transactions", **where a transaction is either**:
+Given a stock price array and an action strategy array (buy/hold/sell each day), you can **at most once** modify any length-`k` consecutive segment:  
+- Make first `k/2` days **hold (0)**,  
+- Make last `k/2` days **sell (1)**.
 
-- **Normal transaction:** Buy on day i, sell on later day j (`profit = prices[j] - prices[i]`)
-- **Short selling:** Sell (borrow and sell) on day i, buy back on later day j (`profit = prices[i] - prices[j]`)
-
-**Constraint:** No overlapping transactions. Each transaction must finish before the next begins. **You must have at most `k` total transactions** (of any mix).
-
-**Goal:** Maximize total profit.
+Profit is the sum of **strategy[i] * prices[i]**. Return the maximum profit over all such modifications (including possibly none).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `2 <= prices.length <= 1000`
-- `1 <= prices[i] <= 10^9`
-- `1 <= k <= prices.size() / 2`
-- You cannot do multiple transactions at once.
-- You cannot buy/sell (or sell/buyback) on the same day as a previous transaction's sell/buyback.
-- If `k` is very large, it’s still bounded by `prices.length//2` (so can't treat it as "unlimited" simple greedy).
-
-**Edge Cases:**
-- Prices never increase? Only short sells are profitable.
-- Prices never decrease? Only buys then sells are profitable.
-- k=1? Only the best single transaction (of either type).
-- Large prices? No overflows with C++ 64-bit integers.
+- **Length:** Up to 1e5 (`10^5`) — O(N) solutions required.
+- **No budget or position checks:** You can "buy" or "sell" with unlimited funds and stocks.
+- **k even, `2 <= k <= n`.**
+- **We may opt to not modify at all.**
+- **Edge Cases:**
+  - Modifying at start or end.
+  - Strategy is already optimal.
+  - All strategies are 0.
+  - Extreme values of prices.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This is essentially a generalization of the classical "Best Time to Buy and Sell Stock IV" DP, **but allowing each transaction to be either normal or short-selling**.
+**Goal:** Efficiently (O(N)) find the "best" modification window.
 
-**DP state ideas:**
+### **Step-by-step**
 
-- Let `dp[i][t][s]` be: max profit by day `i`, with `t` transactions completed, and `s` representing the current state:
-    - `s = 0`: not holding any position
-    - `s = 1`: holding a long position (after a buy, waiting to sell)
-    - `s = 2`: holding a short position (after a short sell, waiting to buy back)
-- The recursion handles moving from one state to another.
+#### a) **Compute original profit**
+- `orig = sum(strategy[i] * prices[i])`
 
-**Transitions:**
+#### b) **For each window of size k:**
+- **Compute delta:**
+  - For indices `[l, l+k-1]`, set first `k/2` elements to `0`, last `k/2` to `1`.
+  
+  - For each such window:
+    - For `i in [l, l+k/2-1]`
+      - Old = `strategy[i] * prices[i]`, New = `0`
+      - Change = `- strategy[i] * prices[i]`
+    - For `i in [l+k/2, l+k-1]`
+      - Old = `strategy[i] * prices[i]`, New = `1*prices[i]`
+      - Change = `(1 - strategy[i]) * prices[i]`
+    - **Net delta for window:**
+      ```
+      For l in 0..n-k:
+        delta =
+            SUM [i=l, i<l+k/2):
+                  -strategy[i] * prices[i]
+            +
+            SUM [i=l+k/2, i<l+k):
+                  (1 - strategy[i]) * prices[i]
+      ```
 
-At each day, you can:
-- Do nothing (hold/rest)
-- Start a new transaction (only when s=0): start long or start short
-- Finish a transaction (if in s=1 or s=2): sell (long) or buy back (short), increment t.
+#### c) **Efficient computation:**
+- **Precompute Prefix Sums for:**
+  - `P1[i]`: sum of `strategy[j] * prices[j]` for `j=0..i-1`
+  - `P2[i]`: sum of `prices[j]` for `j=0..i-1`
 
-### **Recurrence**
+- **For each window starting at l:**
+  - First half (make 0): Indices `[l, l+k/2)`
+    - Contribution reduced to 0. Loss of sum of `strategy[i] * prices[i]` for those indices → Net change: `-sum(strategy[i] * prices[i])` over `[l, l+k/2)`
+  - Second half (make 1): Indices `[l+k/2, l+k)`
+    - All set to 1: New = `prices[i]`; old was `strategy[i] * prices[i]`
+    - Net change: sum over `[l+k/2, l+k)` of `(1-strategy[i]) * prices[i]`
 
-- `dp[i][t][0]`:
-    - Rest: `dp[i-1][t][0]`
-    - Finish a **long position**: if previous was long, Sell at current price: `dp[i-1][t][1] + prices[i]`
-    - Finish a **short position**: if previous was short, Buy back: `dp[i-1][t][2] - prices[i]`
-- `dp[i][t][1]`: (holding a long, waiting to sell)
-    - Hold: `dp[i-1][t][1]`
-    - Start new long position today: only if we have not exceeded k, from resting state at previous day; cost to buy: `dp[i-1][t-1][0] - prices[i]`
-- `dp[i][t][2]`: (holding a short, waiting to buy back)
-    - Hold: `dp[i-1][t][2]`
-    - Start new short position today: only if we have not exceeded k; from resting state at previous day; sell to open: `dp[i-1][t-1][0] + prices[i]`
+  - For `[l, l+k/2)`
+    ```
+    S1 = P1[l+k/2] - P1[l]     // sum strategy[i]*prices[i] in first half
+    ```
+  - For `[l+k/2, l+k)`
+    ```
+    S2 = P2[l+k] - P2[l+k/2]   // sum prices[i] in second half
+    S3 = P1[l+k] - P1[l+k/2]   // sum strategy[i]*prices[i] in second half
+    S2 - S3 = sum (1-strategy[i])*prices[i] in that half
+    ```
+  - So for window [l, l+k):
+    ```
+    delta = -S1 + (S2 - S3)
+    ```
 
-**Base Cases:**
+- **Track max delta; add to original profit for answer.**
 
-- `dp[0][0][0] = 0`
-- `dp[0][0][1] = -prices[0]`  (if allowed: first day can buy, but only if t>0?)
-    - But starting a transaction spends from t-1, so only when t>0.
-- `dp[0][0][2] = prices[0]`   (if allowed: first day can short sell)
+#### d) **Return answer**
 
-**Ultimately, answer is max over all `dp[n-1][t][0]` for 0≤t≤k**: we must end up with no open positions.
-
-**Optimization:**
-- We only need `t` up to `k`, and keep previous/current day (rolling DP arrays).
-- Time: O(n * k), Space: O(n * k) (or reduce to O(k)).
+- `ans = max(orig, orig + max_delta)`
 
 ---
 
@@ -88,47 +101,27 @@ using namespace std;
 
 class Solution {
 public:
-    int maxProfit(vector<int>& prices, int k) {
+    long long maxProfit(vector<int>& prices, vector<int>& strategy, int k) {
         int n = prices.size();
-        // dp[t][s]: t transactions done, s=0/1/2 (idle/long/short)
-        vector<vector<long long>> prev(k+1, vector<long long>(3, LLONG_MIN));
-        vector<vector<long long>> curr(k+1, vector<long long>(3, LLONG_MIN));
-        
-        // Day 0 init: no transaction, idle state = 0 profit
-        prev[0][0] = 0;
-        for (int t = 1; t <= k; ++t) {
-            prev[t][1] = -prices[0];    // start long pos on day 0
-            prev[t][2] = +prices[0];    // start short pos on day 0
+        vector<long long> prefix_strat_price(n+1), prefix_price(n+1);
+        for (int i = 0; i < n; ++i) {
+            prefix_strat_price[i+1] = prefix_strat_price[i] + 1LL * strategy[i] * prices[i];
+            prefix_price[i+1] = prefix_price[i] + prices[i];
         }
         
-        for (int i = 1; i < n; ++i) {
-            for (int t = 0; t <= k; ++t) {
-                // Idle
-                curr[t][0] = prev[t][0];
-                // If holding a long position, can try selling today to be idle
-                if (prev[t][1] != LLONG_MIN)
-                    curr[t][0] = max(curr[t][0], prev[t][1] + prices[i]);
-                // If holding a short position, can try buying back today to be idle
-                if (prev[t][2] != LLONG_MIN)
-                    curr[t][0] = max(curr[t][0], prev[t][2] - prices[i]);
-                
-                // Long position (holding after buying)
-                curr[t][1] = prev[t][1];
-                if (t > 0 && prev[t-1][0] != LLONG_MIN)
-                    curr[t][1] = max(curr[t][1], prev[t-1][0] - prices[i]);
-                
-                // Short position (holding after short sell)
-                curr[t][2] = prev[t][2];
-                if (t > 0 && prev[t-1][0] != LLONG_MIN)
-                    curr[t][2] = max(curr[t][2], prev[t-1][0] + prices[i]);
-            }
-            swap(prev, curr);
+        long long orig = prefix_strat_price[n];
+        long long max_delta = 0;
+        int half = k / 2;
+        for (int l = 0; l + k <= n; ++l) {
+            // [l, l+half) => hold
+            long long S1 = prefix_strat_price[l+half] - prefix_strat_price[l];
+            // [l+half, l+k) => sell
+            long long S2 = prefix_price[l+k] - prefix_price[l+half];
+            long long S3 = prefix_strat_price[l+k] - prefix_strat_price[l+half];
+            long long delta = -S1 + (S2 - S3);
+            max_delta = max(max_delta, delta);
         }
-        // The answer is the maximum profit at rest state after at most k transactions
-        long long res = 0;
-        for (int t = 0; t <= k; ++t)
-            res = max(res, prev[t][0]);
-        return (int)res;
+        return orig + max_delta;
     }
 };
 ```
@@ -137,28 +130,33 @@ public:
 
 ## 5. **Example Explanation**
 
-> **Example 1:**  
-> `prices = [1,7,9,8,2]`, `k=2`
+**Example 1:**  
+`prices = [4,2,8], strategy = [-1,0,1], k = 2`
 
-- **Best Solution:**
-    - **Transaction 1:** Buy at day 0 (1), sell at day 2 (9), normal transaction. Profit = 9-1=8.
-    - **Transaction 2:** Short sell at day 3 (8), buy back at day 4 (2), profit = 8-2=6
-    - **Total = 8 + 6 = 14**.
-
-The algorithm, via the DP, will try all valid transaction sequences, capturing the best two by following the state transitions.
-
----
-
-### **Summary Table for Example 1**
-
-| Day | Action | Position | Transactions Used | Profit |
-|-----|--------|----------|------------------|--------|
-|  0  | Buy    | Long     |       1          |  -1    |
-|  2  | Sell   | Idle     |       1          |  +9    |
-|  3  | Short  | Short    |       2          |  +8    |
-|  4  | BuyBk  | Idle     |       2          |  -2    |
-|     |        |          |                  |   14   |
+- Original: `(-1)*4 + 0*2 + 1*8 = -4 + 0 + 8 = 4`
+- Try all windows of size 2:
+  - Window [0,1]:
+    - `[0]` (first half): original `-1*4 = -4`, set to 0, lose -4 = gain 4.
+    - `[1]` (second half): original `0*2 = 0`, set to 1, gain `1*2 - 0 = 2`
+    - delta = gain 4 + 2 = **6**
+    - New profit = `4 + 6 = 10`
+  - Window [1,2]:
+    - `[1]` (first half): 0*2, set to 0, no change
+    - `[2]` (second half): 1*8, already 1, so no change
+    - delta = 0
+    - New profit = 4
+- Answer: **10**
 
 ---
 
-**This DP fully and efficiently explores all optimal transaction choices given the constraints.**
+### **Summary Table for Algorithm**
+
+| Step                           | Time Complexity |
+|---------------------------------|----------------|
+| Prefix sums computation         | O(n)           |
+| Sliding window delta updates    | O(n)           |
+| Overall                        | O(n)           |
+
+---
+
+## 👉 Let me know if you want a **Python** version or more corner cases!
