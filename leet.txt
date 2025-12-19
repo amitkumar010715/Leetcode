@@ -1,127 +1,140 @@
-Let's break down your request step by step:
+Let's tackle the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a stock price array and an action strategy array (buy/hold/sell each day), you can **at most once** modify any length-`k` consecutive segment:  
-- Make first `k/2` days **hold (0)**,  
-- Make last `k/2` days **sell (1)**.
-
-Profit is the sum of **strategy[i] * prices[i]**. Return the maximum profit over all such modifications (including possibly none).
+You have a list of people (numbered `0` to `n-1`), and a series of meetings `[x, y, time]` where person `x` and `y` meet at a given time. Person `0` knows a secret at time `0` and immediately shares it with `firstPerson`. Whenever someone knowing the secret meets someone else, they share it **instantly**, so secrets can propagate within the same set of simultaneous meetings. Return **all people who know the secret after all meetings**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Length:** Up to 1e5 (`10^5`) — O(N) solutions required.
-- **No budget or position checks:** You can "buy" or "sell" with unlimited funds and stocks.
-- **k even, `2 <= k <= n`.**
-- **We may opt to not modify at all.**
-- **Edge Cases:**
-  - Modifying at start or end.
-  - Strategy is already optimal.
-  - All strategies are 0.
-  - Extreme values of prices.
+- **Large Data:** up to `1e5` people and `1e5` meetings.
+- **Multiple/Simultaneous Meetings:** Several meetings can occur at the same timestamp; information can "chain-propagate" among participants who just learned the secret.
+- **Propagation:** If a person gets the secret in one meeting, they can immediately share it in another meeting at the same time.
+- **Person 0 always knows the secret.**
+- **Person 0** shares it with **firstPerson** at time `0` before any meeting.
+- **firstPerson ≠ 0**.
+- Edge cases:
+  - People may never attend a meeting.
+  - Groups of meetings/cliques disconnected in time.
+  - Multiple meetings at the same time, causing instant propagation between multiple connected people.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Goal:** Efficiently (O(N)) find the "best" modification window.
+### Key Idea
 
-### **Step-by-step**
+1. Since meetings at the same time instant allow *instant* multi-person propagation, we must process meetings **per time group**, handling all connected people at a given timestamp together.
 
-#### a) **Compute original profit**
-- `orig = sum(strategy[i] * prices[i])`
+2. **Approach:**
+   - Group all meetings by their `time`.
+   - At each timestamp, form a graph where edges are meetings at that time.
+   - For each connected component at that timestamp: if **anyone** already knows the secret, then **everyone** in the component learns it (since they can propagate it instantly).
 
-#### b) **For each window of size k:**
-- **Compute delta:**
-  - For indices `[l, l+k-1]`, set first `k/2` elements to `0`, last `k/2` to `1`.
-  
-  - For each such window:
-    - For `i in [l, l+k/2-1]`
-      - Old = `strategy[i] * prices[i]`, New = `0`
-      - Change = `- strategy[i] * prices[i]`
-    - For `i in [l+k/2, l+k-1]`
-      - Old = `strategy[i] * prices[i]`, New = `1*prices[i]`
-      - Change = `(1 - strategy[i]) * prices[i]`
-    - **Net delta for window:**
-      ```
-      For l in 0..n-k:
-        delta =
-            SUM [i=l, i<l+k/2):
-                  -strategy[i] * prices[i]
-            +
-            SUM [i=l+k/2, i<l+k):
-                  (1 - strategy[i]) * prices[i]
-      ```
+### Efficient Implementation
 
-#### c) **Efficient computation:**
-- **Precompute Prefix Sums for:**
-  - `P1[i]`: sum of `strategy[j] * prices[j]` for `j=0..i-1`
-  - `P2[i]`: sum of `prices[j]` for `j=0..i-1`
+- **Sort meetings by time.**
+- For each time, collect all unique people at meetings and use **Union-Find (Disjoint Set Union, DSU)** to form components.
+- For each connected component, if any member knows the secret, mark **all** as knowing.
+- Move to the next timestamp.
 
-- **For each window starting at l:**
-  - First half (make 0): Indices `[l, l+k/2)`
-    - Contribution reduced to 0. Loss of sum of `strategy[i] * prices[i]` for those indices → Net change: `-sum(strategy[i] * prices[i])` over `[l, l+k/2)`
-  - Second half (make 1): Indices `[l+k/2, l+k)`
-    - All set to 1: New = `prices[i]`; old was `strategy[i] * prices[i]`
-    - Net change: sum over `[l+k/2, l+k)` of `(1-strategy[i]) * prices[i]`
+### Time Complexity
 
-  - For `[l, l+k/2)`
-    ```
-    S1 = P1[l+k/2] - P1[l]     // sum strategy[i]*prices[i] in first half
-    ```
-  - For `[l+k/2, l+k)`
-    ```
-    S2 = P2[l+k] - P2[l+k/2]   // sum prices[i] in second half
-    S3 = P1[l+k] - P1[l+k/2]   // sum strategy[i]*prices[i] in second half
-    S2 - S3 = sum (1-strategy[i])*prices[i] in that half
-    ```
-  - So for window [l, l+k):
-    ```
-    delta = -S1 + (S2 - S3)
-    ```
-
-- **Track max delta; add to original profit for answer.**
-
-#### d) **Return answer**
-
-- `ans = max(orig, orig + max_delta)`
+- O(M log M) for sorting meetings.
+- Each meeting processed a constant number of DSU operations.
+- DSU operations are nearly constant (inverse Ackermann).
+- Total: O(M log M + N α(N)), which is efficient for the constraint.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
 using namespace std;
+
+class DSU {
+public:
+    vector<int> parent;
+    DSU(int n) : parent(n) {
+        for (int i = 0; i < n; ++i) parent[i] = i;
+    }
+    int find(int x) {
+        if (parent[x] != x) parent[x] = find(parent[x]);
+        return parent[x];
+    }
+    void unite(int x, int y) {
+        parent[find(x)] = find(y);
+    }
+};
 
 class Solution {
 public:
-    long long maxProfit(vector<int>& prices, vector<int>& strategy, int k) {
-        int n = prices.size();
-        vector<long long> prefix_strat_price(n+1), prefix_price(n+1);
+    vector<int> findAllPeople(int n, vector<vector<int>>& meetings, int firstPerson) {
+        // Sort meetings by time
+        sort(meetings.begin(), meetings.end(), [](const auto& a, const auto& b) {
+            return a[2] < b[2];
+        });
+
+        // Known secret so far
+        vector<bool> knows(n, false);
+        knows[0] = knows[firstPerson] = true;
+
+        int m = meetings.size();
+        int i = 0;
+        while (i < m) {
+            int current_time = meetings[i][2];
+
+            // Collect all people involved at this time
+            unordered_set<int> persons;
+            int j = i;
+            while (j < m && meetings[j][2] == current_time) {
+                persons.insert(meetings[j][0]);
+                persons.insert(meetings[j][1]);
+                ++j;
+            }
+
+            // DSU for this time group
+            DSU dsu(n);
+            for (int k = i; k < j; ++k) {
+                dsu.unite(meetings[k][0], meetings[k][1]);
+            }
+
+            // Group persons by component root
+            unordered_map<int, vector<int>> groups;
+            for (int p : persons) {
+                groups[dsu.find(p)].push_back(p);
+            }
+
+            // For each component, if any member knows, all members know
+            for (const auto& [root, group] : groups) {
+                bool secret_in_group = false;
+                for (int p : group) {
+                    if (knows[p]) {
+                        secret_in_group = true;
+                        break;
+                    }
+                }
+                if (secret_in_group) {
+                    for (int p : group) knows[p] = true;
+                }
+            }
+
+            i = j;
+        }
+
+        // Gather results
+        vector<int> res;
         for (int i = 0; i < n; ++i) {
-            prefix_strat_price[i+1] = prefix_strat_price[i] + 1LL * strategy[i] * prices[i];
-            prefix_price[i+1] = prefix_price[i] + prices[i];
+            if (knows[i]) res.push_back(i);
         }
-        
-        long long orig = prefix_strat_price[n];
-        long long max_delta = 0;
-        int half = k / 2;
-        for (int l = 0; l + k <= n; ++l) {
-            // [l, l+half) => hold
-            long long S1 = prefix_strat_price[l+half] - prefix_strat_price[l];
-            // [l+half, l+k) => sell
-            long long S2 = prefix_price[l+k] - prefix_price[l+half];
-            long long S3 = prefix_strat_price[l+k] - prefix_strat_price[l+half];
-            long long delta = -S1 + (S2 - S3);
-            max_delta = max(max_delta, delta);
-        }
-        return orig + max_delta;
+        return res;
     }
 };
 ```
@@ -131,32 +144,27 @@ public:
 ## 5. **Example Explanation**
 
 **Example 1:**  
-`prices = [4,2,8], strategy = [-1,0,1], k = 2`
+`n = 6`, `meetings = [[1,2,5],[2,3,8],[1,5,10]]`, `firstPerson = 1`
 
-- Original: `(-1)*4 + 0*2 + 1*8 = -4 + 0 + 8 = 4`
-- Try all windows of size 2:
-  - Window [0,1]:
-    - `[0]` (first half): original `-1*4 = -4`, set to 0, lose -4 = gain 4.
-    - `[1]` (second half): original `0*2 = 0`, set to 1, gain `1*2 - 0 = 2`
-    - delta = gain 4 + 2 = **6**
-    - New profit = `4 + 6 = 10`
-  - Window [1,2]:
-    - `[1]` (first half): 0*2, set to 0, no change
-    - `[2]` (second half): 1*8, already 1, so no change
-    - delta = 0
-    - New profit = 4
-- Answer: **10**
+Step by step:
+- **Time 0**: Person 0 shares the secret with person 1 (`knows = [T,T,F,F,F,F]`).
+- **Time 5**: Meeting `[1,2]`. Person 1 knows, so now person 2 learns it (`knows = [T,T,T,F,F,F]`).
+- **Time 8**: Meeting `[2,3]`. Person 2 knows, so now person 3 learns (`knows = [T,T,T,T,F,F]`).
+- **Time 10**: Meeting `[1,5]`. Person 1 knows, person 5 learns (`knows = [T,T,T,T,F,T]`).
+
+**Final people who know the secret:** `[0, 1, 2, 3, 5]`
 
 ---
 
-### **Summary Table for Algorithm**
+### **Summary Table**
 
-| Step                           | Time Complexity |
-|---------------------------------|----------------|
-| Prefix sums computation         | O(n)           |
-| Sliding window delta updates    | O(n)           |
-| Overall                        | O(n)           |
+| Time | Knows     | At Meeting        | New Knowers |
+|------|-----------|-------------------|-------------|
+| 0    | 0,1       | -                 | 1           |
+| 5    | 0,1,2     | [1,2]             | 2           |
+| 8    | 0,1,2,3   | [2,3]             | 3           |
+|10    |0,1,2,3,5  | [1,5]             | 5           |
 
 ---
 
-## 👉 Let me know if you want a **Python** version or more corner cases!
+**This algorithm guarantees optimal speed by treating each time independently while allowing for instant propagation, perfectly matching the rules and constraints.**
