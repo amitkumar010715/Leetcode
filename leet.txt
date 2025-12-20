@@ -1,170 +1,94 @@
-Let's tackle the problem step by step:
+Let's break down the problem as per your requirements:
 
 ---
 
 ## 1. **Short Summary**
 
-You have a list of people (numbered `0` to `n-1`), and a series of meetings `[x, y, time]` where person `x` and `y` meet at a given time. Person `0` knows a secret at time `0` and immediately shares it with `firstPerson`. Whenever someone knowing the secret meets someone else, they share it **instantly**, so secrets can propagate within the same set of simultaneous meetings. Return **all people who know the secret after all meetings**.
+You are given a list of strings of equal length, forming an \( n \times m \) character grid. You must count how many columns **are not sorted lexicographically from top to bottom**, and return that count.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Large Data:** up to `1e5` people and `1e5` meetings.
-- **Multiple/Simultaneous Meetings:** Several meetings can occur at the same timestamp; information can "chain-propagate" among participants who just learned the secret.
-- **Propagation:** If a person gets the secret in one meeting, they can immediately share it in another meeting at the same time.
-- **Person 0 always knows the secret.**
-- **Person 0** shares it with **firstPerson** at time `0` before any meeting.
-- **firstPerson ≠ 0**.
-- Edge cases:
-  - People may never attend a meeting.
-  - Groups of meetings/cliques disconnected in time.
-  - Multiple meetings at the same time, causing instant propagation between multiple connected people.
+- **Constraints**
+    - \( 1 \leq n \leq 100 \) (number of strings/rows)
+    - \( 1 \leq m \leq 1000 \) (length of each string/columns)
+    - Each `strs[i]` consists of lowercase English letters.
+
+- **Edge Cases**
+    - Only one string (`n = 1`): All columns are trivially sorted (output 0).
+    - Strings of length 1 (`m = 1`): Only one column, so check whether it is sorted.
+    - All columns sorted: Output 0.
+    - All columns unsorted: Output \( m \).
+    - Case with equal letters in a column: It's valid, since equality is allowed for sorted order.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Key Idea
-
-1. Since meetings at the same time instant allow *instant* multi-person propagation, we must process meetings **per time group**, handling all connected people at a given timestamp together.
-
-2. **Approach:**
-   - Group all meetings by their `time`.
-   - At each timestamp, form a graph where edges are meetings at that time.
-   - For each connected component at that timestamp: if **anyone** already knows the secret, then **everyone** in the component learns it (since they can propagate it instantly).
-
-### Efficient Implementation
-
-- **Sort meetings by time.**
-- For each time, collect all unique people at meetings and use **Union-Find (Disjoint Set Union, DSU)** to form components.
-- For each connected component, if any member knows the secret, mark **all** as knowing.
-- Move to the next timestamp.
-
-### Time Complexity
-
-- O(M log M) for sorting meetings.
-- Each meeting processed a constant number of DSU operations.
-- DSU operations are nearly constant (inverse Ackermann).
-- Total: O(M log M + N α(N)), which is efficient for the constraint.
+- For each column `j` from 0 to \( m-1 \):
+    - For each row `i` from 1 to \( n-1 \):
+        - Compare `strs[i][j]` and `strs[i-1][j]`.
+        - If `strs[i][j] < strs[i-1][j]`, this column is **not sorted**, so increment the count and move to the next column.
+- Time Complexity: \( O(n \cdot m) \) — since we check each character in the grid at most once.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-#include <unordered_map>
-#include <unordered_set>
-using namespace std;
-
-class DSU {
-public:
-    vector<int> parent;
-    DSU(int n) : parent(n) {
-        for (int i = 0; i < n; ++i) parent[i] = i;
-    }
-    int find(int x) {
-        if (parent[x] != x) parent[x] = find(parent[x]);
-        return parent[x];
-    }
-    void unite(int x, int y) {
-        parent[find(x)] = find(y);
-    }
-};
-
 class Solution {
 public:
-    vector<int> findAllPeople(int n, vector<vector<int>>& meetings, int firstPerson) {
-        // Sort meetings by time
-        sort(meetings.begin(), meetings.end(), [](const auto& a, const auto& b) {
-            return a[2] < b[2];
-        });
-
-        // Known secret so far
-        vector<bool> knows(n, false);
-        knows[0] = knows[firstPerson] = true;
-
-        int m = meetings.size();
-        int i = 0;
-        while (i < m) {
-            int current_time = meetings[i][2];
-
-            // Collect all people involved at this time
-            unordered_set<int> persons;
-            int j = i;
-            while (j < m && meetings[j][2] == current_time) {
-                persons.insert(meetings[j][0]);
-                persons.insert(meetings[j][1]);
-                ++j;
-            }
-
-            // DSU for this time group
-            DSU dsu(n);
-            for (int k = i; k < j; ++k) {
-                dsu.unite(meetings[k][0], meetings[k][1]);
-            }
-
-            // Group persons by component root
-            unordered_map<int, vector<int>> groups;
-            for (int p : persons) {
-                groups[dsu.find(p)].push_back(p);
-            }
-
-            // For each component, if any member knows, all members know
-            for (const auto& [root, group] : groups) {
-                bool secret_in_group = false;
-                for (int p : group) {
-                    if (knows[p]) {
-                        secret_in_group = true;
-                        break;
-                    }
-                }
-                if (secret_in_group) {
-                    for (int p : group) knows[p] = true;
+    int minDeletionSize(vector<string>& strs) {
+        int n = strs.size(), m = strs[0].size();
+        int delCount = 0;
+        for (int col = 0; col < m; ++col) {
+            for (int row = 1; row < n; ++row) {
+                if (strs[row][col] < strs[row-1][col]) {
+                    delCount++;
+                    break; // Move to next column
                 }
             }
-
-            i = j;
         }
-
-        // Gather results
-        vector<int> res;
-        for (int i = 0; i < n; ++i) {
-            if (knows[i]) res.push_back(i);
-        }
-        return res;
+        return delCount;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-**Example 1:**  
-`n = 6`, `meetings = [[1,2,5],[2,3,8],[1,5,10]]`, `firstPerson = 1`
+Take example:  
+`strs = ["cba", "daf", "ghi"]`
 
-Step by step:
-- **Time 0**: Person 0 shares the secret with person 1 (`knows = [T,T,F,F,F,F]`).
-- **Time 5**: Meeting `[1,2]`. Person 1 knows, so now person 2 learns it (`knows = [T,T,T,F,F,F]`).
-- **Time 8**: Meeting `[2,3]`. Person 2 knows, so now person 3 learns (`knows = [T,T,T,T,F,F]`).
-- **Time 10**: Meeting `[1,5]`. Person 1 knows, person 5 learns (`knows = [T,T,T,T,F,T]`).
+Grid:
 
-**Final people who know the secret:** `[0, 1, 2, 3, 5]`
+```
+c b a
+d a f
+g h i
+```
 
----
+- **Column 0:** `c` → `d` → `g` (c < d < g) -- Sorted
+- **Column 1:** `b` → `a` → `h` (`a` < `b`, so not sorted) -- **Needs to be deleted**
+- **Column 2:** `a` → `f` → `i` (a < f < i) -- Sorted
 
-### **Summary Table**
-
-| Time | Knows     | At Meeting        | New Knowers |
-|------|-----------|-------------------|-------------|
-| 0    | 0,1       | -                 | 1           |
-| 5    | 0,1,2     | [1,2]             | 2           |
-| 8    | 0,1,2,3   | [2,3]             | 3           |
-|10    |0,1,2,3,5  | [1,5]             | 5           |
+**Only column 1 is not sorted, so the function returns 1.**
 
 ---
 
-**This algorithm guarantees optimal speed by treating each time independently while allowing for instant propagation, perfectly matching the rules and constraints.**
+## **Summary Table**
+
+| Column | Letters | Sorted? |
+|--------|---------|---------|
+| 0      | c d g   |   ✔     |
+| 1      | b a h   |   ❌    |
+| 2      | a f i   |   ✔     |
+
+**Deleted columns:** 1  
+**Return value:** `1`
+
+---
+
+**This is an easy and efficient column-wise check using a double loop (rows and columns).**
