@@ -1,94 +1,118 @@
-Let's break down the problem as per your requirements:
+Certainly! Let's break down the **LeetCode problem "Delete Columns to Make Sorted II"** step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-You are given a list of strings of equal length, forming an \( n \times m \) character grid. You must count how many columns **are not sorted lexicographically from top to bottom**, and return that count.
+Given a list of same-length strings (`strs`), you can delete any columns (character positions) you like, as long as after the deletions, the rows are in **lexicographic (dictionary) order**. You must return the **minimum** number of columns you need to delete so that the array is sorted.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints**
-    - \( 1 \leq n \leq 100 \) (number of strings/rows)
-    - \( 1 \leq m \leq 1000 \) (length of each string/columns)
-    - Each `strs[i]` consists of lowercase English letters.
+- **Constraints:**
+  - `1 <= n <= 100` (`n` = number of strings)
+  - `1 <= strs[i].length <= 100`
+  - All strings have the same length
+  - All strings only contain lowercase English letters
 
-- **Edge Cases**
-    - Only one string (`n = 1`): All columns are trivially sorted (output 0).
-    - Strings of length 1 (`m = 1`): Only one column, so check whether it is sorted.
-    - All columns sorted: Output 0.
-    - All columns unsorted: Output \( m \).
-    - Case with equal letters in a column: It's valid, since equality is allowed for sorted order.
+- **Edge Cases:**
+  - Strings are already sorted: Should return 0.
+  - Strings are reversely sorted or all columns are descending: Should possibly delete all columns.
+  - Some pairs of rows are already strictly ordered in early columns — don't need to consider further columns for those pairs.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- For each column `j` from 0 to \( m-1 \):
-    - For each row `i` from 1 to \( n-1 \):
-        - Compare `strs[i][j]` and `strs[i-1][j]`.
-        - If `strs[i][j] < strs[i-1][j]`, this column is **not sorted**, so increment the count and move to the next column.
-- Time Complexity: \( O(n \cdot m) \) — since we check each character in the grid at most once.
+**Key Insight:**  
+It's similar to "Delete Columns to Make Sorted" (LeetCode 944), but here, we can use the history from previous columns: For some row-pairs, if they're already strictly ordered in a previous column, no need to consider them for subsequent columns.
+
+**Algorithm (Greedy + Simulation):**
+
+1. **Track if pairs are 'resolved':**  
+   For each pair of consecutive rows `i` and `i+1`, use an array `sorted[i]` to store if that pair is already strictly ordered in previous columns.
+2. **Column by column:**  
+   For each column from left to right:
+   - For each unresolved pair, if `strs[i][col] > strs[i+1][col]`, then deleting this column is **necessary**; increment deletion count, skip to next column (since keeping it will mess up lex order!).
+   - If `strs[i][col] < strs[i+1][col]`, mark this pair as resolved (ordered forever), so future columns don't matter for them.
+   - If `strs[i][col] == strs[i+1][col]`, do nothing (their ordering is still unresolved).
+3. **Continue until all columns are processed.**
+4. **Return total deletions.**
+
+**Time Complexity:**  
+- Each column: up to `n-1` pair comparisons.
+- There are at most 100 columns × 100 rows = **10,000 operations**.
+- Efficient enough for the constraints.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+#include <string>
+using namespace std;
+
 class Solution {
 public:
     int minDeletionSize(vector<string>& strs) {
-        int n = strs.size(), m = strs[0].size();
-        int delCount = 0;
+        int n = strs.size(), m = strs[0].length();
+        int ans = 0;
+        vector<bool> sorted(n - 1, false); // tracks if strs[i] < strs[i+1] is 'done'
+
         for (int col = 0; col < m; ++col) {
-            for (int row = 1; row < n; ++row) {
-                if (strs[row][col] < strs[row-1][col]) {
-                    delCount++;
-                    break; // Move to next column
+            bool mustDelete = false;
+            for (int i = 0; i < n - 1; ++i) {
+                if (!sorted[i] && strs[i][col] > strs[i+1][col]) {
+                    mustDelete = true;
+                    break;
+                }
+            }
+            if (mustDelete) {
+                ++ans;
+                continue; // move to the next column
+            }
+            // Update resolved pairs
+            for (int i = 0; i < n - 1; ++i) {
+                if (!sorted[i] && strs[i][col] < strs[i+1][col]) {
+                    sorted[i] = true;
                 }
             }
         }
-        return delCount;
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Explain One Example**
 
-Take example:  
-`strs = ["cba", "daf", "ghi"]`
+**Example:**  
+`strs = ["ca", "bb", "ac"]`
 
-Grid:
-
-```
-c b a
-d a f
-g h i
-```
-
-- **Column 0:** `c` → `d` → `g` (c < d < g) -- Sorted
-- **Column 1:** `b` → `a` → `h` (`a` < `b`, so not sorted) -- **Needs to be deleted**
-- **Column 2:** `a` → `f` → `i` (a < f < i) -- Sorted
-
-**Only column 1 is not sorted, so the function returns 1.**
+### Stepwise Reasoning
+- 2 columns: `c b a`
+- Let's check column 0 (col = 0):
+  - "ca" vs "bb": 'c' > 'b' → **out of order**; must delete col 0.
+  - No need to check further; go to column 1.
+- Now, only column 1 remains:
+  - After column 0 deleted: strings are "a", "b", "c"
+  - "a" <= "b" <= "c" is **sorted**.
+- **Minimum deletions = 1.**
 
 ---
 
 ## **Summary Table**
 
-| Column | Letters | Sorted? |
-|--------|---------|---------|
-| 0      | c d g   |   ✔     |
-| 1      | b a h   |   ❌    |
-| 2      | a f i   |   ✔     |
+| Step    | Columns Left | Rows after deletions | Sorted? |
+|---------|--------------|---------------------|---------|
+| Start   | 0,1          | ca, bb, ac          | ✗       |
+| Delete0 | 1            | a,  b,  c           | ✓       |
 
-**Deleted columns:** 1  
-**Return value:** `1`
+**Return:** 1
 
 ---
 
-**This is an easy and efficient column-wise check using a double loop (rows and columns).**
+Let me know if you need further clarification on any part!
