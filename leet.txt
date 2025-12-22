@@ -1,49 +1,60 @@
-Certainly! Let's break down the **LeetCode problem "Delete Columns to Make Sorted II"** step by step:
+Let's break down and solve **Delete Columns to Make Sorted III** step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a list of same-length strings (`strs`), you can delete any columns (character positions) you like, as long as after the deletions, the rows are in **lexicographic (dictionary) order**. You must return the **minimum** number of columns you need to delete so that the array is sorted.
+Given multiple strings (all of same length), you can delete any set of columns. After deletions, each *individual string* (row) must be **non-decreasing** (i.e., letters are in lexicographical order, left to right). Return the **minimum number of columns to delete**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= n <= 100` (`n` = number of strings)
-  - `1 <= strs[i].length <= 100`
-  - All strings have the same length
-  - All strings only contain lowercase English letters
-
-- **Edge Cases:**
-  - Strings are already sorted: Should return 0.
-  - Strings are reversely sorted or all columns are descending: Should possibly delete all columns.
-  - Some pairs of rows are already strictly ordered in early columns — don't need to consider further columns for those pairs.
+- `1 <= n <= 100` (number of rows)
+- `1 <= len <= 100` (length of each string)
+- Every string only contains lowercase letters.
+- Special cases:
+    - **One string:** Just need that one string to be sorted (like a classic Minimum Delete to Make Sorted).
+    - **All strings already sorted:** Answer is zero, as no deletion is needed.
+    - **Strings with all same letters:** Answer is zero.
+    - **Worst case:** All letters in *reverse* order → need to delete all except one letter per row.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Key Insight:**  
-It's similar to "Delete Columns to Make Sorted" (LeetCode 944), but here, we can use the history from previous columns: For some row-pairs, if they're already strictly ordered in a previous column, no need to consider them for subsequent columns.
+This problem is a **variation of Longest Increasing Subsequence (LIS)** in 2D. However, the "increasing" condition must be satisfied **across all rows at once, column-wise**.
 
-**Algorithm (Greedy + Simulation):**
+### Insight
 
-1. **Track if pairs are 'resolved':**  
-   For each pair of consecutive rows `i` and `i+1`, use an array `sorted[i]` to store if that pair is already strictly ordered in previous columns.
-2. **Column by column:**  
-   For each column from left to right:
-   - For each unresolved pair, if `strs[i][col] > strs[i+1][col]`, then deleting this column is **necessary**; increment deletion count, skip to next column (since keeping it will mess up lex order!).
-   - If `strs[i][col] < strs[i+1][col]`, mark this pair as resolved (ordered forever), so future columns don't matter for them.
-   - If `strs[i][col] == strs[i+1][col]`, do nothing (their ordering is still unresolved).
-3. **Continue until all columns are processed.**
-4. **Return total deletions.**
+- Consider keeping a subset of columns, in any order, so that **in each row** the kept columns' letters stay in order.
+- Since we can *delete* columns, we want to **keep a sequence of columns (indices)** such that for all rows, the letters at those indices are non-decreasing left to right.
+- Our goal: maximize the number of columns to **keep**; answer is `total-cols - kept-cols`.
 
-**Time Complexity:**  
-- Each column: up to `n-1` pair comparisons.
-- There are at most 100 columns × 100 rows = **10,000 operations**.
-- Efficient enough for the constraints.
+### Approach
+
+- Let the length of each string be `m`.
+- Define `dp[j]` = the length of the longest valid subsequence of columns ending at column `j`.
+- For each column `j`:
+    - Try connecting from every earlier column `i < j`:
+        - For **all strings**: `strs[row][i] <= strs[row][j]`.
+        - If valid for all rows, we can extend the subsequence to end at `j` via `i`.
+    - `dp[j]` = max over all valid previous `i` + 1.
+- **Answer** is `m - max(dp[j])` for all `j`.
+
+### Pseudocode
+
+```
+for j from 0 to m-1:
+    dp[j] = 1
+    for i from 0 to j-1:
+        if for all rows, strs[row][i] <= strs[row][j]:
+            dp[j] = max(dp[j], dp[i]+1)
+answer = m - max(dp[j])
+```
+
+**Time Complexity**:  
+- O(m^2 * n): For each pair of columns, check n rows.
 
 ---
 
@@ -52,35 +63,32 @@ It's similar to "Delete Columns to Make Sorted" (LeetCode 944), but here, we can
 ```cpp
 #include <vector>
 #include <string>
+#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
     int minDeletionSize(vector<string>& strs) {
-        int n = strs.size(), m = strs[0].length();
-        int ans = 0;
-        vector<bool> sorted(n - 1, false); // tracks if strs[i] < strs[i+1] is 'done'
+        int n = strs.size(), m = strs[0].size();
+        vector<int> dp(m, 1);
 
-        for (int col = 0; col < m; ++col) {
-            bool mustDelete = false;
-            for (int i = 0; i < n - 1; ++i) {
-                if (!sorted[i] && strs[i][col] > strs[i+1][col]) {
-                    mustDelete = true;
-                    break;
+        for (int j = 0; j < m; ++j) {
+            for (int i = 0; i < j; ++i) {
+                bool valid = true;
+                for (int row = 0; row < n; ++row) {
+                    if (strs[row][i] > strs[row][j]) {
+                        valid = false;
+                        break;
+                    }
                 }
-            }
-            if (mustDelete) {
-                ++ans;
-                continue; // move to the next column
-            }
-            // Update resolved pairs
-            for (int i = 0; i < n - 1; ++i) {
-                if (!sorted[i] && strs[i][col] < strs[i+1][col]) {
-                    sorted[i] = true;
+                if (valid) {
+                    dp[j] = max(dp[j], dp[i]+1);
                 }
             }
         }
-        return ans;
+
+        int maxKeep = *max_element(dp.begin(), dp.end());
+        return m - maxKeep;
     }
 };
 ```
@@ -89,30 +97,36 @@ public:
 
 ## 5. **Explain One Example**
 
-**Example:**  
-`strs = ["ca", "bb", "ac"]`
+### Example 1:
 
-### Stepwise Reasoning
-- 2 columns: `c b a`
-- Let's check column 0 (col = 0):
-  - "ca" vs "bb": 'c' > 'b' → **out of order**; must delete col 0.
-  - No need to check further; go to column 1.
-- Now, only column 1 remains:
-  - After column 0 deleted: strings are "a", "b", "c"
-  - "a" <= "b" <= "c" is **sorted**.
-- **Minimum deletions = 1.**
+**Input:** `strs = ["babca","bbazb"]`
+
+Let's write out columns:
+
+| 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| b | a | b | c | a |
+| b | b | a | z | b |
+
+Our algorithm:
+
+- For each pair `(i, j)`, can we extend?
+- For example, can column 2 follow column 1?
+    - For row 0: a <= b → Yes
+    - For row 1: b <= a → **No**, so can't.
+- The maximum number of columns to keep is **2** (for example columns 2 and 3, or 1 and 3).
+- Therefore, minimum to delete = 5 - 2 = **3**.
 
 ---
 
 ## **Summary Table**
 
-| Step    | Columns Left | Rows after deletions | Sorted? |
-|---------|--------------|---------------------|---------|
-| Start   | 0,1          | ca, bb, ac          | ✗       |
-| Delete0 | 1            | a,  b,  c           | ✓       |
-
-**Return:** 1
+| Step                       | Value   |
+|----------------------------|---------|
+| Total columns              | 5       |
+| Maximum columns to keep    | 2       |
+| Minimum deletions needed   | 3       |
 
 ---
 
-Let me know if you need further clarification on any part!
+### This is the optimal, classic DP solution tailored for the problem's requirements.
