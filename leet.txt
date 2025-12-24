@@ -1,52 +1,51 @@
-Certainly! Let's break down the solution step-by-step:
+Let's tackle the problem step by step:
 
 ---
 
-## 1. **Summary**
+### 1. **Summary**
 
-Given a list of events where each event has a start time, an end time, and a value, pick **at most two non-overlapping events** such that their total value is **maximized**. Times are inclusive, meaning events *cannot touch* at the same time (if one ends at t, the other cannot start at t).
+Given:
+- Several packs with some apples (`apple` array).
+- Several boxes with capacities (`capacity` array).
 
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints:**
-  * `2 <= events.length <= 1e5`
-  * Each event: `[start, end, value]` with `1 <= start <= end <= 1e9` and `1 <= value <= 1e6`
-  * Times are large; need efficient (non-brute-force) solution.
-- **Edge Cases:**
-  * All events overlap (can only pick one).
-  * No two events overlap (pick the two with highest values).
-  * Some events may completely subsume others.
+**Task:** Find the **minimum number of boxes** needed such that their combined capacity can hold all the apples (apples from the same pack can go into different boxes).
 
 ---
 
-## 3. **Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-### **Goal**:
-- For each event, find another *non-overlapping* event to combine for max sum (or just pick a single event).
-
-### **Approach**:
-
-#### High Level Steps:
-1. **Sort events by start time** for binary search utility.
-2. **Sort another copy of events by end time** to query "the best event that ends before a given time".
-3. For each event, 
-    - Use binary search to find the event with the **largest value** that ends **before** this event's start.
-    - Keep a running **maxValueSoFar** as you step through `end-sorted` events.
-    - For each event, the answer is max(the event alone, event + bestValueBefore).
-4. Track the **global maximum**.
-
-#### Implementation Details:
-
-- As you go through the events in order of start time:
-    - For each event, find (via searching the end-sorted array) the maximum value among all events that end **before** this event starts.
-    - Use a pointer technique (not brute force) to keep this max up-to-date.
-- This method is O(N log N) due to sorting and binary search.
+- `1 <= n, m <= 50` (small arrays)
+- `1 <= apple[i], capacity[i] <= 50`
+- It is *guaranteed* that it is always possible to distribute the apples into boxes.
+  
+**Edge Cases:**
+- Number of boxes < number of packs.
+- All capacities are 1, apples are all small.
+- One box is much larger than all others (potentially answer is 1).
 
 ---
 
-## 4. **C++ Solution**
+### 3. **Optimal Algorithm**
+
+Let's think:
+
+- All that matters is the *total* apples and the *total* capacity.
+- To **minimize the number of boxes**, we want to pick the *largest* boxes first.
+
+So:
+1. Compute `total_apples = sum(apple)`.
+2. Sort `capacity` *descending*.
+3. Start picking boxes one by one from the largest, accumulating their capacity, until the sum >= `total_apples`.
+4. The count of boxes used is the answer.
+
+**Time Complexity:**  
+- Sorting: O(m log m)  
+- Accumulation: O(m)  
+This is easily fast for constraints.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
 #include <vector>
@@ -55,74 +54,45 @@ using namespace std;
 
 class Solution {
 public:
-    int maxTwoEvents(vector<vector<int>>& events) {
-        int n = events.size();
-        // Sort events by start time
-        sort(events.begin(), events.end());
-
-        // Prepare a vector to pair (end time, value)
-        vector<pair<int, int>> endEvents;
-        for (auto &ev : events) {
-            endEvents.emplace_back(ev[1], ev[2]);
-        }
-        // Sort endEvents by end time (for prefix max query)
-        sort(endEvents.begin(), endEvents.end());
-
-        // Prepare prefix max array for endEvents
-        vector<int> endTime(n), prefixMax(n);
-        for (int i = 0; i < n; ++i) {
-            endTime[i] = endEvents[i].first;
-            prefixMax[i] = (i == 0 ? endEvents[i].second : max(prefixMax[i-1], endEvents[i].second));
-        }
-
-        int ans = 0;
-        for (int i = 0; i < n; ++i) {
-            int start = events[i][0], value = events[i][2];
-            // Find the largest end time < start, i.e., event ends before this one starts
-            auto it = lower_bound(endTime.begin(), endTime.end(), start);
-            if (it != endTime.begin()) {
-                int idx = it - endTime.begin() - 1;
-                ans = max(ans, value + prefixMax[idx]);
+    int minimumBoxes(vector<int>& apple, vector<int>& capacity) {
+        int total_apples = 0;
+        for (int a : apple) total_apples += a;
+        
+        // sort capacities descending
+        sort(capacity.rbegin(), capacity.rend());
+        
+        int sum = 0;
+        for (int i = 0; i < capacity.size(); ++i) {
+            sum += capacity[i];
+            if (sum >= total_apples) {
+                return i + 1;
             }
-            ans = max(ans, value); // consider just the current event
         }
-        return ans;
+        // constraints guarantee it is always possible, so this line should never be reached
+        return -1;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+### 5. **Example Explanation**
 
-**Example**:  
-Input: `events = [[1,5,3],[1,5,1],[6,6,5]]`
+#### Example 1:
 
-- **Sort events by start:** [[1,5,3],[1,5,1],[6,6,5]]
-- **endEvents:** [(5,3), (5,1), (6,5)], sorted, and `prefixMax` is [3,3,5] (max value so far)
+- `apple = [1,3,2]` ⇒ total_apples = 1 + 3 + 2 = 6
+- `capacity = [4,3,1,5,2]`
+- Sort descending: [5,4,3,2,1]
 
-- Check event [1,5,3]:
-    - Find max value with end < 1 → none.
-    - Max is `3`.
-- Check event [1,5,1]:
-    - Same, none. Max is `3` (still).
-- Check event [6,6,5]:
-    - Find max end < 6. Since ends at [5,5], get index 1 in `endTime`. prefixMax[1] = 3
-    - 5 + 3 = **8**
-- So output is **8**.
+Now, pick largest boxes until sum ≥ 6:
+- 5 (used 1 box, sum=5)
+- 5 + 4 = 9 (now sum=9, boxes used = 2)
+
+Answer: 2
+
+**As shown in the code and approach, we select boxes with 5 and 4 capacity. Their combined 9 can accommodate all 6 apples. Using any less is not possible.**
 
 ---
 
-### **Summary Table**
-
-| Event        | MaxValue (alone) | MaxValue (with prev) | Max So Far |
-|--------------|------------------|----------------------|------------|
-| [1,5,3]      | 3                | N/A                  | 3          |
-| [1,5,1]      | 1                | N/A                  | 3          |
-| [6,6,5]      | 5                | 5+3=8                | 8          |
-
-**Output: 8**
-
----
-
-Let me know if you need more clarifications!
+**Summary:**  
+Sort capacities descending, pick boxes until you have enough total capacity for all apples. Return the number of boxes picked.
