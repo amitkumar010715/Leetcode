@@ -1,67 +1,110 @@
-Let's break down the problem step by step:
+Let's solve the "Minimum Penalty for a Shop" problem step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given `n` children each with a happiness value, in each of `k` turns you pick one child. At every turn after picking, the happiness of **every remaining, unpicked child** decreases by 1 (cannot go below 0). You must maximize the total happiness sum of the **selected** `k` children.
+We are given a string `customers` where `'Y'` or `'N'` at each index indicates whether any customers arrive in that hour. For any hour `j`, if the shop closes at `j` (**i.e., all hours >= j are closed**), the penalty is:
+
+- For each open hour (before closing) with **no customers** (`'N'`), add 1 penalty.
+- For each closed hour (from `j` on) with **customers** (`'Y'`), add 1 penalty.
+
+We want the **earliest closing hour** with **minimal total penalty**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints**
-- `1 <= n <= 2*10^5`
-- `1 <= happiness[i] <= 1e8`
-- `1 <= k <= n`
-
-**Edge Cases**
-- All happiness values are 1 (quickly drop to zero after picks).
-- `k = n` (all children are picked).
-- Large values for n, so O(n log n) or faster is necessary.
-- Some happiness values might reach zero before being picked.
+- `1 <= customers.length <= 1e5` (100,000)
+- `customers` contains only `'Y'` and `'N'`
+- Must process efficiently (**O(N)** time, **O(1)** extra space)
+- Edge cases:
+  - All 'N' -> best to close at hour 0
+  - All 'Y' -> best to close at the end
+  - Alternating 'Y' and 'N'
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Observation**
-- Picking higher happiness children earlier gives us a higher score because happiness values drop each step.
-- For every child picked at the `i-th` turn (`i` from 0 to k-1), all children have had exactly `i` decrements applied (since `i` picks have happened).
-- If you picked a child at step `i`, their happiness when picked is:  
-  `max(happiness[orig] - i, 0)`
+### Observations
 
-### **Strategy**
-- **Sort** the happiness array in decreasing order.
-- At turn `i`, pick the **i-th largest** original happiness.
-- The happiness gained is `max(happiness[i] - i, 0)`.
-- **Sum the top k such values**.
+- Precompute prefix sums or simply iterate smartly, since `N` is large.
+- The penalty for closing at hour `j` is:
+  - # of 'N's in positions `[0, j-1]` (shop was open but no customers)
+  - # of 'Y's in positions `[j, n-1]` (shop closed, but customers arrived)
 
-This is **O(n log n)** due to sorting.
+### Approach
+
+- Let’s refer to:
+  - `open_no_customer = count of 'N' in [0, j-1]`
+  - `closed_with_customer = count of 'Y' in [j, n-1]`
+
+We can:
+1. Compute **total number of 'Y'**.
+2. Set `penalty = total_Y` (if closing at hour 0, all 'Y's are after closing).
+3. As we **iterate hour-by-hour**, we consider moving the closing hour from `0` to `n`:
+    - If at hour `i-1`, character is `'Y'`, *removing one closed_with_customer, but open one more hour (no penalty since customer comes)*.
+    - If character is `'N'`, *now shop open one more hour, which is a possible penalty*.
+
+So, at each step:
+- If s[i-1] == 'Y': penalty decreases by 1 (since that 'Y' now in open hours, not penalized)
+- If s[i-1] == 'N': penalty increases by 1 (since that 'N' in open hours, penalized)
+
+We keep track of minimal penalty and earliest index.
+
+### Pseudocode
+
+```
+penalty = count of 'Y' in string       // starting at closing hour 0
+min_penalty = penalty
+min_hour = 0
+
+for i in 1 to n:
+    if s[i-1] == 'Y':
+        penalty -= 1
+    else: // s[i-1] == 'N'
+        penalty += 1
+
+    if penalty < min_penalty:
+        min_penalty = penalty
+        min_hour = i
+```
 
 ---
 
-## 4. **C++ solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
+#include <string>
 using namespace std;
 
 class Solution {
 public:
-    long long maximumHappinessSum(vector<int>& happiness, int k) {
-        // Sort happiness descending
-        sort(happiness.rbegin(), happiness.rend());
-        long long result = 0;
-        for (int i = 0; i < k; ++i) {
-            // Calculate current pick value after i decrements
-            int cur = happiness[i] - i;
-            if (cur > 0) 
-                result += cur;
-            // If cur <= 0, we still have to pick but it adds nothing
+    int bestClosingTime(string customers) {
+        int n = customers.size();
+        int totalY = 0;
+        for (char c : customers) {
+            if (c == 'Y') totalY++;
         }
-        return result;
+        
+        int penalty = totalY;
+        int minPenalty = penalty;
+        int ans = 0;
+        
+        for (int i = 1; i <= n; ++i) {
+            // Considering closing at hour i
+            if (customers[i-1] == 'Y') {
+                penalty -= 1;
+            } else { // 'N'
+                penalty += 1;
+            }
+            if (penalty < minPenalty) {
+                minPenalty = penalty;
+                ans = i;
+            }
+        }
+        return ans;
     }
 };
 ```
@@ -70,35 +113,35 @@ public:
 
 ## 5. **Example Explanation**
 
-### **Example 1:**
+Let's use the first example: `customers = "YYNY"`
 
-    happiness = [1,2,3], k = 2
+- n = 4
+- totalY = 3 (`customers[0] = Y`, `1=Y`, `2=N`, `3=Y`)
 
-- **Sort:** [3,2,1]
-- **Turn 0:** pick 3 → after 0 decrements → 3, remaining [2,1] to [1,0]
-- **Turn 1:** pick 1 (originally 2) → after 1 decrement → 2-1=1
-- Total: 3 + 1 = **4**
+Let's simulate penalties:
 
-*The code computes:*
-- happiness[0] - 0 = 3
-- happiness[1] - 1 = 2 - 1 = 1
-- sum = 4
+| Close at j (hour) | open: [0, j-1] | closed: [j, n-1] | open_no_customer | closed_with_customer | penalty |
+|-------------------|----------------|------------------|------------------|---------------------|---------|
+|        0          |     [ ]        |   [0 1 2 3]      |       0          |        3            |   3     |
+|        1          |    [0]         |   [1 2 3]        |    0 (`Y`)       |    2 (`Y Y`)        | 0+2=2   |
+|        2          |   [0 1]        |   [2 3]          |    0 (`Y Y`)     |    1 (`Y`)          | 0+1=1   |
+|        3          |  [0 1 2]       |    [3]           |    1 (`N`)       |    1 (`Y`)          | 1+1=2   |
+|        4          | [0 1 2 3]      |    [ ]           |    1 (`N`)       |    0                | 1+0=1   |
 
----
+Penalties: [3, 2, 1, 2, 1]. The first minimum is at closing hour 2.
 
-## **Summary Table**
-
-| Input | Sorted | Picks      | Formula                  | Value     | Sum  |
-|-------|--------|------------|--------------------------|-----------|------|
-|[1,2,3], k=2|[3,2,1]|3 at turn 0, 2 at turn 1|3-0, 2-1                | 3, 1     | 4    |
-|[1,1,1,1], k=2|[1,1,1,1]|1 at 0, 1 at 1      |1-0, 1-1                | 1, 0     | 1    |
-|[2,3,4,5], k=1|[5,4,3,2]|5 at 0            |5-0                      | 5        | 5    |
+Return **2**.
 
 ---
 
-### **In summary:**
-- Sort descending, pick `k` largest, subtract turn number, sum values above zero.
+## **Summary and Final Notes**
+
+- Do an initial count of `'Y'`: these are all penalties if closed at hour 0.
+- Sweep left-to-right, maintaining current penalty. Adjust for each hour.
+- Store earliest hour of minimum penalty.
+- This is **O(N)** time, **O(1)** space.
+- Handles all edge cases due to sweep and exact penalty model.
 
 ---
 
-**Let me know if you need the Python version or further clarification!**
+If you have more questions or want follow-up explanations, let me know!
