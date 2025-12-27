@@ -1,110 +1,113 @@
-Let's solve the "Minimum Penalty for a Shop" problem step by step.
+Let's tackle the **Meeting Rooms III** problem from LeetCode step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-We are given a string `customers` where `'Y'` or `'N'` at each index indicates whether any customers arrive in that hour. For any hour `j`, if the shop closes at `j` (**i.e., all hours >= j are closed**), the penalty is:
-
-- For each open hour (before closing) with **no customers** (`'N'`), add 1 penalty.
-- For each closed hour (from `j` on) with **customers** (`'Y'`), add 1 penalty.
-
-We want the **earliest closing hour** with **minimal total penalty**.
+Given `n` meeting rooms and a list of meetings each with a unique start time and end time, assign meetings to the *lowest-numbered available* room. If no room is available, a meeting must wait until a room is free, but keeps its original *duration*. If a room is freed and several meetings are delayed, the one with the earlier original start time gets priority. Return **the room that hosted the most meetings**, preferring the lowest number on ties.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= customers.length <= 1e5` (100,000)
-- `customers` contains only `'Y'` and `'N'`
-- Must process efficiently (**O(N)** time, **O(1)** extra space)
-- Edge cases:
-  - All 'N' -> best to close at hour 0
-  - All 'Y' -> best to close at the end
-  - Alternating 'Y' and 'N'
+- `n` (number of rooms): up to 100 (small)
+- Number of meetings: up to `1e5` (large)
+- All meeting start times are unique
+- Each room can host at most one meeting at a time
+- Meeting durations are preserved if delayed
+- Tie-breakers: use *lowest room number* for available and most-used rooms, and *earliest original start* for delayed meetings
+
+#### Edge Cases
+- All meetings overlap, so all are delayed except the first `n`
+- All meetings non-overlapping: no delays
+- Multiple rooms tie for most meetings
+- Meeting durations vary
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Observations
+### Data Structures:
+- Min-Heap for available rooms, sorted by room number (`availableRooms`)
+- Min-Heap for occupied rooms: each entry is (end_time, room_number) (`occupiedRooms`)
+- Sort `meetings` by **start time**.
 
-- Precompute prefix sums or simply iterate smartly, since `N` is large.
-- The penalty for closing at hour `j` is:
-  - # of 'N's in positions `[0, j-1]` (shop was open but no customers)
-  - # of 'Y's in positions `[j, n-1]` (shop closed, but customers arrived)
+### Steps:
+1. Sort meetings by `start time`.
+2. Initialize all `n` rooms as available.
+3. For each meeting:
+    - Free up any rooms where meetings have ended **before this meeting's start time** and add them back to `availableRooms`.
+    - If a room is available: 
+        - Pop the *lowest-numbered* room, assign the meeting immediately, increment its counter.
+        - Push `(end_time, room_number)` into `occupiedRooms`.
+    - If no room is available (all rooms occupied):
+        - The first ending room (from `occupiedRooms`) becomes free earliest.
+        - Delay the current meeting to that room; it will start at the room's `end_time`.
+        - Its duration doesn't change: compute new end time as `end_time = finish_time + (orig_end - orig_start)`.
+        - Increment its counter.
+        - Push new `(delayed_end_time, room_number)` into `occupiedRooms`.
 
-### Approach
+4. After all meetings, scan the counter for the maximum, preferring the smallest room number.
 
-- Let’s refer to:
-  - `open_no_customer = count of 'N' in [0, j-1]`
-  - `closed_with_customer = count of 'Y' in [j, n-1]`
-
-We can:
-1. Compute **total number of 'Y'**.
-2. Set `penalty = total_Y` (if closing at hour 0, all 'Y's are after closing).
-3. As we **iterate hour-by-hour**, we consider moving the closing hour from `0` to `n`:
-    - If at hour `i-1`, character is `'Y'`, *removing one closed_with_customer, but open one more hour (no penalty since customer comes)*.
-    - If character is `'N'`, *now shop open one more hour, which is a possible penalty*.
-
-So, at each step:
-- If s[i-1] == 'Y': penalty decreases by 1 (since that 'Y' now in open hours, not penalized)
-- If s[i-1] == 'N': penalty increases by 1 (since that 'N' in open hours, penalized)
-
-We keep track of minimal penalty and earliest index.
-
-### Pseudocode
-
-```
-penalty = count of 'Y' in string       // starting at closing hour 0
-min_penalty = penalty
-min_hour = 0
-
-for i in 1 to n:
-    if s[i-1] == 'Y':
-        penalty -= 1
-    else: // s[i-1] == 'N'
-        penalty += 1
-
-    if penalty < min_penalty:
-        min_penalty = penalty
-        min_hour = i
-```
+**Efficiency**:  
+- Each meeting does `O(log n)` heap operations, so `O(M log n)` time, where `M` is the number of meetings.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <string>
+#include <vector>
+#include <queue>
+#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int bestClosingTime(string customers) {
-        int n = customers.size();
-        int totalY = 0;
-        for (char c : customers) {
-            if (c == 'Y') totalY++;
+    int mostBooked(int n, vector<vector<int>>& meetings) {
+        int m = meetings.size();
+        // Sort meetings by start time
+        sort(meetings.begin(), meetings.end());
+        
+        vector<long long> meetingsCount(n, 0); // meeting counts per room
+
+        // Min-heap for available rooms (by room number)
+        priority_queue<int, vector<int>, greater<int>> availableRooms;
+        for (int r = 0; r < n; ++r) availableRooms.push(r);
+
+        // Min-heap for occupied rooms: (end_time, room_number)
+        using ll = long long;
+        priority_queue<pair<ll,int>, vector<pair<ll,int>>, greater<pair<ll,int>>> occupiedRooms;
+
+        for (const auto& meeting : meetings) {
+            ll start = meeting[0], end = meeting[1];
+            
+            // Free up rooms that have ended by current start
+            while (!occupiedRooms.empty() && occupiedRooms.top().first <= start) {
+                int freedRoom = occupiedRooms.top().second;
+                occupiedRooms.pop();
+                availableRooms.push(freedRoom);
+            }
+
+            if (!availableRooms.empty()) {
+                int room = availableRooms.top();
+                availableRooms.pop();
+                meetingsCount[room]++;
+                occupiedRooms.emplace(end, room);
+            } else {
+                // Get the room that becomes available the earliest
+                auto [free_time, room] = occupiedRooms.top(); occupiedRooms.pop();
+                meetingsCount[room]++;
+                ll duration = end - start;
+                occupiedRooms.emplace(free_time + duration, room);
+            }
         }
         
-        int penalty = totalY;
-        int minPenalty = penalty;
-        int ans = 0;
-        
-        for (int i = 1; i <= n; ++i) {
-            // Considering closing at hour i
-            if (customers[i-1] == 'Y') {
-                penalty -= 1;
-            } else { // 'N'
-                penalty += 1;
-            }
-            if (penalty < minPenalty) {
-                minPenalty = penalty;
-                ans = i;
-            }
-        }
-        return ans;
+        int maxRoom = 0;
+        for (int r = 1; r < n; ++r)
+            if (meetingsCount[r] > meetingsCount[maxRoom])
+                maxRoom = r;
+        return maxRoom;
     }
 };
 ```
@@ -113,35 +116,41 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's use the first example: `customers = "YYNY"`
+Let's walk through Example 1:
 
-- n = 4
-- totalY = 3 (`customers[0] = Y`, `1=Y`, `2=N`, `3=Y`)
+> n = 2, meetings = [[0,10],[1,5],[2,7],[3,4]]
 
-Let's simulate penalties:
+### Initial Room State: both [0,1] available
 
-| Close at j (hour) | open: [0, j-1] | closed: [j, n-1] | open_no_customer | closed_with_customer | penalty |
-|-------------------|----------------|------------------|------------------|---------------------|---------|
-|        0          |     [ ]        |   [0 1 2 3]      |       0          |        3            |   3     |
-|        1          |    [0]         |   [1 2 3]        |    0 (`Y`)       |    2 (`Y Y`)        | 0+2=2   |
-|        2          |   [0 1]        |   [2 3]          |    0 (`Y Y`)     |    1 (`Y`)          | 0+1=1   |
-|        3          |  [0 1 2]       |    [3]           |    1 (`N`)       |    1 (`Y`)          | 1+1=2   |
-|        4          | [0 1 2 3]      |    [ ]           |    1 (`N`)       |    0                | 1+0=1   |
+1. **[0,10]**:
+    - Free rooms: 0, 1 (both)
+    - Assign to room 0 (lowest).
+    - occupied: [(10,0)]
+2. **[1,5]**:
+    - Room 1 is available (room 0 busy till 10)
+    - Assign to room 1.
+    - occupied: [(5,1), (10,0)]
+3. **[2,7]**:
+    - All rooms busy ([5,1], [10,0])
+    - Wait till 5 (room 1).
+    - Schedule meeting at 5 (duration 5 = 7-2): 5+5=10.
+    - occupied: [(10,0), (10,1)]
+4. **[3,4]**:
+    - All rooms busy ([10,0], [10,1])
+    - Wait till 10 (either room; room 0 comes first by priority).
+    - Schedule at 10 (duration 1): 10+1=11.
+    - occupied: [(10,1), (11,0)]
 
-Penalties: [3, 2, 1, 2, 1]. The first minimum is at closing hour 2.
+Meeting count:
+- Room 0: [0,10], [10,11] → 2
+- Room 1: [1,5], [5,10] → 2
 
-Return **2**.
+**Return:** `0` (lowest-numbered tie)
 
 ---
 
-## **Summary and Final Notes**
+### **Summary**
 
-- Do an initial count of `'Y'`: these are all penalties if closed at hour 0.
-- Sweep left-to-right, maintaining current penalty. Adjust for each hour.
-- Store earliest hour of minimum penalty.
-- This is **O(N)** time, **O(1)** space.
-- Handles all edge cases due to sweep and exact penalty model.
+This approach leverages **two min-heaps** to efficiently schedule meetings into rooms with very little wasted computation, ensuring all constraints and priorities are handled, and answers even *hard* cases quickly. 
 
----
-
-If you have more questions or want follow-up explanations, let me know!
+Let me know if you need further clarification or want a Python version!
