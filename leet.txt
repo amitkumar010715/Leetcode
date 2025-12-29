@@ -1,100 +1,143 @@
-Let's address the problem step by step:
+Let's tackle the **Pyramid Transition Matrix** problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a matrix sorted in non-increasing order both row-wise and column-wise, we need to count the number of negative numbers in it.
+Given a starting row `bottom` and a set of allowed triangular "pyramid patterns", determine if you can stack blocks up, layer by layer (each layer one shorter than the last), so that every block placement matches some allowed pattern. If you can reach the top (a single block), **return `true`**; else, **return `false`**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= m, n <= 100`  
-- Each cell: `-100 <= grid[i][j] <= 100`
-- The matrix can have:
-  - All positives or zeros (return 0)
-  - All negatives (return `m*n`)
-  - Negatives clustered towards bottom-right
-- Empty matrices won't occur since m, n >= 1  
-
-**Edge cases:**
-- Single row or column
-- Only one negative in the entire matrix
-- All values are negative or non-negative
+- **`bottom.length`**: 2 to 6 blocks (very manageable for DFS/backtracking).
+- **`allowed.length`**: Up to 216 patterns (since there are 6*6*6 possible triples within the alphabet {A,B,C,D,E,F}).
+- **`allowed` are unique**.
+- **Characters**: Only 'A'-'F'.
+- **Edge cases**:
+    - Some (a, b) pairs may not be allowed to stack anything on them (dead ends).
+    - It's possible to have no valid sequence, even if partial layers can be built.
+    - Empty `allowed` means impossible unless `bottom` is of length 1.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm & Approach**
 
-### **O(m + n) Approach ("Staircase" Traversal)**
+### 🧩 **State:**
+Each layer is a string (or vector<char>). For every *pair* of adjacent blocks `(a, b)` in a layer, you must stack an allowed block `c` (so, (`a`, `b`, `c`) is allowed).
 
-Since the matrix is sorted in non-increasing order both by rows and columns:
+### 🔁 **Recursive Solution:**
+*At each layer*, try **all possible choices** for stacking above each adjacent pair—**backtrack** if you hit a dead end.
 
-- Start from the **bottom-left** (first column, last row).
-- At each step:
-  - If the current value is negative, then **all elements to the right in the same row** are also negative (due to sorting).
-    - Add (`n - col`) to answer and move **up** (row--).
-  - If the current value is non-negative, move **right** (col++).
-- Repeat until you go out of bounds.
+#### **Steps:**
+1. **Preprocess** allowed patterns into a map: `pair<string, vector<char>>`, mapping a 2-character base "AB" to all possible "C" that can be stacked above ("ABC" is allowed).
+2. **DFS/backtracking**:
+    - If `current layer` is of length 1: **success**.
+    - For all adjacent pairs in `current layer`, generate all possible block choices above, as per the allowed map.
+    - For the next row, try all combinations (cross product of choices for each position), and proceed recursively.
 
-**Why is this optimal?**  
-- Each move either goes up a row or right a column.
-- Max steps: m+n.
+#### **Memoization:**
+To prune repeated work (since bottom can be up to 6, and only 6 different block types), **memoize**: for a given current string/layer, does it lead to the top? (`unordered_map<string, bool> memo`).
+
+#### **Complexity:**
+- The input is small enough (`len <= 6`) to allow this exhaustive search with memoization to be optimal.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
+#include <unordered_map>
+#include <vector>
+#include <string>
+using namespace std;
+
 class Solution {
 public:
-    int countNegatives(vector<vector<int>>& grid) {
-        int m = grid.size(), n = grid[0].size();
-        int row = m - 1;      // start from the bottom
-        int col = 0, count = 0;
-        while (row >= 0 && col < n) {
-            if (grid[row][col] < 0) {
-                // all elements from col to n-1 are negative in this row
-                count += (n - col);
-                row--;
-            } else {
-                col++;
+    // Map "AB" -> {C1, C2, ...}
+    unordered_map<string, vector<char>> allowed_map;
+    unordered_map<string, bool> memo;
+
+    bool dfs(const string& row) {
+        if (row.length() == 1) return true;
+        if (memo.count(row)) return memo[row];
+
+        // For all positions in this row, make a list of possible candidates above
+        vector<vector<char>> choices;
+        for (int i = 0; i + 1 < row.length(); ++i) {
+            string base = row.substr(i, 2);
+            if (!allowed_map.count(base)) {
+                return memo[row] = false;
             }
+            choices.push_back(allowed_map[base]);
         }
-        return count;
+
+        // Now try every combination for possible next rows (using recursion)
+        string next_row(choices.size(), ' ');
+
+        function<bool(int)> build_next = [&](int pos) {
+            if (pos == choices.size()) {
+                return dfs(next_row); // reached one candidate for next row
+            }
+            for (char c : choices[pos]) {
+                next_row[pos] = c;
+                if (build_next(pos + 1)) return true;
+            }
+            return false;
+        };
+
+        return memo[row] = build_next(0);
+    }
+
+    bool pyramidTransition(string bottom, vector<string>& allowed) {
+        // Build the allowed_map
+        for (const string& s : allowed) {
+            string key = s.substr(0, 2);
+            allowed_map[key].push_back(s[2]);
+        }
+        memo.clear();
+        return dfs(bottom);
     }
 };
 ```
 
 ---
 
-## 5. **Explain One Example**
+## 5. **Example Explained**
 
-### Example 1
+Let's explain Example 1:
 
 ```
-grid = [[4, 3, 2, -1],
-        [3, 2, 1, -1],
-        [1, 1,-1, -2],
-        [-1,-1,-2, -3]]
+bottom = "BCD"
+allowed = ["BCC","CDE","CEA","FFF"]
 ```
 
-Let's trace:
+- **allowed_map will be:**
+   - "BC" → ['C']
+   - "CD" → ['E']
+   - "CE" → ['A']
+   - "FF" → ['F']
 
-- Start at row=3, col=0 (value: -1). Negative! All rightwards (col=0..3) are negative: count += 4. Move row up (row=2).
-- row=2, col=0 (1). Not negative, move col right (col=1).
-- row=2, col=1 (1). Not negative, move col right (col=2).
-- row=2, col=2 (-1). Negative! col=2,3 are negative: count += 2. Move row up (row=1).
-- row=1, col=2 (1). Not negative, move col right (col=3).
-- row=1, col=3 (-1). Negative. Only col=3 is negative: count += 1. Move row up (row=0).
-- row=0, col=3 (-1). Negative. Only col=3 is negative: count += 1. Move row up (row=-1). Stop.
+- Start with "BCD".
+    - "BC" → can stack 'C' above
+    - "CD" → can stack 'E' above
+- So, next possible row is "CE".
+- "CE":
+    - "CE" → can stack 'A' above
+- So, next row is "A" (top).
+- SUCCESS! (Every triangle used is in allowed).
 
-Final **count = 4 + 2 + 1 + 1 = 8**.
+**So the answer is `true`.**
 
 ---
 
-**Summary:**  
-- Use staircase traverse from bottom-left for O(m+n)
-- At each negative cell, count all rightward negatives for that row.
-- Handles all edge cases efficiently.
+### **Summary Table**
+
+| Approach                 | Time Complexity | Suitability         | Key Tricks                    |
+|--------------------------|----------------|---------------------|-------------------------------|
+| DFS + Memoization        | O(6^N * N)     | N=6 is feasible     | Memoize layer, prune deadends |
+| BFS                      | O(6^N)         | Also possible, but more memory use  | Use queue, process each layer |
+
+---
+
+**This solution is optimal and will pass all constraints efficiently.**
