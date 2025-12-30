@@ -1,143 +1,117 @@
-Let's tackle the **Pyramid Transition Matrix** problem step by step:
+Let's break down the problem step by step:
 
 ---
 
-## 1. **Short Summary**
+### 1. **Summary**
 
-Given a starting row `bottom` and a set of allowed triangular "pyramid patterns", determine if you can stack blocks up, layer by layer (each layer one shorter than the last), so that every block placement matches some allowed pattern. If you can reach the top (a single block), **return `true`**; else, **return `false`**.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **`bottom.length`**: 2 to 6 blocks (very manageable for DFS/backtracking).
-- **`allowed.length`**: Up to 216 patterns (since there are 6*6*6 possible triples within the alphabet {A,B,C,D,E,F}).
-- **`allowed` are unique**.
-- **Characters**: Only 'A'-'F'.
-- **Edge cases**:
-    - Some (a, b) pairs may not be allowed to stack anything on them (dead ends).
-    - It's possible to have no valid sequence, even if partial layers can be built.
-    - Empty `allowed` means impossible unless `bottom` is of length 1.
+Given a grid, count the number of 3x3 subgrids that are "magic squares." A 3x3 magic square contains all distinct numbers from 1 to 9, and all its rows, columns, and diagonals sum to the same value (which is 15, for numbers 1-9).
 
 ---
 
-## 3. **Optimal Algorithm & Approach**
+### 2. **Constraints & Edge Cases**
 
-### 🧩 **State:**
-Each layer is a string (or vector<char>). For every *pair* of adjacent blocks `(a, b)` in a layer, you must stack an allowed block `c` (so, (`a`, `b`, `c`) is allowed).
-
-### 🔁 **Recursive Solution:**
-*At each layer*, try **all possible choices** for stacking above each adjacent pair—**backtrack** if you hit a dead end.
-
-#### **Steps:**
-1. **Preprocess** allowed patterns into a map: `pair<string, vector<char>>`, mapping a 2-character base "AB" to all possible "C" that can be stacked above ("ABC" is allowed).
-2. **DFS/backtracking**:
-    - If `current layer` is of length 1: **success**.
-    - For all adjacent pairs in `current layer`, generate all possible block choices above, as per the allowed map.
-    - For the next row, try all combinations (cross product of choices for each position), and proceed recursively.
-
-#### **Memoization:**
-To prune repeated work (since bottom can be up to 6, and only 6 different block types), **memoize**: for a given current string/layer, does it lead to the top? (`unordered_map<string, bool> memo`).
-
-#### **Complexity:**
-- The input is small enough (`len <= 6`) to allow this exhaustive search with memoization to be optimal.
+- **Grid size:** 1 ≤ row, col ≤ 10 ⇒ O(1) for small brute-force solutions.
+- **Element value:** 0 ≤ grid[i][j] ≤ 15 (but only 1..9 count towards magic squares).
+- **Minimum size:** Need at least 3 rows and 3 columns; if not, answer is 0.
+- **Numbers:** Must check for all **distinct** 1..9 in every 3x3 subgrid.
+- **Edge Cases:**
+    - Grid is smaller than 3x3: Output 0.
+    - Grid has numbers outside 1..9: Should not affect as only 1..9 are allowed in a magic square.
+    - Duplicates in subgrid: Must not be a magic square.
 
 ---
 
-## 4. **Clean C++ Solution**
+### 3. **Optimal Algorithm**
+
+Given small constraints, check every 3x3 subgrid:
+
+For each subgrid:
+- Flatten all its values.
+- Check if they contain all numbers 1 to 9 **exactly once**.
+- Check if rows, columns, and diagonals each sum to 15.
+
+**Optimizations:**
+- The center of a 3x3 magic square using 1-9 must be 5, since that's the only way the sums can work.
+- You can short-circuit checks if a duplicate is found or if a value is outside 1..9.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
-#include <unordered_map>
-#include <vector>
-#include <string>
-using namespace std;
-
 class Solution {
 public:
-    // Map "AB" -> {C1, C2, ...}
-    unordered_map<string, vector<char>> allowed_map;
-    unordered_map<string, bool> memo;
+    int numMagicSquaresInside(vector<vector<int>>& grid) {
+        int rows = grid.size();
+        int cols = grid[0].size();
+        int count = 0;
 
-    bool dfs(const string& row) {
-        if (row.length() == 1) return true;
-        if (memo.count(row)) return memo[row];
-
-        // For all positions in this row, make a list of possible candidates above
-        vector<vector<char>> choices;
-        for (int i = 0; i + 1 < row.length(); ++i) {
-            string base = row.substr(i, 2);
-            if (!allowed_map.count(base)) {
-                return memo[row] = false;
+        // Helper to check a 3x3 subgrid starting at (i, j)
+        auto isMagic = [&](int i, int j) -> bool {
+            vector<int> cnt(10, 0);
+            // Check all numbers are 1-9 and unique
+            for (int x = 0; x < 3; ++x) {
+                for (int y = 0; y < 3; ++y) {
+                    int val = grid[i + x][j + y];
+                    if (val < 1 || val > 9 || cnt[val]++) return false;
+                }
             }
-            choices.push_back(allowed_map[base]);
-        }
-
-        // Now try every combination for possible next rows (using recursion)
-        string next_row(choices.size(), ' ');
-
-        function<bool(int)> build_next = [&](int pos) {
-            if (pos == choices.size()) {
-                return dfs(next_row); // reached one candidate for next row
+            // Check rows
+            for (int x = 0; x < 3; ++x) {
+                int sum = grid[i + x][j] + grid[i + x][j + 1] + grid[i + x][j + 2];
+                if (sum != 15) return false;
             }
-            for (char c : choices[pos]) {
-                next_row[pos] = c;
-                if (build_next(pos + 1)) return true;
+            // Check cols
+            for (int y = 0; y < 3; ++y) {
+                int sum = grid[i][j + y] + grid[i + 1][j + y] + grid[i + 2][j + y];
+                if (sum != 15) return false;
             }
-            return false;
+            // Check diagonals
+            int diag1 = grid[i][j] + grid[i + 1][j + 1] + grid[i + 2][j + 2];
+            int diag2 = grid[i][j + 2] + grid[i + 1][j + 1] + grid[i + 2][j];
+            if (diag1 != 15 || diag2 != 15) return false;
+
+            return true;
         };
 
-        return memo[row] = build_next(0);
-    }
-
-    bool pyramidTransition(string bottom, vector<string>& allowed) {
-        // Build the allowed_map
-        for (const string& s : allowed) {
-            string key = s.substr(0, 2);
-            allowed_map[key].push_back(s[2]);
+        for (int i = 0; i + 2 < rows; ++i) {
+            for (int j = 0; j + 2 < cols; ++j) {
+                // Optionally: only proceed if grid[i+1][j+1] == 5
+                if (grid[i + 1][j + 1] == 5 && isMagic(i, j))
+                    count++;
+            }
         }
-        memo.clear();
-        return dfs(bottom);
+        return count;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+### 5. **Example Explanation**
 
-Let's explain Example 1:
+**Input:**
+```
+grid = [
+  [4, 3, 8, 4],
+  [9, 5, 1, 9],
+  [2, 7, 6, 2]
+]
+```
+Let's check the 3x3 subgrid at the top-left:
 
 ```
-bottom = "BCD"
-allowed = ["BCC","CDE","CEA","FFF"]
+4 3 8
+9 5 1
+2 7 6
 ```
 
-- **allowed_map will be:**
-   - "BC" → ['C']
-   - "CD" → ['E']
-   - "CE" → ['A']
-   - "FF" → ['F']
+Flat: 4,3,8,9,5,1,2,7,6; all numbers 1..9 used once.
 
-- Start with "BCD".
-    - "BC" → can stack 'C' above
-    - "CD" → can stack 'E' above
-- So, next possible row is "CE".
-- "CE":
-    - "CE" → can stack 'A' above
-- So, next row is "A" (top).
-- SUCCESS! (Every triangle used is in allowed).
+- Rows: 4+3+8=15, 9+5+1=15, 2+7+6=15
+- Cols: 4+9+2=15, 3+5+7=15, 8+1+6=15
+- Diagonals: 4+5+6=15, 8+5+2=15
 
-**So the answer is `true`.**
+All checks pass; so it's a magic square. No other 3x3 subgrid passes all conditions, so answer is **1**.
 
 ---
-
-### **Summary Table**
-
-| Approach                 | Time Complexity | Suitability         | Key Tricks                    |
-|--------------------------|----------------|---------------------|-------------------------------|
-| DFS + Memoization        | O(6^N * N)     | N=6 is feasible     | Memoize layer, prune deadends |
-| BFS                      | O(6^N)         | Also possible, but more memory use  | Use queue, process each layer |
-
----
-
-**This solution is optimal and will pass all constraints efficiently.**
