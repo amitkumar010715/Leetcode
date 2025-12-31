@@ -1,117 +1,177 @@
-Let's break down the problem step by step:
+Let's break down the solution for **LeetCode: Last Day Where You Can Still Cross**:
 
 ---
 
-### 1. **Summary**
+## 1. **Short Summary**
 
-Given a grid, count the number of 3x3 subgrids that are "magic squares." A 3x3 magic square contains all distinct numbers from 1 to 9, and all its rows, columns, and diagonals sum to the same value (which is 15, for numbers 1-9).
-
----
-
-### 2. **Constraints & Edge Cases**
-
-- **Grid size:** 1 ≤ row, col ≤ 10 ⇒ O(1) for small brute-force solutions.
-- **Element value:** 0 ≤ grid[i][j] ≤ 15 (but only 1..9 count towards magic squares).
-- **Minimum size:** Need at least 3 rows and 3 columns; if not, answer is 0.
-- **Numbers:** Must check for all **distinct** 1..9 in every 3x3 subgrid.
-- **Edge Cases:**
-    - Grid is smaller than 3x3: Output 0.
-    - Grid has numbers outside 1..9: Should not affect as only 1..9 are allowed in a magic square.
-    - Duplicates in subgrid: Must not be a magic square.
+Given a binary matrix where, each day, specific cells become "water," return the **last day** you can "walk" from the top to the bottom using only **land** (0s), moving in 4 directions from any top row cell to any bottom row cell.
 
 ---
 
-### 3. **Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-Given small constraints, check every 3x3 subgrid:
-
-For each subgrid:
-- Flatten all its values.
-- Check if they contain all numbers 1 to 9 **exactly once**.
-- Check if rows, columns, and diagonals each sum to 15.
-
-**Optimizations:**
-- The center of a 3x3 magic square using 1-9 must be 5, since that's the only way the sums can work.
-- You can short-circuit checks if a duplicate is found or if a value is outside 1..9.
+- Large input: `row` and `col` up to `2 * 10^4`, but `row*col` <= `2*10^4`, so the total grid size is manageable.
+- All entries in `cells` are unique.
+- Must optimize for repeated connectivity checks (top-to-bottom path).
+- The path may be blocked from early on; sometimes it’s never blocked.
+- **Edge cases:**  
+  - The grid quickly floods; last crossing day is early.
+  - Crossing possible till almost the last day.
 
 ---
 
-### 4. **C++ Solution**
+## 3. **Optimal Algorithm**
+
+### **Key Idea**
+
+We need to **efficiently find the latest day when a top-to-bottom path exists**.  
+Checking top-to-bottom connectivity daily is costly if done naively (e.g. BFS for every day).  
+Instead, use **Binary Search** over the days, and for each midpoint, check if a path from the top row to the bottom row exists using BFS or DFS.
+
+**Why Binary Search?**  
+- Once it becomes impossible to cross (`f(d) == false`), it remains impossible for all later days.
+- So, `f(d)` is monotonic (if you can cross on day i, then you can cross on all earlier days).
+
+### **Steps**
+
+1. **Binary Search** the day:  
+   - Search between 1 and N (N = `row*col`).  
+   - For day `mid`, **simulate the flooding up to that day** — mark first `mid` cells in `cells` as water.  
+
+2. **Crossing Check**:  
+   - Use **BFS** (or DFS) starting from all land cells in the top row.
+   - For each, see if we can reach any bottom row cell.
+   - If yes: crossing is possible on this day.
+
+3. **Result**:  
+   - Binary search for the **last possible day** with a crossing.
+
+#### **Time Complexity**
+- BFS/DFS is `O(RC)` per check (where R=rows, C=columns).
+- Binary search performs ~log(N) checks, where N=RC.
+- Total: `O(RC * log(RC))` — efficient given constraints.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+#include <queue>
+using namespace std;
+
 class Solution {
 public:
-    int numMagicSquaresInside(vector<vector<int>>& grid) {
-        int rows = grid.size();
-        int cols = grid[0].size();
-        int count = 0;
+    int row, col;
+    vector<vector<int>> dirs = {{0,1},{1,0},{0,-1},{-1,0}}; // right, down, left, up
+    
+    // Checks if it's possible to cross the grid given the water up to day 'day'
+    bool canCross(int day, const vector<vector<int>>& grid) {
+        vector<vector<bool>> vis(row, vector<bool>(col, false));
+        queue<pair<int,int>> q;
 
-        // Helper to check a 3x3 subgrid starting at (i, j)
-        auto isMagic = [&](int i, int j) -> bool {
-            vector<int> cnt(10, 0);
-            // Check all numbers are 1-9 and unique
-            for (int x = 0; x < 3; ++x) {
-                for (int y = 0; y < 3; ++y) {
-                    int val = grid[i + x][j + y];
-                    if (val < 1 || val > 9 || cnt[val]++) return false;
+        // Add all land cells in the top row to the queue
+        for (int c = 0; c < col; ++c)
+            if (grid[0][c] == 0) {
+                q.push({0, c});
+                vis[0][c] = true;
+            }
+
+        while (!q.empty()) {
+            auto [r, c] = q.front(); q.pop();
+            if (r == row - 1) return true; // reached bottom
+
+            for (auto& d : dirs) {
+                int nr = r + d[0], nc = c + d[1];
+                if (nr >= 0 && nr < row && nc >= 0 && nc < col &&
+                    !vis[nr][nc] && grid[nr][nc] == 0) {
+                    vis[nr][nc] = true;
+                    q.push({nr, nc});
                 }
             }
-            // Check rows
-            for (int x = 0; x < 3; ++x) {
-                int sum = grid[i + x][j] + grid[i + x][j + 1] + grid[i + x][j + 2];
-                if (sum != 15) return false;
-            }
-            // Check cols
-            for (int y = 0; y < 3; ++y) {
-                int sum = grid[i][j + y] + grid[i + 1][j + y] + grid[i + 2][j + y];
-                if (sum != 15) return false;
-            }
-            // Check diagonals
-            int diag1 = grid[i][j] + grid[i + 1][j + 1] + grid[i + 2][j + 2];
-            int diag2 = grid[i][j + 2] + grid[i + 1][j + 1] + grid[i + 2][j];
-            if (diag1 != 15 || diag2 != 15) return false;
+        }
+        return false;
+    }
 
-            return true;
-        };
+    int latestDayToCross(int Row, int Col, vector<vector<int>>& cells) {
+        row = Row; col = Col;
+        int left = 1, right = cells.size(), ans = 0;
 
-        for (int i = 0; i + 2 < rows; ++i) {
-            for (int j = 0; j + 2 < cols; ++j) {
-                // Optionally: only proceed if grid[i+1][j+1] == 5
-                if (grid[i + 1][j + 1] == 5 && isMagic(i, j))
-                    count++;
+        while (left <= right) {
+            int mid = (left + right) / 2;
+            // Simulate the grid at 'mid' day: water all given cells
+            vector<vector<int>> grid(row, vector<int>(col, 0));
+            for (int i = 0; i < mid; ++i) {
+                int r = cells[i][0]-1, c = cells[i][1]-1;
+                grid[r][c] = 1;
+            }
+            if (canCross(mid, grid)) {
+                ans = mid; // possible, try a later day
+                left = mid + 1;
+            } else {
+                right = mid - 1; // not possible, try earlier
             }
         }
-        return count;
+        return ans;
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation**
+## 5. **Example Explanation**
 
-**Input:**
+**Example 1** (from prompt):
+
+Input: `row = 2, col = 2, cells = [[1,1],[2,1],[1,2],[2,2]]`
+
+**Day 0**:  
 ```
-grid = [
-  [4, 3, 8, 4],
-  [9, 5, 1, 9],
-  [2, 7, 6, 2]
-]
+0 0
+0 0
 ```
-Let's check the 3x3 subgrid at the top-left:
+All land. Path exists (`ans=0`).
 
+**Day 1**:  
+Flood (1,1):
 ```
-4 3 8
-9 5 1
-2 7 6
+1 0
+0 0
 ```
+Can still cross: path (0,1) → (1,1).
 
-Flat: 4,3,8,9,5,1,2,7,6; all numbers 1..9 used once.
+**Day 2**:  
+Flood (2,1):
+```
+1 0
+1 0
+```
+Can still cross: path (0,1) → (1,1).
 
-- Rows: 4+3+8=15, 9+5+1=15, 2+7+6=15
-- Cols: 4+9+2=15, 3+5+7=15, 8+1+6=15
-- Diagonals: 4+5+6=15, 8+5+2=15
+**Day 3**:  
+Flood (1,2):
+```
+1 1
+1 0
+```
+Only (1,2) is land at bottom, but you cannot reach (1,1) from the top.
 
-All checks pass; so it's a magic square. No other 3x3 subgrid passes all conditions, so answer is **1**.
+**So, the last day you could cross is 2.**
 
 ---
+
+## **Summary Table**
+
+| Day | Flooded cells | Matrix        | Path Exists? | Note             |
+|-----|--------------|---------------|--------------|------------------|
+|  0  | None         | All 0s        |    Yes       | Start            |
+|  1  | (1,1)        | 1 0 / 0 0     |    Yes       |                  |
+|  2  | (2,1)        | 1 0 / 1 0     |    Yes       | Last YES         |
+|  3  | (1,2)        | 1 1 / 1 0     |    No        | Blocked          |
+|  4  | (2,2)        | 1 1 / 1 1     |    No        | All water        |
+
+---
+
+## **Closing Notes**
+- **Binary search** with BFS per day provides optimal O(RC log(RC)) performance.
+- If cells were not unique or grid larger, Union-Find approach could be considered, but for this problem BFS with binary search is clear and practical.
