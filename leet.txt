@@ -1,177 +1,78 @@
-Let's break down the solution for **LeetCode: Last Day Where You Can Still Cross**:
+Let's address each requirement step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a binary matrix where, each day, specific cells become "water," return the **last day** you can "walk" from the top to the bottom using only **land** (0s), moving in 4 directions from any top row cell to any bottom row cell.
+This problem asks you to add **one** to a big non-negative integer, where the integer is given as an *array* of its digits. You must increment this number and return the new array format—handling carryovers if needed (like 9 + 1 → [1,0]).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- Large input: `row` and `col` up to `2 * 10^4`, but `row*col` <= `2*10^4`, so the total grid size is manageable.
-- All entries in `cells` are unique.
-- Must optimize for repeated connectivity checks (top-to-bottom path).
-- The path may be blocked from early on; sometimes it’s never blocked.
-- **Edge cases:**  
-  - The grid quickly floods; last crossing day is early.
-  - Crossing possible till almost the last day.
+**Constraints**
+- `1 <= digits.length <= 100`
+- Each digit: `0 <= digits[i] <= 9`
+- The input never has leading zeroes.
+
+**Edge Cases**
+- If the last digit is **not** 9, just increment and return.
+- If there are trailing 9s, need to "carry over" (e.g., [1,2,9] + 1 → [1,3,0]).
+- If *all* digits are 9, a leading 1 is added: [9,9,9] + 1 → [1,0,0,0].
+- Single-digit case: [0] → [1], [9] → [1,0].
+- Input never contains an empty array.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Idea**
+- Start from the last digit and move backwards:
+    - If the current digit is less than 9, increment it and return the array.
+    - If the current digit is 9, set it to 0 and continue to carry over.
+- If you've finished the loop and didn't return (all were 9s), insert 1 at the beginning.
 
-We need to **efficiently find the latest day when a top-to-bottom path exists**.  
-Checking top-to-bottom connectivity daily is costly if done naively (e.g. BFS for every day).  
-Instead, use **Binary Search** over the days, and for each midpoint, check if a path from the top row to the bottom row exists using BFS or DFS.
-
-**Why Binary Search?**  
-- Once it becomes impossible to cross (`f(d) == false`), it remains impossible for all later days.
-- So, `f(d)` is monotonic (if you can cross on day i, then you can cross on all earlier days).
-
-### **Steps**
-
-1. **Binary Search** the day:  
-   - Search between 1 and N (N = `row*col`).  
-   - For day `mid`, **simulate the flooding up to that day** — mark first `mid` cells in `cells` as water.  
-
-2. **Crossing Check**:  
-   - Use **BFS** (or DFS) starting from all land cells in the top row.
-   - For each, see if we can reach any bottom row cell.
-   - If yes: crossing is possible on this day.
-
-3. **Result**:  
-   - Binary search for the **last possible day** with a crossing.
-
-#### **Time Complexity**
-- BFS/DFS is `O(RC)` per check (where R=rows, C=columns).
-- Binary search performs ~log(N) checks, where N=RC.
-- Total: `O(RC * log(RC))` — efficient given constraints.
+**Time Complexity:** O(N), as you may need to traverse the whole array (`N = digits.size()`).
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <queue>
 using namespace std;
 
 class Solution {
 public:
-    int row, col;
-    vector<vector<int>> dirs = {{0,1},{1,0},{0,-1},{-1,0}}; // right, down, left, up
-    
-    // Checks if it's possible to cross the grid given the water up to day 'day'
-    bool canCross(int day, const vector<vector<int>>& grid) {
-        vector<vector<bool>> vis(row, vector<bool>(col, false));
-        queue<pair<int,int>> q;
-
-        // Add all land cells in the top row to the queue
-        for (int c = 0; c < col; ++c)
-            if (grid[0][c] == 0) {
-                q.push({0, c});
-                vis[0][c] = true;
-            }
-
-        while (!q.empty()) {
-            auto [r, c] = q.front(); q.pop();
-            if (r == row - 1) return true; // reached bottom
-
-            for (auto& d : dirs) {
-                int nr = r + d[0], nc = c + d[1];
-                if (nr >= 0 && nr < row && nc >= 0 && nc < col &&
-                    !vis[nr][nc] && grid[nr][nc] == 0) {
-                    vis[nr][nc] = true;
-                    q.push({nr, nc});
-                }
-            }
-        }
-        return false;
-    }
-
-    int latestDayToCross(int Row, int Col, vector<vector<int>>& cells) {
-        row = Row; col = Col;
-        int left = 1, right = cells.size(), ans = 0;
-
-        while (left <= right) {
-            int mid = (left + right) / 2;
-            // Simulate the grid at 'mid' day: water all given cells
-            vector<vector<int>> grid(row, vector<int>(col, 0));
-            for (int i = 0; i < mid; ++i) {
-                int r = cells[i][0]-1, c = cells[i][1]-1;
-                grid[r][c] = 1;
-            }
-            if (canCross(mid, grid)) {
-                ans = mid; // possible, try a later day
-                left = mid + 1;
+    vector<int> plusOne(vector<int>& digits) {
+        int n = digits.size();
+        // Traverse from least significant to most
+        for (int i = n - 1; i >= 0; --i) {
+            if (digits[i] < 9) {
+                digits[i]++;
+                return digits; // Done; no carry needed
             } else {
-                right = mid - 1; // not possible, try earlier
+                digits[i] = 0; // Set to 0 and carry over
             }
         }
-        return ans;
+        // If we're here, all digits were 9, so we need an extra digit
+        digits.insert(digits.begin(), 1);
+        return digits;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-**Example 1** (from prompt):
+**Input:** `digits = [9, 9, 9]`
 
-Input: `row = 2, col = 2, cells = [[1,1],[2,1],[1,2],[2,2]]`
+**Step-by-step:**
+- Start from the last digit:
+    - digits[2] is 9 → set to 0 (carry left)
+    - digits[1] is 9 → set to 0 (carry left)
+    - digits[0] is 9 → set to 0 (carry left)
+- All done, but still have a carry!
+- Insert 1 at the beginning: `[1, 0, 0, 0]`
 
-**Day 0**:  
-```
-0 0
-0 0
-```
-All land. Path exists (`ans=0`).
-
-**Day 1**:  
-Flood (1,1):
-```
-1 0
-0 0
-```
-Can still cross: path (0,1) → (1,1).
-
-**Day 2**:  
-Flood (2,1):
-```
-1 0
-1 0
-```
-Can still cross: path (0,1) → (1,1).
-
-**Day 3**:  
-Flood (1,2):
-```
-1 1
-1 0
-```
-Only (1,2) is land at bottom, but you cannot reach (1,1) from the top.
-
-**So, the last day you could cross is 2.**
-
----
-
-## **Summary Table**
-
-| Day | Flooded cells | Matrix        | Path Exists? | Note             |
-|-----|--------------|---------------|--------------|------------------|
-|  0  | None         | All 0s        |    Yes       | Start            |
-|  1  | (1,1)        | 1 0 / 0 0     |    Yes       |                  |
-|  2  | (2,1)        | 1 0 / 1 0     |    Yes       | Last YES         |
-|  3  | (1,2)        | 1 1 / 1 0     |    No        | Blocked          |
-|  4  | (2,2)        | 1 1 / 1 1     |    No        | All water        |
-
----
-
-## **Closing Notes**
-- **Binary search** with BFS per day provides optimal O(RC log(RC)) performance.
-- If cells were not unique or grid larger, Union-Find approach could be considered, but for this problem BFS with binary search is clear and practical.
+**Output:** `[1, 0, 0, 0]`
