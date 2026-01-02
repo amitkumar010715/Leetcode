@@ -1,78 +1,93 @@
-Let's address each requirement step by step:
+Let's break down the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-This problem asks you to add **one** to a big non-negative integer, where the integer is given as an *array* of its digits. You must increment this number and return the new array format—handling carryovers if needed (like 9 + 1 → [1,0]).
+Given an array of `2n` integers containing `n+1` unique elements, with **one element repeated exactly `n` times**, find and return this repeated element.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints**
-- `1 <= digits.length <= 100`
-- Each digit: `0 <= digits[i] <= 9`
-- The input never has leading zeroes.
+**Constraints:**
+- `2 <= n <= 5000` (so array length: `4` to `10000`)
+- Each number is `0 <= nums[i] <= 10^4`
+- `nums.length == 2 * n`
+- Exactly one element appears `n` times.
+- Rest of the `n` elements are **unique** (appear once).
 
-**Edge Cases**
-- If the last digit is **not** 9, just increment and return.
-- If there are trailing 9s, need to "carry over" (e.g., [1,2,9] + 1 → [1,3,0]).
-- If *all* digits are 9, a leading 1 is added: [9,9,9] + 1 → [1,0,0,0].
-- Single-digit case: [0] → [1], [9] → [1,0].
-- Input never contains an empty array.
+**Edge Cases:**
+- The repeated element could be anywhere (front, back, or scattered).
+- The repeated element could be `0` or `10^4` (test range boundaries).
+- Array is always of **even length** (at least 4).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- Start from the last digit and move backwards:
-    - If the current digit is less than 9, increment it and return the array.
-    - If the current digit is 9, set it to 0 and continue to carry over.
-- If you've finished the loop and didn't return (all were 9s), insert 1 at the beginning.
+Since only one element is repeated many times (n times!), and the rest are unique, several methods work:
 
-**Time Complexity:** O(N), as you may need to traverse the whole array (`N = digits.size()`).
+### **Approach 1: Using HashSet** (Clean, O(n) time/space)
+- Traverse the array and use a set to record seen numbers.
+- The first number seen twice is the repeated one (since it's the only one with `n` duplicates).
+
+### **Approach 2: Sort and Find Streak** (O(n log n), no extra space)
+- Sort the array. The repeated element will occupy `n` contiguous positions; so, find the element that exists in position `i` and `i+1`.
+
+### **Approach 3: Smart Pairwise Check (O(1) Space, O(n) time)**
+- Since the repeated element is present `n` times, it's guaranteed that **at least two of them will appear with less than three elements in-between**. So, comparing every pair within three apart:
+    - For each `i` from 0 to `len-2`, compare `nums[i] == nums[i+1] || nums[i] == nums[i+2] || nums[i] == nums[i+3]` (for within array range).
+    - If found, return that number.
+
+### HashSet is clean and simple, and optimal given the constraints.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
+(Most readable is with HashSet.)
+
 ```cpp
 #include <vector>
+#include <unordered_set>
 using namespace std;
 
 class Solution {
 public:
-    vector<int> plusOne(vector<int>& digits) {
-        int n = digits.size();
-        // Traverse from least significant to most
-        for (int i = n - 1; i >= 0; --i) {
-            if (digits[i] < 9) {
-                digits[i]++;
-                return digits; // Done; no carry needed
-            } else {
-                digits[i] = 0; // Set to 0 and carry over
+    int repeatedNTimes(vector<int>& nums) {
+        unordered_set<int> seen;
+        for (int num : nums) {
+            if (seen.count(num)) {
+                return num;
             }
+            seen.insert(num);
         }
-        // If we're here, all digits were 9, so we need an extra digit
-        digits.insert(digits.begin(), 1);
-        return digits;
+        // Problem guarantees a solution exists, so shouldn't reach here.
+        return -1;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-**Input:** `digits = [9, 9, 9]`
+**Example:**  
+`nums = [2,1,2,5,3,2]`  
+- n = 3 (since len = 6)
+- The unique numbers: 1, 2, 3, 5 (i.e., 4 numbers, and n+1 = 4)
+- Only **one** number appears 3 times: `2`.
+- As we iterate:
+    - Seen: {}
+    - 2 not seen → insert (Seen: {2})
+    - 1 not seen → insert (Seen: {1,2})
+    - 2 **already seen** → **return 2**
 
-**Step-by-step:**
-- Start from the last digit:
-    - digits[2] is 9 → set to 0 (carry left)
-    - digits[1] is 9 → set to 0 (carry left)
-    - digits[0] is 9 → set to 0 (carry left)
-- All done, but still have a carry!
-- Insert 1 at the beginning: `[1, 0, 0, 0]`
+**Output:** `2`
 
-**Output:** `[1, 0, 0, 0]`
+---
+
+### **Summary, Constraints, Algorithm, Code, & Example provided.**
+
+Let me know if you'd like an explanation for the alternative (constant space) method!
