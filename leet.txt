@@ -4,90 +4,163 @@ Let's break down the problem step by step:
 
 ## 1. **Short Summary**
 
-Given an array of `2n` integers containing `n+1` unique elements, with **one element repeated exactly `n` times**, find and return this repeated element.
+Given an `n x 3` grid, count the number of ways to paint each cell using 3 colors (Red, Yellow, Green) **so that no two adjacent cells (vertically or horizontally) have the same color**. The answer should be returned modulo `1e9+7`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- `2 <= n <= 5000` (so array length: `4` to `10000`)
-- Each number is `0 <= nums[i] <= 10^4`
-- `nums.length == 2 * n`
-- Exactly one element appears `n` times.
-- Rest of the `n` elements are **unique** (appear once).
+- **Grid size:** `1 <= n <= 5000`. The number of rows can be large; a brute-force solution won't work.
+- **Choices per cell:** 3 colors.
+- **Adjacent cells restriction:** Both within a row (horizontally) and between rows (vertically) must use different colors.
+- **Smallest case:** If `n=1`, the answer is the number of valid ways to color one row of 3 cells without two adjacent colors being the same.
 
-**Edge Cases:**
-- The repeated element could be anywhere (front, back, or scattered).
-- The repeated element could be `0` or `10^4` (test range boundaries).
-- Array is always of **even length** (at least 4).
+**Edge cases:**
+- `n=1` (single row): Must count how many ways to color one row with no same-adjacent color.
+- Large `n`: Solution must be O(n) time and O(1) space.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Since only one element is repeated many times (n times!), and the rest are unique, several methods work:
+### **Observation:**
+- Because each cell only interacts (constraints) with the previous row and its adjacent in the same row, **DP on rows** is possible.
+- **Paint one row at a time**; for each, keep track of the possible colorings given the previous row.
 
-### **Approach 1: Using HashSet** (Clean, O(n) time/space)
-- Traverse the array and use a set to record seen numbers.
-- The first number seen twice is the repeated one (since it's the only one with `n` duplicates).
+### **Row Coloring Types for a row of 3:**
+Let's enumerate all colorings of one row where adjacent colors are different:
 
-### **Approach 2: Sort and Find Streak** (O(n log n), no extra space)
-- Sort the array. The repeated element will occupy `n` contiguous positions; so, find the element that exists in position `i` and `i+1`.
+Let the three columns in one row be c1, c2, c3.  
+Each can be colored as:
 
-### **Approach 3: Smart Pairwise Check (O(1) Space, O(n) time)**
-- Since the repeated element is present `n` times, it's guaranteed that **at least two of them will appear with less than three elements in-between**. So, comparing every pair within three apart:
-    - For each `i` from 0 to `len-2`, compare `nums[i] == nums[i+1] || nums[i] == nums[i+2] || nums[i] == nums[i+3]` (for within array range).
-    - If found, return that number.
+- c1 ≠ c2 ≠ c3; adjacent columns must differ.
 
-### HashSet is clean and simple, and optimal given the constraints.
+Total ways for `n=1` (first row):
+
+- For c1: 3 choices (R/Y/G).
+- For c2: 2 choices (must differ from c1).
+- For c3: 2 choices (must differ from c2).
+
+But **c1 can be same as c3** (no restriction, as they are not adjacent).
+
+But overall, the total is:  
+3 (c1) x 2 (c2) x 2 (c3) = **12**
 
 ---
 
-## 4. **Clean C++ Solution**
+### **DP State Optimization:**
 
-(Most readable is with HashSet.)
+Let’s classify coloring of a row into *types* based on their color pattern:
+
+Let’s **group** all patterns:
+
+**Type 1: Two colors used ("ABA" pattern), like Red-Yellow-Red**
+- e.g. R-Y-R, G-R-G, etc.
+
+**Type 2: Three colors used ("ABC" pattern), e.g. R-Y-G**
+
+Let’s count:
+- **Type1 ("ABA"):** Pick 2 colors for A and B (C(3,2)=3), then decide which cells are A and which are B (two patterns: A-B-A or B-A-B). But in a row of 3, only A-B-A pattern ensures adjacent differ.
+    - For c1 and c3: same color
+    - For c2: different
+    - For each 2-color choice: only 1 pattern ("ABA"): so **3 × 2 = 6** (choosing 2 colors, then fix positions)
+    - Actually: Pick color for c1 (3), c2 (2, ≠c1), c3 (1, must =c1): 3×2×1 = **6**
+
+- **Type2 ("ABC"):** All three are different: 3 choices for c1, 2 for c2, 1 for c3, but each cell must differ from its neighbor.
+    - 3×2×1 = **6**
+
+So total for one row: 6 two-color types ("ABA") + 6 three-color types ("ABC") = **12**, as expected.
+
+### **Transition (Dynamic Programming):**
+
+Let’s denote:
+- `a[i]`: number of ways to paint row `i` using "ABA" (2 colors) pattern
+- `b[i]`: number of ways to paint row `i` using "ABC" (3 colors) pattern
+
+For next row, for each coloring type, consider **compatibility** with previous row.
+
+After derivations, the transitions are:
+
+```
+a[i] = 3*a[i-1] + 2*b[i-1]
+b[i] = 2*a[i-1] + 2*b[i-1]
+```
+
+- From previous "ABA" row, current can be:
+    - 3 ways to ABA, 2 ways to ABC
+- From previous "ABC" row:
+    - 2 ways to ABA, 2 ways to ABC
+
+**Why?**
+- For each pattern, you count the number of ways to "stack" a row of each pattern type on each other, satisfying the coloring restrictions (no vertical adjacent cells are same // i.e. cells in column 1, 2, 3 must not have same color as cell directly above in previous row).
+
+This result is well-known for this problem because it's been precomputed (see [LeetCode Discuss Reference](https://leetcode.com/problems/number-of-ways-to-paint-n-3-grid/discuss/397902/Simple-Java-O(n)-Solution-with-Explanation)).
+
+---
+
+### **Base Case:**
+
+For row 1 (n = 1):  
+- a[1] = 6 ("ABA")  
+- b[1] = 6 ("ABC")
+
+---
+
+### **Final Answer**
+
+For n rows: `total = a[n] + b[n]`.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <unordered_set>
-using namespace std;
-
 class Solution {
 public:
-    int repeatedNTimes(vector<int>& nums) {
-        unordered_set<int> seen;
-        for (int num : nums) {
-            if (seen.count(num)) {
-                return num;
-            }
-            seen.insert(num);
+    int numOfWays(int n) {
+        const int MOD = 1e9+7;
+        long a = 6; // ABA pattern
+        long b = 6; // ABC pattern
+
+        for (int i = 2; i <= n; ++i) {
+            long new_a = (3*a + 2*b) % MOD;
+            long new_b = (2*a + 2*b) % MOD;
+            a = new_a;
+            b = new_b;
         }
-        // Problem guarantees a solution exists, so shouldn't reach here.
-        return -1;
+        
+        return (a + b) % MOD;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Walkthrough**
 
-**Example:**  
-`nums = [2,1,2,5,3,2]`  
-- n = 3 (since len = 6)
-- The unique numbers: 1, 2, 3, 5 (i.e., 4 numbers, and n+1 = 4)
-- Only **one** number appears 3 times: `2`.
-- As we iterate:
-    - Seen: {}
-    - 2 not seen → insert (Seen: {2})
-    - 1 not seen → insert (Seen: {1,2})
-    - 2 **already seen** → **return 2**
+**Example: n = 1**
 
-**Output:** `2`
+- For a single row, as calculated earlier:
+    - `a[1] = 6` ("ABA" patterns)
+    - `b[1] = 6` ("ABC" patterns)
+- Total = `6 + 6 = 12`
+
+**So, output is 12.**
 
 ---
 
-### **Summary, Constraints, Algorithm, Code, & Example provided.**
+## **Summary Table**
 
-Let me know if you'd like an explanation for the alternative (constant space) method!
+| n | a (ABA) | b (ABC) | total |
+|:-:|:-------:|:-------:|:-----:|
+| 1 |   6     |   6     |  12   |
+| 2 |  (3×6+2×6=30)   | (2×6+2×6=24) | 54 |
+| 3 |  (3×30+2×24=138) | (2×30+2×24=108) | 246 |
+
+And so on.
+
+---
+
+### **Conclusion**
+
+This O(n) method leverages symmetry in coloring and keeps only two states per row, hence very efficient and suitable for large n.
