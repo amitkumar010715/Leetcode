@@ -4,163 +4,156 @@ Let's break down the problem step by step:
 
 ## 1. **Short Summary**
 
-Given an `n x 3` grid, count the number of ways to paint each cell using 3 colors (Red, Yellow, Green) **so that no two adjacent cells (vertically or horizontally) have the same color**. The answer should be returned modulo `1e9+7`.
+Given an array of integers, for each number, if it **has exactly four divisors**, add the **sum of those divisors** to the answer. Return the total sum for the whole array.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Grid size:** `1 <= n <= 5000`. The number of rows can be large; a brute-force solution won't work.
-- **Choices per cell:** 3 colors.
-- **Adjacent cells restriction:** Both within a row (horizontally) and between rows (vertically) must use different colors.
-- **Smallest case:** If `n=1`, the answer is the number of valid ways to color one row of 3 cells without two adjacent colors being the same.
-
-**Edge cases:**
-- `n=1` (single row): Must count how many ways to color one row with no same-adjacent color.
-- Large `n`: Solution must be O(n) time and O(1) space.
+- Constraints:
+  - `1 <= nums.length <= 10^4` (reasonable, up to 10,000 elements)
+  - `1 <= nums[i] <= 10^5` (the highest possible value in nums is 100,000)
+- Edge cases:
+  - Numbers with fewer or more than 4 divisors are ignored.
+  - Numbers with repeats (e.g., `[21,21]`) are counted each time.
+  - There may be no numbers with exactly four divisors (output `0`).
+  - Small numbers (e.g., 1, 2, 3, 5, 7) will usually NOT have 4 divisors.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
+<div style="font-size: 1.05em">
+
 ### **Observation:**
-- Because each cell only interacts (constraints) with the previous row and its adjacent in the same row, **DP on rows** is possible.
-- **Paint one row at a time**; for each, keep track of the possible colorings given the previous row.
+A number has **exactly 4 positive divisors** if and only if:
+1. **It's the product of two distinct primes:** `num = p * q` (divisors: `1, p, q, pq`)
+2. **It's a cube of a prime:** `num = p^3` (divisors: `1, p, p^2, p^3`)
 
-### **Row Coloring Types for a row of 3:**
-Let's enumerate all colorings of one row where adjacent colors are different:
+All other numbers do **not** have exactly 4 divisors.
 
-Let the three columns in one row be c1, c2, c3.  
-Each can be colored as:
+### **Algorithm Steps:**
 
-- c1 ≠ c2 ≠ c3; adjacent columns must differ.
+1. **Precompute primes up to sqrt(1e5) using Sieve of Eratosthenes.**
+   - (Since cubes up to 1e5 only need primes up to 100)
 
-Total ways for `n=1` (first row):
+2. For each number `n` in `nums`:
+   - **Case 1: Check if n == p^3 for prime p.**
+     - Compute the integer cube root and check exact match and primeness.
+   - **Case 2: Check if n == p * q for two distinct primes p, q (p < q).**
+     - For each prime `p <= sqrt(n)`, check if `q = n / p` is an integer, not equal to `p`, and is prime.
 
-- For c1: 3 choices (R/Y/G).
-- For c2: 2 choices (must differ from c1).
-- For c3: 2 choices (must differ from c2).
+3. If n matches either case,
+   - For `p^3`, divisors are `1, p, p^2, n`; sum: `1 + p + p^2 + n`.
+   - For `p*q`, divisors are `1, p, q, n`; sum: `1 + p + q + n`.
 
-But **c1 can be same as c3** (no restriction, as they are not adjacent).
+4. Add the sum to the answer.
 
-But overall, the total is:  
-3 (c1) x 2 (c2) x 2 (c3) = **12**
+### **Complexity:**
+- Sieve: O(N log log N)
+- For each num: O(sqrt(num)) for searching divisors or primes (acceptable since num ≤ 1e5 and nums.size ≤ 1e4)
 
----
-
-### **DP State Optimization:**
-
-Let’s classify coloring of a row into *types* based on their color pattern:
-
-Let’s **group** all patterns:
-
-**Type 1: Two colors used ("ABA" pattern), like Red-Yellow-Red**
-- e.g. R-Y-R, G-R-G, etc.
-
-**Type 2: Three colors used ("ABC" pattern), e.g. R-Y-G**
-
-Let’s count:
-- **Type1 ("ABA"):** Pick 2 colors for A and B (C(3,2)=3), then decide which cells are A and which are B (two patterns: A-B-A or B-A-B). But in a row of 3, only A-B-A pattern ensures adjacent differ.
-    - For c1 and c3: same color
-    - For c2: different
-    - For each 2-color choice: only 1 pattern ("ABA"): so **3 × 2 = 6** (choosing 2 colors, then fix positions)
-    - Actually: Pick color for c1 (3), c2 (2, ≠c1), c3 (1, must =c1): 3×2×1 = **6**
-
-- **Type2 ("ABC"):** All three are different: 3 choices for c1, 2 for c2, 1 for c3, but each cell must differ from its neighbor.
-    - 3×2×1 = **6**
-
-So total for one row: 6 two-color types ("ABA") + 6 three-color types ("ABC") = **12**, as expected.
-
-### **Transition (Dynamic Programming):**
-
-Let’s denote:
-- `a[i]`: number of ways to paint row `i` using "ABA" (2 colors) pattern
-- `b[i]`: number of ways to paint row `i` using "ABC" (3 colors) pattern
-
-For next row, for each coloring type, consider **compatibility** with previous row.
-
-After derivations, the transitions are:
-
-```
-a[i] = 3*a[i-1] + 2*b[i-1]
-b[i] = 2*a[i-1] + 2*b[i-1]
-```
-
-- From previous "ABA" row, current can be:
-    - 3 ways to ABA, 2 ways to ABC
-- From previous "ABC" row:
-    - 2 ways to ABA, 2 ways to ABC
-
-**Why?**
-- For each pattern, you count the number of ways to "stack" a row of each pattern type on each other, satisfying the coloring restrictions (no vertical adjacent cells are same // i.e. cells in column 1, 2, 3 must not have same color as cell directly above in previous row).
-
-This result is well-known for this problem because it's been precomputed (see [LeetCode Discuss Reference](https://leetcode.com/problems/number-of-ways-to-paint-n-3-grid/discuss/397902/Simple-Java-O(n)-Solution-with-Explanation)).
-
----
-
-### **Base Case:**
-
-For row 1 (n = 1):  
-- a[1] = 6 ("ABA")  
-- b[1] = 6 ("ABC")
-
----
-
-### **Final Answer**
-
-For n rows: `total = a[n] + b[n]`.
+</div>
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+#include <cmath>
+#include <numeric>
+using namespace std;
+
+// Sieve to get all primes up to limit
+vector<int> getPrimes(int limit) {
+    vector<bool> isPrime(limit+1, true);
+    vector<int> primes;
+    isPrime[0]=isPrime[1]=false;
+    for(int i=2;i<=limit;++i) {
+        if(isPrime[i]) {
+            primes.push_back(i);
+            for(int j=i*i;j<=limit;j+=i)
+                isPrime[j]=false;
+        }
+    }
+    return primes;
+}
+
 class Solution {
 public:
-    int numOfWays(int n) {
-        const int MOD = 1e9+7;
-        long a = 6; // ABA pattern
-        long b = 6; // ABC pattern
-
-        for (int i = 2; i <= n; ++i) {
-            long new_a = (3*a + 2*b) % MOD;
-            long new_b = (2*a + 2*b) % MOD;
-            a = new_a;
-            b = new_b;
-        }
+    int sumFourDivisors(vector<int>& nums) {
+        const int MAXN = 1e5;
+        // Primes up to sqrt(1e5) is enough
+        auto primes = getPrimes((int)sqrt(MAXN)+10);
+        vector<bool> isPrime(MAXN+1, true);
+        isPrime[0]=isPrime[1]=false;
+        for(int p:primes) isPrime[p] = true;
+        for(int i=2;i<=MAXN;++i)
+            if(i>=primes.back() && isPrime[i])
+                for(int j=i*2;j<=MAXN;j+=i)
+                    isPrime[j]=false;
         
-        return (a + b) % MOD;
+        int ans = 0;
+        for(int n : nums) {
+            int sum = 0;
+            // Case 1: Cube of a prime
+            int root = round(pow(n, 1.0/3)); // Cube root
+            if(root*root*root==n && root > 1 && isPrime[root]) {
+                sum = 1 + root + root*root + n;
+            } else {
+                // Case 2: Product of two distinct primes
+                for(int p : primes) {
+                    if(p * p > n) break;
+                    if(n % p == 0) {
+                        int q = n / p;
+                        if(q != p && q > 1 && isPrime[q]) {
+                            sum = 1 + p + q + n;
+                        }
+                        break; // Only one such pair possible
+                    }
+                }
+            }
+            ans += sum;
+        }
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explanation**
 
-**Example: n = 1**
+### Example Input:
+```cpp
+nums = [21, 4, 7]
+```
 
-- For a single row, as calculated earlier:
-    - `a[1] = 6` ("ABA" patterns)
-    - `b[1] = 6` ("ABC" patterns)
-- Total = `6 + 6 = 12`
+Let's process each:
 
-**So, output is 12.**
+- **21:**
+  - Divisors: 1, 3, 7, 21 (**exactly 4**; 3 and 7 are primes and 21 = 3*7).
+  - Sum: 1 + 3 + 7 + 21 = **32**
+- **4:**
+  - Divisors: 1, 2, 4 (only 3 divisors).
+- **7:**
+  - Divisors: 1, 7 (only 2 divisors).
+
+**Only 21 qualifies,**
+so total is **32**, which matches the output.
 
 ---
 
 ## **Summary Table**
 
-| n | a (ABA) | b (ABC) | total |
-|:-:|:-------:|:-------:|:-----:|
-| 1 |   6     |   6     |  12   |
-| 2 |  (3×6+2×6=30)   | (2×6+2×6=24) | 54 |
-| 3 |  (3×30+2×24=138) | (2×30+2×24=108) | 246 |
-
-And so on.
+| Input           | Divisors           | Has 4 divisors? | Sum added |
+|-----------------|--------------------|-----------------|-----------|
+| 21              | 1, 3, 7, 21        | Yes             | 32        |
+| 4               | 1, 2, 4            | No              | 0         |
+| 7               | 1, 7               | No              | 0         |
+| **Total sum**   |                    |                 | **32**    |
 
 ---
 
-### **Conclusion**
-
-This O(n) method leverages symmetry in coloring and keeps only two states per row, hence very efficient and suitable for large n.
+**This approach is clean, uses mathematical properties, and is efficient for the given constraints.**
