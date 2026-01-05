@@ -1,159 +1,115 @@
-Let's break down the problem step by step:
+Let's break the problem down step by step following your requirements.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array of integers, for each number, if it **has exactly four divisors**, add the **sum of those divisors** to the answer. Return the total sum for the whole array.
+- Given an `n x n` matrix, you can repeatedly pick any two **adjacent** elements and flip their sign (multiply by `-1`).
+- You want the **maximum possible sum** of all elements after any sequence of such operations.
+- **Return that maximum sum.**
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- Constraints:
-  - `1 <= nums.length <= 10^4` (reasonable, up to 10,000 elements)
-  - `1 <= nums[i] <= 10^5` (the highest possible value in nums is 100,000)
-- Edge cases:
-  - Numbers with fewer or more than 4 divisors are ignored.
-  - Numbers with repeats (e.g., `[21,21]`) are counted each time.
-  - There may be no numbers with exactly four divisors (output `0`).
-  - Small numbers (e.g., 1, 2, 3, 5, 7) will usually NOT have 4 divisors.
+- `n` is up to 250 (`n x n` can be up to 62,500 cells, so an `O(n^2)` solution is fine).
+- Matrix elements range from `-1e5` to `1e5` (including negatives & zeros).
+- The operation can be performed any number of times, including 0.
+- Every cell has 2-4 adjacent cells (up, down, left, right).
+- All numbers are negative? All positive? Zeros? Odd/even count of negatives? These will matter!
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-<div style="font-size: 1.05em">
+**Key Observations:**
 
-### **Observation:**
-A number has **exactly 4 positive divisors** if and only if:
-1. **It's the product of two distinct primes:** `num = p * q` (divisors: `1, p, q, pq`)
-2. **It's a cube of a prime:** `num = p^3` (divisors: `1, p, p^2, p^3`)
+- The operation, flipping *two* adjacents' signs, affects both at once. It changes the total sign of the matrix by flipping pairs.
+- You can flip pairs as many times as desired, but never a single cell by itself.
+- The **parity** of the number of negatives: You can only flip pairs. So, if the total number of negatives is even, you can flip all signs to positive. If it's odd, one negative must "remain".
 
-All other numbers do **not** have exactly 4 divisors.
+### **Detailed Solution:**
 
-### **Algorithm Steps:**
+1. **Sum all absolute values** (imagine making everything positive).
+2. **Count the number of negative values**. And, track the minimum absolute value in the matrix.
+3. **If the number of negatives is even**:
+    - You can flip all, so the answer is the sum of all absolute values.
+4. **If odd**:
+    - **One** negative must remain. It's optimal to "leave" the cell with the smallest absolute value as negative (minimizes loss).
+    - The answer is `sum_abs - 2 * min_abs`: You lose twice that smallest absolute value because its sign cannot be flipped alone.
 
-1. **Precompute primes up to sqrt(1e5) using Sieve of Eratosthenes.**
-   - (Since cubes up to 1e5 only need primes up to 100)
+### **Why?**
 
-2. For each number `n` in `nums`:
-   - **Case 1: Check if n == p^3 for prime p.**
-     - Compute the integer cube root and check exact match and primeness.
-   - **Case 2: Check if n == p * q for two distinct primes p, q (p < q).**
-     - For each prime `p <= sqrt(n)`, check if `q = n / p` is an integer, not equal to `p`, and is prime.
-
-3. If n matches either case,
-   - For `p^3`, divisors are `1, p, p^2, n`; sum: `1 + p + p^2 + n`.
-   - For `p*q`, divisors are `1, p, q, n`; sum: `1 + p + q + n`.
-
-4. Add the sum to the answer.
-
-### **Complexity:**
-- Sieve: O(N log log N)
-- For each num: O(sqrt(num)) for searching divisors or primes (acceptable since num ≤ 1e5 and nums.size ≤ 1e4)
-
-</div>
+- Repeatedly flip pairs of negatives to become positives—if you have an even count, all can be positive.
+- If odd count, you always end up with one negative (cannot flip one cell alone).
+- The goal is to maximize the sum; so, we want the **least negative impact**, hence leave the cell with the **smallest absolute value** negative.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <cmath>
-#include <numeric>
-using namespace std;
-
-// Sieve to get all primes up to limit
-vector<int> getPrimes(int limit) {
-    vector<bool> isPrime(limit+1, true);
-    vector<int> primes;
-    isPrime[0]=isPrime[1]=false;
-    for(int i=2;i<=limit;++i) {
-        if(isPrime[i]) {
-            primes.push_back(i);
-            for(int j=i*i;j<=limit;j+=i)
-                isPrime[j]=false;
-        }
-    }
-    return primes;
-}
-
 class Solution {
 public:
-    int sumFourDivisors(vector<int>& nums) {
-        const int MAXN = 1e5;
-        // Primes up to sqrt(1e5) is enough
-        auto primes = getPrimes((int)sqrt(MAXN)+10);
-        vector<bool> isPrime(MAXN+1, true);
-        isPrime[0]=isPrime[1]=false;
-        for(int p:primes) isPrime[p] = true;
-        for(int i=2;i<=MAXN;++i)
-            if(i>=primes.back() && isPrime[i])
-                for(int j=i*2;j<=MAXN;j+=i)
-                    isPrime[j]=false;
-        
-        int ans = 0;
-        for(int n : nums) {
-            int sum = 0;
-            // Case 1: Cube of a prime
-            int root = round(pow(n, 1.0/3)); // Cube root
-            if(root*root*root==n && root > 1 && isPrime[root]) {
-                sum = 1 + root + root*root + n;
-            } else {
-                // Case 2: Product of two distinct primes
-                for(int p : primes) {
-                    if(p * p > n) break;
-                    if(n % p == 0) {
-                        int q = n / p;
-                        if(q != p && q > 1 && isPrime[q]) {
-                            sum = 1 + p + q + n;
-                        }
-                        break; // Only one such pair possible
-                    }
-                }
+    long long maxMatrixSum(vector<vector<int>>& matrix) {
+        int n = matrix.size();
+        long long sum = 0;
+        int negCount = 0;
+        int minAbs = INT_MAX;
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                int val = matrix[i][j];
+                if (val < 0) ++negCount;
+                sum += abs(val);
+                minAbs = min(minAbs, abs(val));
             }
-            ans += sum;
         }
-        return ans;
+        // If even, make all positive. If odd, leave the smallest abs negative.
+        if (negCount % 2 == 0) {
+            return sum;
+        } else {
+            return sum - 2LL * minAbs;
+        }
     }
 };
 ```
+- **Time Complexity:** O(n^2)
+- **Space Complexity:** O(1) (apart from input)
 
 ---
 
 ## 5. **Example Explanation**
 
-### Example Input:
-```cpp
-nums = [21, 4, 7]
-```
+Let's explain **Example 2**:
 
-Let's process each:
+> **Input**: `matrix = [[1,2,3], [-1,-2,-3], [1,2,3]]`
 
-- **21:**
-  - Divisors: 1, 3, 7, 21 (**exactly 4**; 3 and 7 are primes and 21 = 3*7).
-  - Sum: 1 + 3 + 7 + 21 = **32**
-- **4:**
-  - Divisors: 1, 2, 4 (only 3 divisors).
-- **7:**
-  - Divisors: 1, 7 (only 2 divisors).
+- **Absolute Sum:**
+  - 1 + 2 + 3 + 1 + 2 + 3 + 1 + 2 + 3 = `18`
+- **Negatives:** -1, -2, -3 → 3 negatives (odd count!)
+- **Smallest absolute:** `1`
+- **Final answer:** `18 - 2*1 = 16`
 
-**Only 21 qualifies,**
-so total is **32**, which matches the output.
+**How to achieve this in practice?**
+- You can't make all numbers positive since 3 is odd.
+- Best you can do is flip all but the smallest, ending up with just one negative (`-1`), rest positives. That’s leaving one `-1` (or any cell with abs=1) negative.
 
 ---
 
-## **Summary Table**
+### **Summary Table**
 
-| Input           | Divisors           | Has 4 divisors? | Sum added |
-|-----------------|--------------------|-----------------|-----------|
-| 21              | 1, 3, 7, 21        | Yes             | 32        |
-| 4               | 1, 2, 4            | No              | 0         |
-| 7               | 1, 7               | No              | 0         |
-| **Total sum**   |                    |                 | **32**    |
+| Step              | Value        |
+|-------------------|-------------|
+| Absolute sum      | 18          |
+| Negative count    | 3 (odd)     |
+| Smallest abs      | 1           |
+| Final answer      | 18-2*1 = 16 |
 
 ---
 
-**This approach is clean, uses mathematical properties, and is efficient for the given constraints.**
+## **Recap**
+
+- **Flip pairs of negatives to maximize positives.**
+- If odd negatives, one must remain; pick the cell with minimal absolute value.
+- O(n^2) one pass.
+- Clean C++ code above!
