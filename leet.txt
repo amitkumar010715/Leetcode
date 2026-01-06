@@ -1,115 +1,120 @@
-Let's break the problem down step by step following your requirements.
+Let's break down the solution step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-- Given an `n x n` matrix, you can repeatedly pick any two **adjacent** elements and flip their sign (multiply by `-1`).
-- You want the **maximum possible sum** of all elements after any sequence of such operations.
-- **Return that maximum sum.**
+Given a binary tree, for each level, calculate the sum of all node values on that level. Return the smallest level number with the maximum sum. Root starts at level 1.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `n` is up to 250 (`n x n` can be up to 62,500 cells, so an `O(n^2)` solution is fine).
-- Matrix elements range from `-1e5` to `1e5` (including negatives & zeros).
-- The operation can be performed any number of times, including 0.
-- Every cell has 2-4 adjacent cells (up, down, left, right).
-- All numbers are negative? All positive? Zeros? Odd/even count of negatives? These will matter!
+- **Nodes**: Between 1 and 10,000.
+- **Node Values**: Each node's value is between -100,000 and 100,000 (can be negative or positive).
+- **Edge Cases**:
+    - All values may be negative.
+    - Maximal sum may occur at more than one level; choose the smallest level.
+    - Tree may have only one node.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Key Observations:**
+### **Approach: Breadth-First Search (BFS) / Level Order Traversal**
 
-- The operation, flipping *two* adjacents' signs, affects both at once. It changes the total sign of the matrix by flipping pairs.
-- You can flip pairs as many times as desired, but never a single cell by itself.
-- The **parity** of the number of negatives: You can only flip pairs. So, if the total number of negatives is even, you can flip all signs to positive. If it's odd, one negative must "remain".
+- Do a level order traversal (BFS) to visit nodes level by level.
+- For each level, sum the node values.
+- Keep track of the maximum sum and its associated (smallest) level.
 
-### **Detailed Solution:**
+### **Steps:**
 
-1. **Sum all absolute values** (imagine making everything positive).
-2. **Count the number of negative values**. And, track the minimum absolute value in the matrix.
-3. **If the number of negatives is even**:
-    - You can flip all, so the answer is the sum of all absolute values.
-4. **If odd**:
-    - **One** negative must remain. It's optimal to "leave" the cell with the smallest absolute value as negative (minimizes loss).
-    - The answer is `sum_abs - 2 * min_abs`: You lose twice that smallest absolute value because its sign cannot be flipped alone.
+1. Start BFS from the root.
+2. Use a queue to process nodes by level.
+3. For each level:
+   - Compute the sum of values for all nodes at that level.
+   - If this sum is larger than the previous max, update the max and level.
+   - If equal, retain the smallest level.
+4. Continue to next level until the queue is empty.
 
-### **Why?**
+**Time Complexity:** O(N) where N is the number of nodes.
 
-- Repeatedly flip pairs of negatives to become positives—if you have an even count, all can be positive.
-- If odd count, you always end up with one negative (cannot flip one cell alone).
-- The goal is to maximize the sum; so, we want the **least negative impact**, hence leave the cell with the **smallest absolute value** negative.
+**Space Complexity:** O(W) where W is the maximum width of the tree (at most N/2).
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
+/**
+ * Definition for a binary tree node.
+ * struct TreeNode {
+ *     int val;
+ *     TreeNode *left;
+ *     TreeNode *right;
+ *     TreeNode() : val(0), left(nullptr), right(nullptr) {}
+ *     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+ *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
+ * };
+ */
 class Solution {
 public:
-    long long maxMatrixSum(vector<vector<int>>& matrix) {
-        int n = matrix.size();
-        long long sum = 0;
-        int negCount = 0;
-        int minAbs = INT_MAX;
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < n; ++j) {
-                int val = matrix[i][j];
-                if (val < 0) ++negCount;
-                sum += abs(val);
-                minAbs = min(minAbs, abs(val));
+    int maxLevelSum(TreeNode* root) {
+        if (!root) return 0;
+
+        std::queue<TreeNode*> q;
+        q.push(root);
+        int level = 1;
+        int maxLevel = 1;
+        int maxSum = root->val;
+
+        while (!q.empty()) {
+            int size = q.size();
+            int currLevelSum = 0;
+            for (int i = 0; i < size; ++i) {
+                TreeNode* node = q.front(); q.pop();
+                currLevelSum += node->val;
+
+                if (node->left)
+                    q.push(node->left);
+                if (node->right)
+                    q.push(node->right);
             }
+            if (currLevelSum > maxSum) {
+                maxSum = currLevelSum;
+                maxLevel = level;
+            }
+            level += 1;
         }
-        // If even, make all positive. If odd, leave the smallest abs negative.
-        if (negCount % 2 == 0) {
-            return sum;
-        } else {
-            return sum - 2LL * minAbs;
-        }
+        return maxLevel;
     }
 };
 ```
-- **Time Complexity:** O(n^2)
-- **Space Complexity:** O(1) (apart from input)
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-Let's explain **Example 2**:
+Let's take **Example 1**:  
+`root = [1,7,0,7,-8,null,null]`
 
-> **Input**: `matrix = [[1,2,3], [-1,-2,-3], [1,2,3]]`
+**Tree:**
+```
+        1
+       / \
+      7   0
+     / \
+    7  -8
+```
 
-- **Absolute Sum:**
-  - 1 + 2 + 3 + 1 + 2 + 3 + 1 + 2 + 3 = `18`
-- **Negatives:** -1, -2, -3 → 3 negatives (odd count!)
-- **Smallest absolute:** `1`
-- **Final answer:** `18 - 2*1 = 16`
+**Level Sums:**
+- Level 1: 1
+- Level 2: 7 + 0 = 7
+- Level 3: 7 + (-8) = -1
 
-**How to achieve this in practice?**
-- You can't make all numbers positive since 3 is odd.
-- Best you can do is flip all but the smallest, ending up with just one negative (`-1`), rest positives. That’s leaving one `-1` (or any cell with abs=1) negative.
-
----
-
-### **Summary Table**
-
-| Step              | Value        |
-|-------------------|-------------|
-| Absolute sum      | 18          |
-| Negative count    | 3 (odd)     |
-| Smallest abs      | 1           |
-| Final answer      | 18-2*1 = 16 |
+**Maximum sum is 7** at **level 2**.  
+**Return:** `2`
 
 ---
 
-## **Recap**
-
-- **Flip pairs of negatives to maximize positives.**
-- If odd negatives, one must remain; pick the cell with minimal absolute value.
-- O(n^2) one pass.
-- Clean C++ code above!
+Let me know if you want a Python version or further clarification!
