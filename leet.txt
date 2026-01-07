@@ -1,45 +1,33 @@
-Let's break down the solution step by step:
+Let's address the problem step by step:
 
 ---
 
 ## 1. **Summary**
-
-Given a binary tree, for each level, calculate the sum of all node values on that level. Return the smallest level number with the maximum sum. Root starts at level 1.
+Given a binary tree, remove exactly **one edge** such that the two resulting subtrees' **sum of values** have their product maximized. Return the maximum such product modulo $10^9 + 7$.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
-
-- **Nodes**: Between 1 and 10,000.
-- **Node Values**: Each node's value is between -100,000 and 100,000 (can be negative or positive).
-- **Edge Cases**:
-    - All values may be negative.
-    - Maximal sum may occur at more than one level; choose the smallest level.
-    - Tree may have only one node.
+- **2 ≤ number of nodes ≤ 50,000:** Efficient O(N) solution is required; brute force is not feasible.
+- **1 ≤ Node.val ≤ 10,000:** All sums are positive integers.
+- **Edge cases:**
+  - Tree is skewed (like a linked list) or perfectly balanced.
+  - All node values are the same.
+  - Removing the edge closest to the root or to the leaves.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Approach: Breadth-First Search (BFS) / Level Order Traversal**
+### Approach:
 
-- Do a level order traversal (BFS) to visit nodes level by level.
-- For each level, sum the node values.
-- Keep track of the maximum sum and its associated (smallest) level.
+1. **Compute total sum of the tree.**
+2. **For every edge:** (effectively, every subtree except entire tree itself), consider removing the edge *above* a subtree.
+    - The product becomes `sum(subtree) * (totalSum - sum(subtree))`.
+3. **Maximize this product** for all such splits.
+4. Use post-order traversal to calculate each subtree sum.
 
-### **Steps:**
-
-1. Start BFS from the root.
-2. Use a queue to process nodes by level.
-3. For each level:
-   - Compute the sum of values for all nodes at that level.
-   - If this sum is larger than the previous max, update the max and level.
-   - If equal, retain the smallest level.
-4. Continue to next level until the queue is empty.
-
-**Time Complexity:** O(N) where N is the number of nodes.
-
-**Space Complexity:** O(W) where W is the maximum width of the tree (at most N/2).
+### Complexity: O(N) time and O(H) space (H = tree height, recursion stack).
 
 ---
 
@@ -57,64 +45,70 @@ Given a binary tree, for each level, calculate the sum of all node values on tha
  *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
  * };
  */
+
 class Solution {
-public:
-    int maxLevelSum(TreeNode* root) {
+    using ll = long long;
+    ll maxProductFound = 0;
+    ll totalSum = 0;
+    const int MOD = 1e9 + 7;
+
+    // First pass: get total sum
+    ll getTotal(TreeNode* root) {
         if (!root) return 0;
+        return root->val + getTotal(root->left) + getTotal(root->right);
+    }
 
-        std::queue<TreeNode*> q;
-        q.push(root);
-        int level = 1;
-        int maxLevel = 1;
-        int maxSum = root->val;
-
-        while (!q.empty()) {
-            int size = q.size();
-            int currLevelSum = 0;
-            for (int i = 0; i < size; ++i) {
-                TreeNode* node = q.front(); q.pop();
-                currLevelSum += node->val;
-
-                if (node->left)
-                    q.push(node->left);
-                if (node->right)
-                    q.push(node->right);
-            }
-            if (currLevelSum > maxSum) {
-                maxSum = currLevelSum;
-                maxLevel = level;
-            }
-            level += 1;
+    // Second pass: try every split
+    ll dfs(TreeNode* node) {
+        if (!node) return 0;
+        ll currSum = node->val + dfs(node->left) + dfs(node->right);
+        if (node != root_node) { // prevent splitting root (tree can't be empty)
+            ll product = currSum * (totalSum - currSum);
+            if (product > maxProductFound)
+                maxProductFound = product;
         }
-        return maxLevel;
+        return currSum;
+    }
+
+    TreeNode* root_node = nullptr;
+    
+public:
+    int maxProduct(TreeNode* root) {
+        root_node = root;
+        totalSum = getTotal(root);
+        dfs(root);
+        return maxProductFound % MOD;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-Let's take **Example 1**:  
-`root = [1,7,0,7,-8,null,null]`
+### Example 1:
+`root = [1,2,3,4,5,6]`
 
-**Tree:**
+Visual:
 ```
-        1
-       / \
-      7   0
-     / \
-    7  -8
+      1
+    /   \
+   2     3
+  / \   /
+ 4   5 6
 ```
+- **Total sum:** 1 + 2 + 3 + 4 + 5 + 6 = **21**
+- Try every edge cut (every subtree):
+    - Suppose we cut between node 1 and node 2: The sum of subtree rooted at 2 is 2+4+5=11. The other is 21-11=10. Product: 11*10=**110**.
+    - Try other splits, but none is better.
 
-**Level Sums:**
-- Level 1: 1
-- Level 2: 7 + 0 = 7
-- Level 3: 7 + (-8) = -1
-
-**Maximum sum is 7** at **level 2**.  
-**Return:** `2`
+**Final Answer:** 110
 
 ---
 
-Let me know if you want a Python version or further clarification!
+## **Key Takeaway**
+- Use two DFS: one for total sum, another for subtree splits.
+- For each (non-top) subtree sum, maximize its product with the rest.
+- The answer is efficient by post-order traversal.
+
+Let me know if you need the code adapted in a different language or further detail!
