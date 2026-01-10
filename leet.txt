@@ -1,113 +1,107 @@
-Sure! Let's tackle this step by step:
+Let's break down the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a binary tree, **find the smallest subtree** that contains **all the deepest nodes**. The answer should return the root **TreeNode** of that subtree.
-
-This is the same as finding the **lowest common ancestor of all the deepest leaves** in the tree.
+Given two strings, `s1` and `s2`, you need to make them equal by deleting some characters in either string. Each deletion adds the ASCII value of the deleted character to the total sum. Return the minimum possible ASCII sum of deletions needed to make the two strings equal.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Tree Size:** 1 ≤ nodes ≤ 500 (so O(N) is fine).
-- **Node Value:** 0 ≤ Node.val ≤ 500 and unique.
-- **Edge Cases:**
-    - Only the root node (tree with 1 node).
-    - Deepest nodes are not all in the same subtree.
-    - All deepest nodes are on one side (skewed).
-    - Tree with several nodes at the same maximum depth.
+- **Constraints:**
+  - `1 <= s1.length, s2.length <= 1000`
+  - Only lowercase English letters are present (`'a'` to `'z'`).
+- **Edge cases:**
+  - If `s1 == s2`, the answer is 0 (no deletion needed).
+  - If there is no common character, must delete all; sum of all ASCII values in both strings.
+  - Strings of length 1.
+  - One string a subsequence of the other.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm (Dynamic Programming)**
 
-We'll use a **post-order DFS** traversal:
+This problem is similar to finding the "Longest Common Subsequence" (LCS) but with ASCII sum:
+- If two characters match, keep them; otherwise, delete one of them.
+- Let `dp[i][j]` be the minimum ASCII sum to make `s1[0..i-1]` and `s2[0..j-1]` equal.
 
-- For each node, **compute:**
-    - Its **depth** (max depth from it).
-    - The node which is the LCA of all deepest nodes in its subtree.
+**Transition:**
+- If `s1[i-1] == s2[j-1]`:
+  - `dp[i][j] = dp[i-1][j-1]` (no deletion)
+- Else:
+  - Delete `s1[i-1]`: `dp[i-1][j] + int(s1[i-1])`
+  - Delete `s2[j-1]`: `dp[i][j-1] + int(s2[j-1])`
+  - Take the minimum.
 
-**Detailed Steps:**
+**Initialization:**
+- `dp[0][j] = sum of ASCII values of s2[0..j-1]` (delete all of `s2`)
+- `dp[i][0] = sum of ASCII values of s1[0..i-1]` (delete all of `s1`)
+- `dp[0][0] = 0`
 
-1. **Recursively** process left and right subtrees.
-2. For each node:
-    - Compare the **maximum depth** in left & right subtree.
-    - If **equal depths**, it means deepest nodes are on both sides: this node is their LCA.
-    - If **one side is deeper**, propagate up the LCA from that side.
-3. Return the LCA for the root subtree.
-
-**Time Complexity:** O(N), visits each node once.
+**Time/Space Complexity:** `O(m*n)` where `m` and `n` are lengths of the strings.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
-/**
- * Definition for a binary tree node.
- * struct TreeNode {
- *     int val;
- *     TreeNode *left;
- *     TreeNode *right;
- *     TreeNode() : val(0), left(nullptr), right(nullptr) {}
- *     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
- *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
- * };
- */
+#include <vector>
+#include <string>
+#include <numeric>
+using namespace std;
+
 class Solution {
 public:
-    // Pair: (subtree root, subtree depth)
-    pair<TreeNode*, int> dfs(TreeNode* root) {
-        if (!root)
-            return {nullptr, 0};
-
-        auto left = dfs(root->left);
-        auto right = dfs(root->right);
-
-        if (left.second > right.second) {
-            return {left.first, left.second + 1};
-        } else if (right.second > left.second) {
-            return {right.first, right.second + 1};
-        } else {
-            // Equal depth: current node is the LCA
-            return {root, left.second + 1};
+    int minimumDeleteSum(string s1, string s2) {
+        int m = s1.length(), n = s2.length();
+        // dp[i][j]: min delete sum to make s1[0..i-1] and s2[0..j-1] equal
+        vector<vector<int>> dp(m+1, vector<int>(n+1, 0));
+        
+        // Initialize first row and column
+        for (int i = 1; i <= m; ++i)
+            dp[i][0] = dp[i-1][0] + int(s1[i-1]);
+        for (int j = 1; j <= n; ++j)
+            dp[0][j] = dp[0][j-1] + int(s2[j-1]);
+        
+        // Fill dp table
+        for (int i = 1; i <= m; ++i) {
+            for (int j = 1; j <= n; ++j) {
+                if (s1[i-1] == s2[j-1]) {
+                    dp[i][j] = dp[i-1][j-1];
+                } else {
+                    dp[i][j] = min(dp[i-1][j] + int(s1[i-1]),
+                                   dp[i][j-1] + int(s2[j-1]));
+                }
+            }
         }
-    }
-
-    TreeNode* subtreeWithAllDeepest(TreeNode* root) {
-        return dfs(root).first;
+        return dp[m][n];
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Explanation with Example**
+
+Let's use **Example 1**:
 
 **Input:**  
-`root = [3,5,1,6,2,0,8,null,null,7,4]`
+`s1 = "sea"`, `s2 = "eat"`
 
-- The deepest nodes are 7 & 4, both at depth 4.
-- Their lowest common ancestor is node 2.
-- Node 2 is the **minimal subtree** covering both deepest nodes.
-- So, return the `TreeNode*` for node 2 (subtree: `[2,7,4]`).
+ASCII values: s=115, e=101, a=97, t=116
 
----
+- Possible strategy:
+    - Delete 's' from "sea" (`+115`)
+    - Delete 't' from "eat" (`+116`)
+- Both strings become "ea".
+- Total cost = 115 + 116 = **231**.
 
-### **Summary Table**
-
-| Node | Left Depth | Right Depth | Returned Node |
-|------|------------|-------------|--------------|
-|   7  |     0      |     0       |      7       |
-|   4  |     0      |     0       |      4       |
-|   2  |     1      |     1       |      2       |
-|   5  |     1      |     2       |      2       |
-|   3  |     3      |     2       |      2       |
+**How does the algorithm find this?**
+- On first characters, they don't match ('s' vs 'e'), so you can either delete 's' or 'e'.
+- It explores all paths, memoizing the results, so that the final `dp[m][n]` gives the minimal cost scenario.
 
 ---
 
-**In essence:**  
-This algorithm finds the LCA of all deepest leaves, returning the smallest subtree covering all of them.
+**This method ensures the lowest ASCII sum of deletions to make both strings equal by leveraging dynamic programming efficiently.**
