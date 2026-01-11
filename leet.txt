@@ -1,46 +1,45 @@
-Let's break down the problem step by step:
+Let's systematically address your requirements:
 
 ---
 
 ## 1. **Short Summary**
 
-Given two strings, `s1` and `s2`, you need to make them equal by deleting some characters in either string. Each deletion adds the ASCII value of the deleted character to the total sum. Return the minimum possible ASCII sum of deletions needed to make the two strings equal.
+Given a binary matrix, find the area of the largest rectangle containing only '1's (all-ones submatrix). Return its area.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-  - `1 <= s1.length, s2.length <= 1000`
-  - Only lowercase English letters are present (`'a'` to `'z'`).
-- **Edge cases:**
-  - If `s1 == s2`, the answer is 0 (no deletion needed).
-  - If there is no common character, must delete all; sum of all ASCII values in both strings.
-  - Strings of length 1.
-  - One string a subsequence of the other.
+  - `1 <= rows, cols <= 200` ⇒ The matrix can be up to 40,000 elements.
+  - `matrix[i][j]` is `'0'` or `'1'`.
+- **Edge Cases:**
+  - Matrix of size 1x1, containing only `'0'` or `'1'`.
+  - All elements are `'0'` ⇒ answer is 0.
+  - All elements are `'1'` ⇒ answer is `rows * cols`.
+  - Matrix has only one row or one column.
 
 ---
 
-## 3. **Optimal Algorithm (Dynamic Programming)**
+## 3. **Optimal Algorithm**
 
-This problem is similar to finding the "Longest Common Subsequence" (LCS) but with ASCII sum:
-- If two characters match, keep them; otherwise, delete one of them.
-- Let `dp[i][j]` be the minimum ASCII sum to make `s1[0..i-1]` and `s2[0..j-1]` equal.
+### **Approach: Histogram per Row + Stack**
 
-**Transition:**
-- If `s1[i-1] == s2[j-1]`:
-  - `dp[i][j] = dp[i-1][j-1]` (no deletion)
-- Else:
-  - Delete `s1[i-1]`: `dp[i-1][j] + int(s1[i-1])`
-  - Delete `s2[j-1]`: `dp[i][j-1] + int(s2[j-1])`
-  - Take the minimum.
+1. **Transform each row into a histogram:**  
+   For every row, build a 'height' array representing consecutive '1's in columns up to the current row.
+  
+2. For each row, compute the largest rectangle in the histogram using a **monotonic stack** (classic method to solve "Largest Rectangle in Histogram").
 
-**Initialization:**
-- `dp[0][j] = sum of ASCII values of s2[0..j-1]` (delete all of `s2`)
-- `dp[i][0] = sum of ASCII values of s1[0..i-1]` (delete all of `s1`)
-- `dp[0][0] = 0`
+**Time Complexity:** `O(rows * cols)` (since each row is processed in O(cols) time).
 
-**Time/Space Complexity:** `O(m*n)` where `m` and `n` are lengths of the strings.
+#### **Steps:**
+- Initialize a height array `heights` of size `cols` with all zeros.
+- For each row:
+  - For each column:  
+    - If `matrix[r][c] == '1'`, `heights[c]++`.
+    - Else, `heights[c] = 0`.
+  - Compute the largest rectangle for the current histogram (`heights`).
+- Track the maximal area found.
 
 ---
 
@@ -48,60 +47,87 @@ This problem is similar to finding the "Longest Common Subsequence" (LCS) but wi
 
 ```cpp
 #include <vector>
-#include <string>
-#include <numeric>
+#include <stack>
+#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int minimumDeleteSum(string s1, string s2) {
-        int m = s1.length(), n = s2.length();
-        // dp[i][j]: min delete sum to make s1[0..i-1] and s2[0..j-1] equal
-        vector<vector<int>> dp(m+1, vector<int>(n+1, 0));
+    int maximalRectangle(vector<vector<char>>& matrix) {
+        if (matrix.empty()) return 0;
+        int rows = matrix.size(), cols = matrix[0].size();
+        vector<int> heights(cols, 0);
+        int maxArea = 0;
         
-        // Initialize first row and column
-        for (int i = 1; i <= m; ++i)
-            dp[i][0] = dp[i-1][0] + int(s1[i-1]);
-        for (int j = 1; j <= n; ++j)
-            dp[0][j] = dp[0][j-1] + int(s2[j-1]);
-        
-        // Fill dp table
-        for (int i = 1; i <= m; ++i) {
-            for (int j = 1; j <= n; ++j) {
-                if (s1[i-1] == s2[j-1]) {
-                    dp[i][j] = dp[i-1][j-1];
-                } else {
-                    dp[i][j] = min(dp[i-1][j] + int(s1[i-1]),
-                                   dp[i][j-1] + int(s2[j-1]));
-                }
+        for (int r = 0; r < rows; ++r) {
+            // Step 1: Build heights histogram for this row
+            for (int c = 0; c < cols; ++c) {
+                if (matrix[r][c] == '1')
+                    heights[c]++;
+                else
+                    heights[c] = 0;
             }
+            // Step 2: Compute largest rectangle in histogram
+            maxArea = max(maxArea, largestRectangleArea(heights));
         }
-        return dp[m][n];
+        return maxArea;
+    }
+    
+    // Classic Largest Rectangle in Histogram problem (O(N), monotonic stack)
+    int largestRectangleArea(vector<int>& heights) {
+        heights.push_back(0); // sentinel to flush stack at the end
+        int maxArea = 0;
+        stack<int> st;
+        for (int i = 0; i < heights.size(); ++i) {
+            while (!st.empty() && heights[i] < heights[st.top()]) {
+                int h = heights[st.top()];
+                st.pop();
+                int w = st.empty() ? i : i - st.top() - 1;
+                maxArea = max(maxArea, h * w);
+            }
+            st.push(i);
+        }
+        heights.pop_back(); // remove sentinel
+        return maxArea;
     }
 };
 ```
 
 ---
 
-## 5. **Explanation with Example**
+## 5. **Example Explanation**
 
-Let's use **Example 1**:
+### Example 1
 
-**Input:**  
-`s1 = "sea"`, `s2 = "eat"`
+**Input:**
+```
+matrix = [
+  ["1","0","1","0","0"],
+  ["1","0","1","1","1"],
+  ["1","1","1","1","1"],
+  ["1","0","0","1","0"]
+]
+```
 
-ASCII values: s=115, e=101, a=97, t=116
+**How it works:**  
+Let's focus on row 3 (`["1","1","1","1","1"]`):
 
-- Possible strategy:
-    - Delete 's' from "sea" (`+115`)
-    - Delete 't' from "eat" (`+116`)
-- Both strings become "ea".
-- Total cost = 115 + 116 = **231**.
+- **Heights at this row:**  
+  - For each column, we count continuous '1's from the top:
+    ```
+    col 0: ["1","1","1"] ⇒ 3
+    col 1: ["0","0","1"] ⇒ 1
+    col 2: ["1","1","1"] ⇒ 3
+    col 3: ["0","1","1"] ⇒ 2
+    col 4: ["0","1","1"] ⇒ 2
+    ```
+  So, `heights = [3, 1, 3, 2, 2]` at that row.
 
-**How does the algorithm find this?**
-- On first characters, they don't match ('s' vs 'e'), so you can either delete 's' or 'e'.
-- It explores all paths, memoizing the results, so that the final `dp[m][n]` gives the minimal cost scenario.
+- **On that row, the largest rectangle is of area 6:**  
+  - Formed by columns 2, 3, 4 (3 consecutive columns), heights at least 2 (rows 2 and 3), 3x2 = 6.
+
+**Output:** `6`
 
 ---
 
-**This method ensures the lowest ASCII sum of deletions to make both strings equal by leveraging dynamic programming efficiently.**
+Let me know if you'd like a more step-by-step number breakdown of the histogram update or stack processing!
