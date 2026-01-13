@@ -1,99 +1,142 @@
-Certainly! Let’s break down the problem and design an optimal solution.
+Let's tackle the problem step by step:
 
 ---
 
-## 1. **Short Summary**
+## **1. Summary**
 
-You are given a sequence of integer points `[x, y]` on a 2D grid. Move through the points **in order**; each move (per second) can be **1 unit vertically, 1 unit horizontally, or 1 unit diagonally** (which is simultaneously up+right/left/down). What is the minimum seconds needed to visit all the points in order?
-
----
-
-## 2. **Constraints & Edge Cases**
-
-**Constraints**:
-- `1 <= n <= 100` (number of points)
-- Coordinates are in `[-1000, 1000]`.
-
-**Edge Cases**:
-- All points are the same (should return 0).
-- Segments where only x or y change.
-- Large jumps.
-- Minimum possible `n` (only 1 point, output is 0).
+Given several axis-aligned squares (possibly overlapping), you need to find the **lowest y-coordinate** for a horizontal line such that the total area of parts of squares **above** the line equals the area **below**. Overlaps are counted **multiple times** (i.e., additive area). The answer must be accurate within 1e-5.
 
 ---
 
-## 3. **Optimal Algorithm & Explanation**
+## **2. Constraints & Edge Cases**
 
-### **Movement observation**
-
-Given two points `(x0, y0)` and `(x1, y1)`, you can move:
-- **Diagonally:** covers both x and y at the same time in one second (e.g., (x, y) → (x+1, y+1))
-- Otherwise, move only horizontally or vertically.
-
-**In one second**, you can reduce both the x difference *and* the y difference by 1 **if you move diagonally**. So the minimum steps from `(x0, y0)` to `(x1, y1)` is `max(abs(x1 - x0), abs(y1 - y0))`. (The number of diagonal steps is `min(dx, dy)`, then the remainder is taken in straight lines.)
-
-Thus, to solve the problem:
-- Sum for each consecutive pair, the `max(abs(dx), abs(dy))`.
-
-### **Algorithm Steps**
-1. Set total_time = 0.
-2. For each `i` from `1` to `n-1`:
-    - Compute `dx = abs(points[i][0] - points[i-1][0])`
-    - Compute `dy = abs(points[i][1] - points[i-1][1])`
-    - Increment total_time by `max(dx, dy)`
-3. Return total_time.
+- **n (Number of squares):** Up to 50,000.
+- **Coordinates and length:** Range from 0 to 1e9.
+- **Total area ≤ 1e12**.
+- **Overlap:** Each square's area is counted independently (overlapped regions are double-counted).
+- **Edge cases:**
+  - All squares at the same y.
+  - Very large or very small squares.
+  - Multiple squares start or end at the same y.
 
 ---
 
-## 4. **Clean C++ Solution**
+## **3. Optimal Algorithm**
+
+### **Key Insight**
+
+We can reframe the problem:
+
+- The **"area under or below"** the line at `y = L` = sum of all portions of all squares **below y = L**.
+- The **"area above"** (w.r.t all squares) is the total area minus the area below `L`.
+
+We seek the **lowest y = L** such that `area_below(L) = total_area - area_below(L)`, i.e., `area_below(L) = total_area / 2`.
+
+**Monotonicity:** `area_below(L)` is a monotonically increasing function in `L` (higher line → more area below).
+
+**Thus:** we can do **binary search** on `L`.
+
+### **How to compute `area_below(L)` efficiently?**
+
+- For each square `[x, y, l]`, its bottom is `y`, top is `y+l`.
+- For a given `L`, the covered region below `L` is:
+    - If `L <= y`: contribution is `0`.
+    - If `L >= y + l`: contribution is the full area: `l * l`.
+    - Else: the height below `L` is `L - y`, so area is `l * (L - y)`.
+
+So, for each square, sum up `l * min(max(L - y, 0), l)`.
+
+### **Algorithm**
+
+1. Compute `total_area` = sum of `l * l` for all squares.
+2. Initialize `lo = min_y` (minimum bottom edge), `hi = max_y_plus_l` (maximum top edge).
+3. Binary search:
+    - For each mid-point `L`, compute `area_below(L)`.
+    - If `area_below(L) < total_area/2`, move `lo = L`.
+    - Else, move `hi = L`.
+    - Continue until precision is achieved (for 1e-5).
+
+**Time complexity:**  
+Each area computation is `O(n)`; binary search is about 50 steps, so total is `O(n * 50)`.
+
+---
+
+## **4. C++ Solution**
 
 ```cpp
 #include <vector>
 #include <algorithm>
+#include <numeric>
+#include <cmath>
 using namespace std;
 
 class Solution {
 public:
-    int minTimeToVisitAllPoints(vector<vector<int>>& points) {
-        int total_time = 0;
-        for (int i = 1; i < points.size(); ++i) {
-            int dx = abs(points[i][0] - points[i-1][0]);
-            int dy = abs(points[i][1] - points[i-1][1]);
-            total_time += max(dx, dy);
+    double areaBelow(const vector<vector<int>>& squares, double L) {
+        double sum = 0.0;
+        for (const auto& sq : squares) {
+            double y = sq[1];
+            double l = sq[2];
+            double height = min(max(L - y, 0.0), (double)l);
+            sum += l * height;
         }
-        return total_time;
+        return sum;
+    }
+    
+    double separateSquares(vector<vector<int>>& squares) {
+        double total_area = 0.0;
+        double min_y = 1e18, max_y = -1e18;
+        for (const auto& sq : squares) {
+            double y = sq[1];
+            double l = sq[2];
+            total_area += l * l;
+            min_y = min(min_y, y);
+            max_y = max(max_y, y + l);
+        }
+        double lo = min_y, hi = max_y;
+        for (int iter = 0; iter < 60; ++iter) {
+            double mid = (lo + hi) / 2.0;
+            double below = areaBelow(squares, mid);
+            if (below < total_area / 2.0)
+                lo = mid;
+            else
+                hi = mid;
+        }
+        return lo;
     }
 };
 ```
 
----
-
-## 5. **Example Explanation**
-
-**Example:**
-
+### **LeetCode Function Signature**
+```cpp
+double separateSquares(vector<vector<int>>& squares);
 ```
-points = [[1,1],[3,4],[-1,0]]
-
-Step 1: From [1,1] to [3,4]
-    dx = |3-1| = 2
-    dy = |4-1| = 3
-    min time = max(2, 3) = 3 seconds
-
-Step 2: From [3,4] to [-1,0]
-    dx = |(-1)-3| = 4
-    dy = |0-4| = 4
-    min time = max(4, 4) = 4 seconds
-
-Total: 3 + 4 = 7 seconds
-```
-
-**Explanation:** You can move diagonally as much as possible:  
-- From [1,1] towards [3,4], do 2 diagonal moves to [3,3], then one vertical to [3,4], total 3s.
-- From [3,4] to [-1,0], do 4 diagonal moves, total 4s (each diagonal reduces both coords by 1 toward the goal).
-
-**Final answer:** `7`
 
 ---
 
-Let me know if you have further questions!
+## **5. Example Explanation**
+
+### **Example 1**
+
+`squares = [[0,0,1],[2,2,1]]`
+
+- Square 1: y ∈ [0,1]
+- Square 2: y ∈ [2,3]
+- `total_area = 1 + 1 = 2`
+
+When searching for the line, only at `y = 1` does the first square's entire area lie below, and the second square is completely above. Area below is 1 (from first square). Above is 1. It balances. The **minimum y** doing this is `1.0`.
+
+---
+
+### **Summary Table**
+
+| Step          | Action                                                         |
+|---------------|---------------------------------------------------------------|
+| 1. total_area | `sum(l * l)` over all squares                                  |
+| 2. Binary search `L` | For each mid `L`, `area_below(L)` vs. half_total_area      |
+| 3. Area below | Sum `l * min(max(L - y, 0), l)` for each square                |
+| 4. Output     | The lowest `L` at which `area_below(L) == total_area / 2`      |
+
+---
+
+Let me know if you'd like a Python solution or further clarification!
