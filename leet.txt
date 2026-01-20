@@ -1,113 +1,119 @@
-Let's tackle the problem step-by-step:
+Let's break down and solve the **"Construct the Minimum Bitwise Array I"** LeetCode problem as requested:
 
 ---
 
-## **1. Short Summary**
+## 1. **Short Summary**
 
-Given a 2D `mat` and an integer `threshold`, **find the largest possible side length** of a square submatrix whose **sum of elements is ≤ threshold**. Return `0` if no such square exists.
+Given an array of prime numbers `nums`, for each element we must find the **minimal non-negative integer `x`** such that:
+- `(x) | (x + 1) == nums[i]`  
+  (where `|` is the bitwise OR)
 
----
-
-## **2. Constraints & Edge Cases**
-
-- `m, n ≤ 300`: Matrix is at most 300×300, so up to 90,000 cells.
-- All matrix values are non-negative and ≤ 10⁴.
-- Brute force O(mn*k²) won't work. Need O(mn log(min(m,n))) or O(mn).
-- Edge Cases:
-    - No elements less than threshold ⇒ Output 0.
-    - Multiple valid squares, return **maximum size**.
-    - Matrix of size 1×1.
-    - threshold = 0, so only zeros can be included.
+If impossible, output `-1` for that index in the result.
 
 ---
 
-## **3. Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-**a. Compute 2D prefix sum:**  
-Let `psum[i][j]` be total sum from (0,0) to (i-1, j-1).
+- **`1 <= nums.length <= 100`** – Small, simple for per-element processing.
+- **`2 <= nums[i] <= 1000`** – Each value is a reasonably small prime. All elements are >1.
+- **Only primes** – No composite or 1 allowed.
+- **Result for each index should be minimized.**
+- If multiple answers exist, take the smallest; if none, return `-1` for that index.
 
-Use:
-```
-psum[r][c] = mat[r-1][c-1] + psum[r-1][c] + psum[r][c-1] - psum[r-1][c-1]
-```
-
-**b. Binary Search on Side Lengths:**  
-- The answer is between `0` and `min(m, n)`.
-- For each side `k`, check if any k×k square sum ≤ threshold using prefix sum.
-
-**c. For a given `k`, to check all squares:**  
-Iterate all possible top-left points, use 2D prefix sum for O(1) query on each k×k square sum.
+**Edge Cases:**
+- No solution: e.g., in sample, for 2, output is -1.
+- For small numbers: Particularly, for small primes (2, 3, 5), check all 0 ≤ x < nums[i].
+- Primes near a power of two (ex: 3,7,31) have patterns.
 
 ---
 
-## **4. C++ Solution**
+## 3. **Optimal Algorithm**
+
+### **Observations**
+
+Given: `x | (x + 1) == num`  
+Want minimal x.
+
+We can loop `x` from `0` to `num`, and check if `x | (x+1) == num`;  
+But that's O(num) per number, which is fine here (num up to 1000, 100 items).
+
+But let's analyze bitwise:
+
+- Two consecutive numbers (`x`, `x+1`) will have different least significant bits (the LSB will always be 0 for `x`, 1 for `x+1`), but all higher bits almost the same, except for carry.
+- Their OR is `x | (x+1)`. Whenever there is a 0 in `x` which becomes 1 in `x+1`, the OR will reflect that.
+
+#### **Brute Force is Acceptable**
+
+For each `num`, try all `x` in `[0, num]` (because for x > num, x|x+1 > num as all values are positive).
+
+For each, check if `(x | (x + 1)) == num` and keep the minimal such x.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int maxSideLength(vector<vector<int>>& mat, int threshold) {
-        int m = mat.size(), n = mat[0].size();
-
-        // Compute prefix sum
-        vector<vector<int>> psum(m + 1, vector<int>(n + 1, 0));
-        for (int i = 1; i <= m; ++i)
-            for (int j = 1; j <= n; ++j)
-                psum[i][j] = mat[i-1][j-1] + psum[i-1][j] + psum[i][j-1] - psum[i-1][j-1];
-
-        int left = 0, right = min(m, n), res = 0;
-        while (left <= right) {
-            int mid = (left + right) / 2;
-            bool found = false;
-            for (int i = mid; i <= m && !found; ++i) {
-                for (int j = mid; j <= n && !found; ++j) {
-                    int sum = psum[i][j] - psum[i - mid][j] - psum[i][j - mid] + psum[i - mid][j - mid];
-                    if (sum <= threshold)
-                        found = true;
+    vector<int> constructArray(vector<int>& nums) {
+        vector<int> ans;
+        for(int num : nums) {
+            int best = -1;
+            for(int x = 0; x <= num; ++x) {
+                if ((x | (x + 1)) == num) {
+                    best = x;
+                    break;  // minimal, so break immediately
                 }
             }
-            if (found) {
-                res = mid;
-                left = mid + 1;
-            } else {
-                right = mid - 1;
-            }
+            ans.push_back(best);
         }
-        return res;
+        return ans;
     }
 };
 ```
 
 ---
 
-## **5. Example Explanation**
+## 5. **Example Explanation**
 
-Let's use Example 1:
+**Example 1:**  
+`nums = [2,3,5,7]`
 
-### Input:
-```
-mat = [
-    [1,1,3,2,4,3,2],
-    [1,1,3,2,4,3,2],
-    [1,1,3,2,4,3,2]
-], threshold = 4
-```
+Let's process one: `nums[2] = 5`
 
-### Steps:
-- The algorithm tries different possible side lengths. For side length 1, every element (≤4) is valid. For side length 2, the sum for each 2x2 square in the top left is checked.
-- For each 2x2 area, sum:
-    - Top-left (0,0): 1+1+1+1 = 4 (valid).
-    - Others: sum > 4 (invalid, as three or more contains 3s, which causes sum > 4)
-- 3x3 would sum to 9 or more, which is over threshold.
+Find minimal x ≥ 0, `x | (x+1) == 5`
 
-So, the **maximum side length** is **2**.
+Try x from 0 up:
+
+- **x = 0:**  0 | 1 = 1
+- **x = 1:**  1 | 2 = 3
+- **x = 2:**  2 | 3 = 3
+- **x = 3:**  3 | 4 = 7
+- **x = 4:**  4 | 5 = 5  ✔️ **(minimum!)**
+
+So, ans[2] = 4.
 
 ---
 
-**Summary:**  
-The solution efficiently finds, using prefix sums & binary search, the largest square with sum ≤ threshold.  
-**Time: O(mn log(min(m,n)))**.  
-**Space: O(mn) for prefix sum array.**
+# **Summary Table for Example 1**
+
+| nums[i] | Minimum x | Reason                         |
+|---------|-----------|--------------------------------|
+| 2       |   -1      | No x such that x|x+1 == 2      |
+| 3       |   1       | 1|2 = 3                        |
+| 5       |   4       | 4|5 = 5                        |
+| 7       |   3       | 3|4 = 7                        |
+
+---
+
+# **Key Takeaway**
+
+We brute-force check all x from 0 to num for each prime:  
+The first x such that x | (x+1) == num is the answer, otherwise -1.
+
+---
+
+Let me know if you have questions about optimizations or alternative approaches (e.g., closed formula)!
