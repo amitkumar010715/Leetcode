@@ -1,259 +1,93 @@
-Let's address your request step by step.
+Let's break down the problem and solve it step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array of prime numbers `nums`, for each `nums[i]`, you must compute the smallest non-negative integer `ans[i]` such that:
-
-```
-ans[i] | (ans[i] + 1) == nums[i]
-```
-
-If there is no possible value, set `ans[i] = -1`.
+Given an array, you can repeatedly replace the **adjacent pair with the smallest sum** by their sum (thus merging them) as many times as you want. Your goal is to find the **minimum number of such operations** needed to make the array **non-decreasing**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= nums.length <= 100`
-- Each `nums[i]` is **prime** and `2 <= nums[i] <= 1e9`.
-- Since `nums[i]` are primes (odd except 2), it's crucial for the bitwise property.
-- Edge cases:
-    - If `nums[i] == 2`, check if solution exists.
-    - What about even/odd primes and their binary forms?
-    - For large numbers (up to 10⁹), your algorithm **must** be O(1) or O(log n) per number.
+- **Array Size**: 1 ≤ nums.length ≤ 50 (very manageable for O(n²) solutions)
+- **Values**: -1000 ≤ nums[i] ≤ 1000 (no overflow risks)
+- **Edge Cases**:
+  - Already non-decreasing array: Should return `0`.
+  - All elements same: `0` operations needed.
+  - Array length 1: `0` operations needed.
+  - Decreasing or zigzag arrays: Requires computation.
 
 ---
 
-## 3. **Optimal Algorithm & Reasoning**
+## 3. **Optimal Algorithm**
 
-### **Derivation**
+The array is small, so a greedy simulation is practical:
 
-#### Let's analyze the property:
+### **Key Observations**
+- Each operation **reduces the array length** by 1, so at most `n-1` operations.
+- The operation may not always immediately fix violations; sometimes you must combine multiple times.
 
-We want:
+### **Approach**
+1. While the array is not sorted:
+   - Find the **leftmost adjacent pair with the minimum sum**.
+   - Merge/replace that pair with their sum.
+   - Increase the operation count.
+2. If the array is already non-decreasing, return 0.
+
+#### **How to check if sorted?**
+- Check if for all i: nums[i] <= nums[i+1].
+
+#### **How to perform operation?**
+- For each adjacent `i`, calculate `nums[i]+nums[i+1]`, track the minimum sum and its (leftmost) index.
+- Replace nums[index] and nums[index+1] by their sum at position index, remove index+1.
+
+### **Pseudo-code**
 ```
-(ans | ans+1) == num
+cnt = 0
+while not sorted(nums):
+    find leftmost pair (i, i+1) with minimal nums[i]+nums[i+1]
+    replace nums[i] and nums[i+1] by their sum at nums[i], remove nums[i+1]
+    cnt += 1
+return cnt
 ```
-
-Let’s consider the bits. `ans` and `ans+1` are consecutive numbers, so their bits have a special relationship.
-
-**Key property:**
-For any integer `x`, `x | (x+1)` equals: all bits up to and including the least significant 0-bit in `x` set to 1.
-
-For example:
-- Suppose `x = 100100` (binary)
-- The lowest zero is at bit 1 (from right, zero-based index)
-- If x = ... x1110111, then x|x+1 turns all lower bits 1, up to the first zero from right.
-
-Now, we want to find minimal `ans` such that `ans | (ans+1) == num`.
-
-### **Observation**
-
-Suppose the binary form of `num` looks like a run of 1s, possibly with leading zeros, *plus* anything after.
-
-But let's check with the examples:
-
-#### Example: num = 5 (`101`)
-Trying values in order:
-- ans = 0: 0|1 = 1   ❌
-- ans = 1: 1|2 = 1|10 = 11 = 3 ❌
-- ans = 2: 2|3 = 10|11 = 11 = 3 ❌
-- ans = 3: 3|4 = 11|100 = 111 = 7 ❌
-- ans = 4: 4|5 = 100|101 = 101 = 5 ✅
-
-So ans = 4.
-
-#### Let's generalize
-
-Since num is prime (>2) → always odd (except 2).
-
-- For odd primes (bit T), there’s always one least significant zero
-- The candidates for ans are (num - 1), (num - 2), ..., but we want the **smallest**.
-
-Observe that **if num & (num-1) == 0**, num = 1, 2, 4, ... (all powers of two)
-- But all primes but 2 are odd, so for num=2: try to see if ans exists.
-
-##### For num = 2
-
-num = 2 (10 in binary)
-Try:
-- ans = 0:  0|1 = 1
-- ans = 1:  1|2 = 3
-So **no value** for which ans | (ans+1) == 2.
-
-So, return -1.
-
-#### **Key Fact:**
-- For a given num, let’s find x such that x | (x+1) == num and x is minimal.
-
-**Let’s recall a well-known trick:**
-If num = (1 << k) - 1 (a run of k consecutive 1's), then for any x = (1 << (k-1)) - 1, x | (x+1) = (1 << k) - 1
-
-But for arbitrary num, often, the minimal x is num & ~(1).
-
-But let's go back to the example, see what happens for odd numbers:
-
-#### For odd nums (`num`):
-
-Let’s consider num - 1.
-
-ans = num - 1
-
-Then ans | (ans+1) = (num - 1) | num
-
-But (num-1) | num = num | (num - 1)
-
-But for odd num (>2):
-- num and num-1 are consecutive, num is odd, num-1 is even, differ only at the last bit
-- Their OR usually will be num except for power-of-two.
-
-Is (num-1) | num == num always?
-No, (num-1) | num = num | (num-1) = num | (num-1), but e.g. num = 5: 4 | 5 = 4 | 5 = 5.
-
-So for any odd num, ans = num - 1?
-
-- 3: 2|3 = 2|3 = 3
-- 5: 4|5 = 4|5 = 5
-- 7: 6|7 = 6|7 = 7
-- 11: 10|11 = 11
-So yes!
-
-But the problem asks for *minimal* ans.
-
-Let’s check if, for some small ans, ans|ans+1 == num for a value less than num-1.
-
-#### Let's check num=3:
-Possible ans: 1
-
-1|2 = 1|2 = 3
-
-So 1 < 2 (=num-1)
-
-So smaller ans may exist.
-
-#### Let's check num=7:
-Possible ans: try 3
-
-3|4 = 7
-
-3 < 6 (=num-1)
-
-So yes, possibly smaller.
-
-Let’s look at the bits.
-
-#### **So, what's the pattern for the smallest possible ans?**
-
-Let’s revisit what the bits do during OR:
-
-Given ans = x, ans+1 = x+1
-
-What is (x) | (x+1)?
-
-For some k, if x = 2^k-1 (all 1s), x+1 = 100...0 (k+1 bits). So x | (x+1) = 111...1 | 100...0 = 111...1 (max).
-
-But let's look at num. Suppose we want ans such that ans | (ans+1) == num.
-
-**Let’s try all numbers ans from 0 to num-1, check if ans|ans+1 == num. The first one is minimal.**
-
-But that's O(num) per number: not efficient.
-
-But for up to 10⁹ and num.length up to 100, can't brute-force.
-
-#### **Key Analysis**
-
-Notice:
-
-For *any* non-negative integer x, x | (x+1) == num ⇒ all bits set correspond to num.
-
-- Let’s define the largest k such that (1<<k)-1 ≤ num.
-- For ans = (num-1)>>1, sometimes that works when num is 2^k-1.
-
-But actually, let's derive a formula:
-
-Let’s try for each bit k where num has a 0 at bit k, but all lower bits are 1, set ans = num & ~(1<<k). Let's formalize:
-
-For all i=0 to 31 (since num<=1e9), if num & (1<<i) == 0, and (num & ((1<<i)-1)) == (1<<i)-1 (all lower bits are 1), then ans = num^(1<<i).
-
-Let’s try for num=13 (1101):
-
-bits: 1 1 0 1
-
-At pos 1 (from LSB, bit 0):
-
-- bit 0: 1
-- bit 1: 0 (this is zero and all lower bits are one)
-- All bits below bit 1: 1 (bit 0)
-- So ans = 13 ^ (1<<1) = 13 ^ 2 = 15 ^ 2 = 13 ^ 2 = 1511^10=1001=9
-
-But 9|10=9|10=1001|1010=1011=11 ≠13.
-
-At higher bit?
-
-Actually, code-wise, when can ans|ans+1==num be true? Suppose ans = num - k for some k.
-
-Or, use the observation that **to minimize ans, set the lowest 0 in num to 1 and all lower bits to 0** (i.e., ans = num & (~(1<<bit))) where that bit is least significant zero.
-
-Then ans + 1 = num & (~(1<<bit)) + 1 = (num & (~(1<<bit))) + 1
-Their OR will set that bit to 1 and lower bits accordingly, possibly restoring the original num.
-
-Let's formalize the algorithm:
-
-#### **Algorithm**
-
-For each num:
-- For all positions from 0 upwards:
-    - If the bit at that position, `i`, in num is 0 (i.e., (num>>i)&1 == 0)
-    - And all lower bits (from 0 to i-1) are 1: i.e., ((num & ((1<<i)-1)) == (1<<i)-1)
-    - Then, set ans = num ^ (1<<i)
-    - Check if ans >= 0
-    - Since i increases, first such ans is minimal.
-
-But, is this always guaranteed to work? Or in code, just let ans = num ^ (1<<i), gives the first candidate.
-
-Alternatively, just for i from 0 to 31:
-- If bit i in num is 0 and all lower bits are 1, then ans = num^(1<<i) is minimal.
-
-If never found, return -1.
-
-#### **Why does this work?**
-
-Because when you flip the lowest 0 and set all lower bits to 0, when you add 1, it flips back the 0 to 1, lower bits to 0, so the OR restores all bits.
-
-#### **Summary Algorithm**
-
-For each num:
-1. For i = 0 to 31:
-   - If bit i is 0 in num, and all lower bits are 1 (i.e., num & ((1<<i)-1) == (1<<i)-1):
-     - ans = num ^ (1<<i)
-     - Return ans
-2. If no such i, return -1
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
 
 class Solution {
 public:
-    std::vector<int> constructMinimumBitwiseArray(std::vector<int>& nums) {
-        std::vector<int> ans;
-        for (int num : nums) {
-            int found = -1;
-            for (int i = 0; i < 31; ++i) { // since nums[i] <= 1e9
-                // If ith bit is 0 and all lower bits are 1
-                if (((num >> i) & 1) == 0 && (num & ((1 << i) - 1)) == ((1 << i) - 1)) {
-                    found = num ^ (1 << i);
-                    break;
+    int minimumOperations(std::vector<int>& nums) {
+        int cnt = 0;
+        while (!isNonDecreasing(nums)) {
+            // Find leftmost adjacent pair with minimal sum
+            int minSum = nums[0] + nums[1];
+            int idx = 0;
+            for (int i = 1; i < nums.size() - 1; ++i) {
+                int sum = nums[i] + nums[i+1];
+                if (sum < minSum) {
+                    minSum = sum;
+                    idx = i;
                 }
             }
-            ans.push_back(found);
+            // Merge them
+            nums[idx] = nums[idx] + nums[idx+1];
+            nums.erase(nums.begin() + idx + 1);
+            ++cnt;
         }
-        return ans;
+        return cnt;
+    }
+    
+private:
+    bool isNonDecreasing(const std::vector<int>& nums) {
+        for (int i = 1; i < nums.size(); ++i) {
+            if (nums[i] < nums[i-1]) return false;
+        }
+        return true;
     }
 };
 ```
@@ -262,161 +96,29 @@ public:
 
 ## 5. **Example Explained**
 
-**nums = [11, 13, 31]**
+Consider: **nums = [5,2,3,1]**
 
-### For num = 11 (`1011`):
+Initial: `[5, 2, 3, 1]`  
+Is it sorted? No.
 
-- Check i=0: bit0=1 (skip)
-- i=1: bit1=1
-- i=2: bit2=0, all lower bits (i=0,1) are 1: lower mask = (1<<2)-1=3=11
-- (num & 3) == 3 → Yes
-- So, set ans = 11 ^ (1<<2) = 11 ^ 4 = 15 ^ 4 = 11 ^ 4 = 15  (oops this produces 15, but the sample said 9)
+### 1st Operation
+- Adjacent pairs and their sums:
+  - (5,2): 7
+  - (2,3): 5
+  - (3,1): 4  
+- **Minimum sum = 4 at (3,1)** (index 2)
+- Replace with their sum: `[5, 2, 4]`  
+  (merge 3 and 1 into 4)
 
-Wait, sample output is [9, 12, 15], let's check our computation.
+### 2nd Operation
+- Adjacent pairs and their sums:
+  - (5,2): 7
+  - (2,4): 6  
+- **Minimum sum = 6 at (2,4)** (index 1)
+- Replace with their sum: `[5, 6]`  
 
-Actually, in the example:
-
-- For 11: ans = 9, as 9|10=9|10=1011=11
-
-Let's try i=1:
-- bit1: 1 (skip)
-i=2: bit2: 0, lower bits: i=0,1
-(num&3)=3, yes ⇒ ans=11^(1<<2)=11^4=15
-But 15|16=15|16=31≠11
-
-Wait, let's try i=0:
-bit0: 1 (skip)
-i=1: bit1: 1 (skip)
-i=3: bit3: 1
-For i=3: bit is 1, skip.
-
-It seems that the approach as above needs to be double-checked.
-
-Alternatively, perhaps the logic is to find the minimal x such that x | (x+1) = num.
-
-O(log n) per num is fine; just scan from 0 up to num-1 for small k, but for larger numbers, let's limit k.
-
-But from above, it seems the way to get ans is:
-
-For all k such that num >= (1 << k) + (1 << k) - 1 (= (1 << (k+1)) - 1), try all possible values.
-
-But since the constraints are up to 1e9, and num.length <= 100, we can afford to brute-force for up to 31 bits.
-
-Given that, in practice, we can check for all x in [0, num-1]:
-- if (x | (x+1)) == num
-
-But that's too slow for large num.
-
-Alternatively, the minimum ans is (num-1)&num
-
-But according to the Leetcode discussion, for any odd num > 2, the answer is num//2 if num is odd, otherwise num-1.
-
-But let's try another approach: Let's try all x = num-(1<<k), where k is a bit 1 in num:
-
-Loop over k=0..31:
-- If ((num >> k) & 1):
-    - x = num - (1 << k)
-    - if x >= 0 and (x | (x+1)) == num, update minimal ans
-
-Let's code this:
-
-```cpp
-#include <vector>
-#include <climits>
-class Solution {
-public:
-    std::vector<int> constructMinimumBitwiseArray(std::vector<int>& nums) {
-        std::vector<int> ans;
-        for (int num : nums) {
-            int min_x = INT_MAX;
-            for (int k = 0; k < 31; ++k) {
-                if ((num >> k) & 1) {
-                    int x = num - (1 << k);
-                    if (x >= 0 && (x | (x+1)) == num) {
-                        if (x < min_x) min_x = x;
-                    }
-                }
-            }
-            ans.push_back(min_x == INT_MAX ? -1 : min_x);
-        }
-        return ans;
-    }
-};
-```
-
-This agrees with the sample:
-
-- For num=11: 
-    try k=0: x=10, 10|11=11 (yes), min_x=10
-    k=1: 9, 9|10=11 (yes), min_x=9
-    k=2: 7, 7|8=15 (no)
-    k=3: 3, 3|4=7 (no)
-    Smallest is 9.
-
-**Therefore that's the correct approach.**
+Now `[5, 6]` is non-decreasing. Total operations: **2**
 
 ---
 
-# **Final Summary**
-
-- For each `num`:
-    - For each bit position k from 0 to 31:
-        - If bit k in `num` is 1:
-            - `x = num - (1<<k)` (if x >= 0)
-            - If (x | x+1) == num, track minimal x.
-    - If no such x, output -1, else min_x
-
-## **Final C++ Code**
-
-```cpp
-#include <vector>
-#include <climits>
-class Solution {
-public:
-    std::vector<int> constructMinimumBitwiseArray(std::vector<int>& nums) {
-        std::vector<int> ans;
-        for (int num : nums) {
-            int min_x = INT_MAX;
-            for (int k = 0; k < 31; ++k) {
-                if ((num >> k) & 1) {
-                    int x = num - (1 << k);
-                    if (x >= 0 && (x | (x+1)) == num) {
-                        if (x < min_x) min_x = x;
-                    }
-                }
-            }
-            ans.push_back(min_x == INT_MAX ? -1 : min_x);
-        }
-        return ans;
-    }
-};
-```
-
-## **Example Explanation**
-
-Input: `nums = [11, 13, 31]`
-
-- For `num=11`:
-    - k=0: x=10, 10|11=11 ✅
-    - k=1: x=9, 9|10=11 ✅ (smaller), so ans=9
-    - Thus, ans[0]=9
-
-- For `num=13`:
-    - k=0: x=12, 12|13=13 ✅
-    - k=2: x=9, 9|10=11 ❌
-    - k=3: x=5, 5|6=7 ❌
-    - Smallest x is 12, so ans[1]=12
-
-- For `num=31`:
-    - k=0: x=30, 30|31=31 ✅
-    - k=1: x=29, 29|30=31 ✅
-    - k=2: x=27, 27|28=31 ✅
-    - ...
-    - k=4: x=15, 15|16=31 ✅ (smallest)
-    - ans[2]=15
-
-Output: `[9, 12, 15]`
-
----
-
-**This approach is O(31*nums.length), which is efficient given the constraints.**
+Feel free to ask for Python or other variants!
