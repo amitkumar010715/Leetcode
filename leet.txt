@@ -1,130 +1,82 @@
-### 1. **Summary**
-
-Given an array `nums`, repeatedly select and merge the **adjacent pair with the minimum sum** (breaking ties to the left) into their sum, with the goal of making the array **non-decreasing** (sorted, allowing duplicates).  
-**Return the minimal number of such operations needed.**
+Sure! Let's go through each of the requested items:
 
 ---
 
-### 2. **Constraints & Edge Cases**
+## 1. **Short Summary**
 
-- **1 ≤ nums.length ≤ 1e5**: Solution must be O(n log n) for efficiency.
-- **-1e9 ≤ nums[i] ≤ 1e9**: Integers of wide possible range, shouldn't use bucket frequencies.
-- **Already sorted:** Should return 0.
-- **Two elements:** If sorted, answer is 0; else, answer is 1.
-- **Multiple equal minimal pairs:** Always pick the leftmost.
+Given an array of even length, pair up all elements such that *every element is in exactly one pair* and **the maximum pair sum is minimized**. Return this minimal possible *maximum pair sum*, after you optimally form pairs.
 
 ---
 
-### 3. **Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-#### **Key Observations:**
-
-- A merge operation reduces array size by 1.
-- Our only operation merges the *pair with minimum sum*.
-- Ultimately, we aim for `nums` to become non-decreasing: for each `i`, `nums[i] ≤ nums[i+1]`.
-
-#### **Core Insight:**
-The *only* reason to do a merge is to "fix" an inversion (where `nums[i] > nums[i+1]`).
-
-But, unlike plain bubble sort, we **cannot arbitrarily merge inversions**, only allowed to *merge the minimal pair*.  
-So, directly "fixing" every inversion in one pass is NOT allowed.
-
-But, **can we skip unnecessary merges?**  
-For any decreasing interval we encounter, to make it non-decreasing, we must merge elements together into larger values until the resulting value is at least as big as what comes after.
-
-#### **Reduction:**
-If you have a sequence like:
-
-    a1, a2, ..., ak, b      (with a1 > a2 > ... > ak > b)
-
-To convert this to a non-decreasing sequence, you must repeatedly merge adjacent elements within the descending sequence until the leftmost value is no greater than the next value.
-
-But since we can only merge minimal sums, and in strictly decreasing runs, the leftmost pairs are the minimal sums, **greedily merge adjacent elements of these runs from left to right**.
-
-#### **Algorithm Steps:**
-
-1. **Iterate through the array:**
-    - For each strictly decreasing run (let's say from i to j), count: `run_length = j - i + 1`
-    - You need to do `(run_length - 1)` merges to collapse the descending run into a single value.
-    - After merging, the single value should not violate ordering with the next item (`nums[j+1]`).
-        - If it does, it will be counted as part of the next descending run.
-2. **Repeat for each run** and sum all needed merges.
-
-#### **Implementation Plan:**
-- Initialize `operations = 0, i = 0`
-- While `i < n-1`:
-    - If `nums[i] ≤ nums[i+1]`: just increment `i`.
-    - Else, identify the maximal decreasing run starting at `i`.
-        - Find `j` such that for all `k`, `nums[k] > nums[k+1]` for `k=i...j-1`.
-        - Number of merges needed: `j-i`
-        - Add `j-i` to `operations`.
-        - Set `i = j`
-- Output `operations`
-
-#### **Why is this Greedy Algorithm Correct?**
-
-Because you can only merge the minimal adjacent sum, and in a strictly decreasing run, *the leftmost pair* will always be minimal in its local context. Thus, the greedy merging of such runs is both possible and minimal.
+- **Constraints**:
+    - `2 <= n <= 1e5` (`n` even)
+    - `1 <= nums[i] <= 1e5`
+- **Edge Cases**:
+    - Minimum length (n = 2): Just two numbers, the answer is their sum.
+    - All elements are the same: Any pairing gives the same sum.
+    - Some or all elements are the largest allowed (1e5).
+    - The array is not presorted; efficient solution shouldn't rely on starting order.
 
 ---
 
-### 4. **C++ Solution**
+## 3. **Optimal Algorithm**
+
+### **Key Insight:**
+To minimize the largest pair sum, pair the *smallest* number with the *largest*, the second smallest with the second largest, etc. This way, sums are "balanced" and you avoid very large or very small sums.
+
+### **Algorithm Steps:**
+1. **Sort** the array.
+2. For all `i` from `0` to `(n/2 - 1)`, pair `nums[i]` (smallest not yet used) with `nums[n-1-i]` (largest not yet used).
+3. Compute each pair's sum; keep track of the **maximum** among these.
+4. Return this maximum sum.
+
+### **Complexity**
+- **Time:** O(n log n) (for sorting), O(n) for the pairing loop.
+- **Space:** O(1) extra space if sorting in-place.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
+#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int minimumOperations(vector<int>& nums) {
+    int minPairSum(vector<int>& nums) {
+        sort(nums.begin(), nums.end()); // O(n log n)
         int n = nums.size();
-        int ops = 0;
-        int i = 0;
-        while (i < n - 1) {
-            if (nums[i] <= nums[i + 1]) {
-                ++i;
-                continue;
-            }
-            // Start of a decreasing run
-            int j = i + 1;
-            while (j < n && nums[j-1] > nums[j]) ++j;
-            ops += (j - i - 1);
-            i = j - 1;
+        int maxPair = 0;
+        for (int i = 0; i < n/2; ++i) {
+            int pairSum = nums[i] + nums[n-1-i];
+            if (pairSum > maxPair) maxPair = pairSum;
+            // or: maxPair = max(maxPair, pairSum);
         }
-        return ops;
+        return maxPair;
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation**
+## 5. **Example Explanation**
 
-#### Input:
-```
-nums = [5,2,3,1]
-```
+**Input:** `[3,5,2,3]`
 
-#### Steps:
+1. Sort: `[2,3,3,5]`
+2. Pairings:
+    - Pair 1: `2 + 5 = 7`
+    - Pair 2: `3 + 3 = 6`
+3. Pair sums: `[7, 6]`
+4. Maximum pair sum is `7`.
 
-- Check `5 > 2` (decreasing). Let's find the decreasing run:
-    - `5 > 2` (yes)
-    - `2 < 3` (break run)
-- So decreasing run is `[5,2]`, of length 2; need 1 merge.
-- Merge minimal pair: `(2,3)` and `(3,1)` both exist, but among pairs `(5,2)`, `(2,3)`, `(3,1)`:
-    - (3,1) = 4 (smallest), `(3,1)` merged first: `[5,2,4]`
-- Check if sorted: `5 > 2`
-    - Another run `[5,2]`
-    - Merge `(5,2)` => `[7,4]`
-- Result: `[7,4]` (not sorted)
-- Actually, let's work carefully per our algorithm:
-    After first merge (`3,1`): `[5,2,4]`
-    Now, pairs: `(5,2)=7`, `(2,4)=6` → minimal sum pair is `(2,4)` → merge: `[5,6]`
-    Now, `[5,6]` is sorted.
-
-- **Total merges:** 2
+**Output:** `7`
 
 ---
 
-**In summary:**  
-- In each maximal decreasing run of length L, you need (L-1) merges.  
-- The solution is O(N) and works for all valid cases.
+**Summary:**  
+Sort the array, pair the smallest with the largest, and the maximum of these pairs is minimized. This greedy strategy works because it balances high and low numbers to avoid a large sum spike. The approach is efficient and handles the upper constraint sizes well.
