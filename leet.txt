@@ -1,44 +1,46 @@
-Sure! Let's go through each of the requested items:
+Let's break down the problem and solution step by step.
 
 ---
 
-## 1. **Short Summary**
+## 1. Short Summary
 
-Given an array of even length, pair up all elements such that *every element is in exactly one pair* and **the maximum pair sum is minimized**. Return this minimal possible *maximum pair sum*, after you optimally form pairs.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints**:
-    - `2 <= n <= 1e5` (`n` even)
-    - `1 <= nums[i] <= 1e5`
-- **Edge Cases**:
-    - Minimum length (n = 2): Just two numbers, the answer is their sum.
-    - All elements are the same: Any pairing gives the same sum.
-    - Some or all elements are the largest allowed (1e5).
-    - The array is not presorted; efficient solution shouldn't rely on starting order.
+Given a list of student scores (`nums`) and an integer `k`, you must pick **k** students such that the **difference between the highest and lowest of their scores is minimized**. Return this minimum difference.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-### **Key Insight:**
-To minimize the largest pair sum, pair the *smallest* number with the *largest*, the second smallest with the second largest, etc. This way, sums are "balanced" and you avoid very large or very small sums.
+**Constraints:**
+- `1 <= k <= nums.length <= 1000`
+- `0 <= nums[i] <= 10^5`
 
-### **Algorithm Steps:**
-1. **Sort** the array.
-2. For all `i` from `0` to `(n/2 - 1)`, pair `nums[i]` (smallest not yet used) with `nums[n-1-i]` (largest not yet used).
-3. Compute each pair's sum; keep track of the **maximum** among these.
-4. Return this maximum sum.
-
-### **Complexity**
-- **Time:** O(n log n) (for sorting), O(n) for the pairing loop.
-- **Space:** O(1) extra space if sorting in-place.
+**Edge Cases:**
+- `k == 1`: Always returns 0 (since max and min of one number are equal).
+- All `nums` are identical: The answer is 0 for any `k`.
+- `nums` is already sorted/unsorted.
+- Large `k` (`k == nums.length`): Difference between maximum and minimum of all.
+- `nums` may contain only two unique values, or values can be very spread.
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+**Observation:**  
+To minimize the difference between **max** and **min** in any selected `k` elements, it's optimal to pick `k` numbers that are **closest together**, i.e., in a consecutive sorted segment.
+
+**Algorithm Steps:**
+1. **Sort** the array `nums`.
+2. **For each window** of size `k` (i.e., `nums[i] ... nums[i+k-1]`), calculate the difference between the maximum and minimum in that window (`nums[i+k-1] - nums[i]`).
+3. **Keep track** of the minimum such difference across all possible windows.
+
+**Time Complexity:**  
+- Sorting: O(n log n)  
+- Window checking: O(n)  
+**Total:** O(n log n)
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 #include <vector>
@@ -47,36 +49,43 @@ using namespace std;
 
 class Solution {
 public:
-    int minPairSum(vector<int>& nums) {
-        sort(nums.begin(), nums.end()); // O(n log n)
-        int n = nums.size();
-        int maxPair = 0;
-        for (int i = 0; i < n/2; ++i) {
-            int pairSum = nums[i] + nums[n-1-i];
-            if (pairSum > maxPair) maxPair = pairSum;
-            // or: maxPair = max(maxPair, pairSum);
+    int minimumDifference(vector<int>& nums, int k) {
+        sort(nums.begin(), nums.end());
+        int ans = INT_MAX;
+        for (int i = 0; i <= nums.size() - k; ++i) {
+            ans = min(ans, nums[i+k-1] - nums[i]);
         }
-        return maxPair;
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. Example Explanation
 
-**Input:** `[3,5,2,3]`
+**Example:**  
+Input: `nums = [9,4,1,7]`, `k = 2`
 
-1. Sort: `[2,3,3,5]`
-2. Pairings:
-    - Pair 1: `2 + 5 = 7`
-    - Pair 2: `3 + 3 = 6`
-3. Pair sums: `[7, 6]`
-4. Maximum pair sum is `7`.
+**Step 1: Sort**  
+Sorted array: `[1, 4, 7, 9]`
 
-**Output:** `7`
+**Step 2: Find all windows of size 2**
+- Window `[1, 4]`: diff = 4-1 = **3**
+- Window `[4, 7]`: diff = 7-4 = **3**
+- Window `[7, 9]`: diff = 9-7 = **2**
+
+**Step 3: Minimum Difference**  
+Among (3, 3, 2), the **minimum is 2**.
+
+**Output:**  
+`2`
 
 ---
 
-**Summary:**  
-Sort the array, pair the smallest with the largest, and the maximum of these pairs is minimized. This greedy strategy works because it balances high and low numbers to avoid a large sum spike. The approach is efficient and handles the upper constraint sizes well.
+### **In Summary**
+- Sort `nums`.
+- The answer is the smallest difference between the max and min in any window of size `k`.
+- Efficient: O(n log n).
+
+Let me know if you want a detailed walkthrough of the code!
