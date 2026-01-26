@@ -1,46 +1,45 @@
-Let's break down the problem and solution step by step.
+Let's tackle the problem step by step as you requested:
 
 ---
 
-## 1. Short Summary
+## 1. **Short Summary**
 
-Given a list of student scores (`nums`) and an integer `k`, you must pick **k** students such that the **difference between the highest and lowest of their scores is minimized**. Return this minimum difference.
-
----
-
-## 2. Constraints & Edge Cases
-
-**Constraints:**
-- `1 <= k <= nums.length <= 1000`
-- `0 <= nums[i] <= 10^5`
-
-**Edge Cases:**
-- `k == 1`: Always returns 0 (since max and min of one number are equal).
-- All `nums` are identical: The answer is 0 for any `k`.
-- `nums` is already sorted/unsorted.
-- Large `k` (`k == nums.length`): Difference between maximum and minimum of all.
-- `nums` may contain only two unique values, or values can be very spread.
+Given an array of distinct integers, find all pairs `[a, b]` (with `a < b`) such that `b - a` is equal to the smallest absolute difference between any two values in the array. Return these pairs sorted in ascending order.
 
 ---
 
-## 3. Optimal Algorithm
+## 2. **Constraints & Edge Cases**
 
-**Observation:**  
-To minimize the difference between **max** and **min** in any selected `k` elements, it's optimal to pick `k` numbers that are **closest together**, i.e., in a consecutive sorted segment.
-
-**Algorithm Steps:**
-1. **Sort** the array `nums`.
-2. **For each window** of size `k` (i.e., `nums[i] ... nums[i+k-1]`), calculate the difference between the maximum and minimum in that window (`nums[i+k-1] - nums[i]`).
-3. **Keep track** of the minimum such difference across all possible windows.
-
-**Time Complexity:**  
-- Sorting: O(n log n)  
-- Window checking: O(n)  
-**Total:** O(n log n)
+- **Constraints:**
+  - `2 <= arr.length <= 10^5`: The array can be quite large, so efficient `O(N log N)` solutions are required.
+  - Each element is a **distinct integer** within `[-10^6, 10^6]`.
+- **Edge Cases:**
+  - The smallest array size is 2.
+  - All elements are positive, negative, or a mix.
+  - Multiple pairs might have the same minimum difference.
+  - The array might not be in any sorted order.
 
 ---
 
-## 4. Clean C++ Solution
+## 3. **Optimal Algorithm**
+
+### **Observation**
+- The minimal absolute difference will *always* occur between two consecutive elements *when the array is sorted*. This is because, for any non-consecutive pair, there is another number between them due to distinctness.
+
+### **Algorithm Steps**
+1. **Sort the array**.
+2. Compute the minimum absolute difference between adjacent elements.
+3. Traverse the sorted array again, collecting all pairs whose difference equals this minimum.
+
+- **Time Complexity:** 
+  - Sorting: `O(N log N)`
+  - Scanning for minimum difference: `O(N)`
+  - Collecting pairs: `O(N)`
+  - **Total:** `O(N log N)`
+
+---
+
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
@@ -49,43 +48,53 @@ using namespace std;
 
 class Solution {
 public:
-    int minimumDifference(vector<int>& nums, int k) {
-        sort(nums.begin(), nums.end());
-        int ans = INT_MAX;
-        for (int i = 0; i <= nums.size() - k; ++i) {
-            ans = min(ans, nums[i+k-1] - nums[i]);
+    vector<vector<int>> minimumAbsDifference(vector<int>& arr) {
+        sort(arr.begin(), arr.end());
+        int minDiff = INT_MAX;
+        int n = arr.size();
+        // First pass: Find the minimum difference
+        for (int i = 1; i < n; ++i) {
+            minDiff = min(minDiff, arr[i] - arr[i-1]);
         }
-        return ans;
+        // Second pass: Collect all pairs with that minimum difference
+        vector<vector<int>> res;
+        for (int i = 1; i < n; ++i) {
+            if (arr[i] - arr[i-1] == minDiff) {
+                res.push_back({arr[i-1], arr[i]});
+            }
+        }
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. Example Explanation
+## 5. **Example Walkthrough**
 
-**Example:**  
-Input: `nums = [9,4,1,7]`, `k = 2`
+Let's use **Example 1**:  
+`arr = [4, 2, 1, 3]`
 
-**Step 1: Sort**  
-Sorted array: `[1, 4, 7, 9]`
+**Step 1:** Sort the array: `[1, 2, 3, 4]`  
+**Step 2:** Find min difference:
+  - `2 - 1 = 1`
+  - `3 - 2 = 1`
+  - `4 - 3 = 1`
+  - The **min difference** is `1`.
 
-**Step 2: Find all windows of size 2**
-- Window `[1, 4]`: diff = 4-1 = **3**
-- Window `[4, 7]`: diff = 7-4 = **3**
-- Window `[7, 9]`: diff = 9-7 = **2**
+**Step 3:** Collect all consecutive pairs with difference `1`:
+  - `[1, 2]` (since `2 - 1 = 1`)
+  - `[2, 3]` (since `3 - 2 = 1`)
+  - `[3, 4]` (since `4 - 3 = 1`)
 
-**Step 3: Minimum Difference**  
-Among (3, 3, 2), the **minimum is 2**.
-
-**Output:**  
-`2`
+**Final Output:**  
+`[[1,2],[2,3],[3,4]]`
 
 ---
 
-### **In Summary**
-- Sort `nums`.
-- The answer is the smallest difference between the max and min in any window of size `k`.
-- Efficient: O(n log n).
+> **Summary:**  
+Sort, find min difference, collect all consecutive pairs with it.
 
-Let me know if you want a detailed walkthrough of the code!
+**Time complexity:** `O(N log N)` (due to sorting).  
+**Space complexity:** `O(N)` for the result.  
+**C++ code provided above implements this logic.**
