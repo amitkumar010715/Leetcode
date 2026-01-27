@@ -1,100 +1,166 @@
-Let's tackle the problem step by step as you requested:
+Let's tackle your request step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array of distinct integers, find all pairs `[a, b]` (with `a < b`) such that `b - a` is equal to the smallest absolute difference between any two values in the array. Return these pairs sorted in ascending order.
+You are given a **directed, weighted graph**. At each node, you can (once per node, and only upon arrival) choose to "reverse" **one** of its incoming edges, move immediately along it in reverse (paying double its cost), and then your switch for that node is spent.  
+You want the **minimum cost** from node 0 to node n-1 using any combination of normal traversals and at-most-one-exploited edge reversal per node.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-  - `2 <= arr.length <= 10^5`: The array can be quite large, so efficient `O(N log N)` solutions are required.
-  - Each element is a **distinct integer** within `[-10^6, 10^6]`.
-- **Edge Cases:**
-  - The smallest array size is 2.
-  - All elements are positive, negative, or a mix.
-  - Multiple pairs might have the same minimum difference.
-  - The array might not be in any sorted order.
+  - Up to **50,000 nodes** and **100,000 edges**.  
+  - Edge weights up to 1000.
+  - Each node's switch can be used *at most once* (but only when you arrive at that node).
+
+- **Edge cases:**
+  - There may be no path from 0 to n-1 (→ return -1).
+  - Using a reversal may be necessary, or not needed at all.
+  - Multiple incoming edges may exist for one node.
+  - Graph can have cycles.
+  - Edges can go from u to v or from v to u (may be repeated).
+  - Edge costs can be same/different.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Observation**
-- The minimal absolute difference will *always* occur between two consecutive elements *when the array is sorted*. This is because, for any non-consecutive pair, there is another number between them due to distinctness.
+**Approach:**  
+This is a variant of *shortest path* (Dijkstra) on a stateful graph.  
+We need to model per-node "switch" usage status.
 
-### **Algorithm Steps**
-1. **Sort the array**.
-2. Compute the minimum absolute difference between adjacent elements.
-3. Traverse the sorted array again, collecting all pairs whose difference equals this minimum.
+#### **State Definition**
 
-- **Time Complexity:** 
-  - Sorting: `O(N log N)`
-  - Scanning for minimum difference: `O(N)`
-  - Collecting pairs: `O(N)`
-  - **Total:** `O(N log N)`
+For each node, you track two states:
+
+- **(u, 0):** Arrived at node u *without* using its switch yet.
+- **(u, 1):** Arrived at node u *after* using its switch.
+
+#### **State Transitions**
+
+- **Ordinary Forward Edge:**
+  - From (u, used or not), for each forward edge (u→v, w), 
+    - to (v, same usage state), cost += w.
+
+- **Using the Switch:**
+  - At (u, 0) only (i.e., haven’t used the switch at u yet),
+    - for each **incoming edge (v→u, w)**, you may:
+      - **Reverse** it (paying 2*w), traverse along u→v, and land at (v, 1) (since the switch at u is now used!).
+      - The edge must be incoming **to** u. After reversal, movement is u→v.
+
+#### **Implementation**
+
+- Dijkstra over **2*n states**: (node, switch_used: 0/1)
+- For each node, store outgoing edges **and** incoming edges (for reverse moves).
+- Dijkstra's priority queue: `(cost, node, switch_used)`
+- For each pop:
+  - Pursue all outgoing edges as normal.
+  - If `switch_used == 0`, pursue all possible *reversed* incoming edges (to adjacent node, switch_used=1).
+
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
+#include <queue>
+#include <limits>
 using namespace std;
 
 class Solution {
 public:
-    vector<vector<int>> minimumAbsDifference(vector<int>& arr) {
-        sort(arr.begin(), arr.end());
-        int minDiff = INT_MAX;
-        int n = arr.size();
-        // First pass: Find the minimum difference
-        for (int i = 1; i < n; ++i) {
-            minDiff = min(minDiff, arr[i] - arr[i-1]);
+    int minimumCost(int n, vector<vector<int>>& edges) {
+        // Build forward and reverse edge lists
+        vector<vector<pair<int, int>>> out(n), in(n);
+        for (auto& e : edges) {
+            int u = e[0], v = e[1], w = e[2];
+            out[u].emplace_back(v, w);
+            in[v].emplace_back(u, w);
         }
-        // Second pass: Collect all pairs with that minimum difference
-        vector<vector<int>> res;
-        for (int i = 1; i < n; ++i) {
-            if (arr[i] - arr[i-1] == minDiff) {
-                res.push_back({arr[i-1], arr[i]});
+
+        // Dijkstra's state: (cost, node, switchUsed)
+        // We track min cost for [node][0/1]
+        const long long INF = numeric_limits<long long>::max();
+        vector<vector<long long>> dist(n, vector<long long>(2, INF));
+
+        // Start from node 0, switch not used!
+        priority_queue<tuple<long long, int, int>,
+            vector<tuple<long long, int, int>>, greater<>> pq;
+        dist[0][0] = 0;
+        pq.emplace(0LL, 0, 0);
+
+        while (!pq.empty()) {
+            auto [cost, u, used] = pq.top(); pq.pop();
+            if (dist[u][used] < cost) continue;
+            // 1. Normal outgoing edges
+            for (auto& [v, w] : out[u]) {
+                if (cost + w < dist[v][used]) {
+                    dist[v][used] = cost + w;
+                    pq.emplace(cost + w, v, used);
+                }
+            }
+            // 2. If switch at u not yet used: try all incoming edges
+            if (used == 0) {
+                for (auto& [v, w] : in[u]) {
+                    // Use u's switch to reverse v->u => u->v, at cost 2*w
+                    if (cost + 2*w < dist[v][1]) {
+                        dist[v][1] = cost + 2*w;
+                        pq.emplace(cost + 2*w, v, 1);
+                    }
+                }
             }
         }
-        return res;
+        long long ans = min(dist[n-1][0], dist[n-1][1]);
+        return ans == INF ? -1 : (int)ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explanation**
 
-Let's use **Example 1**:  
-`arr = [4, 2, 1, 3]`
+Let's walk through **Example 1**:
 
-**Step 1:** Sort the array: `[1, 2, 3, 4]`  
-**Step 2:** Find min difference:
-  - `2 - 1 = 1`
-  - `3 - 2 = 1`
-  - `4 - 3 = 1`
-  - The **min difference** is `1`.
+**Input:**  
+`n = 4`  
+`edges = [[0,1,3],[3,1,1],[2,3,4],[0,2,2]]`  
 
-**Step 3:** Collect all consecutive pairs with difference `1`:
-  - `[1, 2]` (since `2 - 1 = 1`)
-  - `[2, 3]` (since `3 - 2 = 1`)
-  - `[3, 4]` (since `4 - 3 = 1`)
+**Explanation:**
+- **Go from 0 to 1** via [0→1] (cost = 3)
+- At node 1, *optional*: Reverse [3→1] (cost 1), so we can go 1→3 for *cost 2* (uses node 1's switch).
+- End at 3 (which is n-1).
 
-**Final Output:**  
-`[[1,2],[2,3],[3,4]]`
+**Total: 3 (0→1) + 2 (reverse to 1→3) = 5**
+
+(Note: a direct route without reversal isn't available to 3; using the reversal is required.)
 
 ---
 
-> **Summary:**  
-Sort, find min difference, collect all consecutive pairs with it.
+## **Summary Table**
 
-**Time complexity:** `O(N log N)` (due to sorting).  
-**Space complexity:** `O(N)` for the result.  
-**C++ code provided above implements this logic.**
+| State         | Meaning                       | Cost So Far | Options                              |
+|---------------|------------------------------|-------------|---------------------------------------|
+| (0, 0)        | At node 0, switch unused     | 0           | Go 0→1, 0→2                          |
+| (1, 0)        | At node 1, switch unused     | 3           | Use switch (reverse 3→1), or not     |
+| (3, 1)        | At node 3, switch used       | 5           | Finished                             |
+
+Thus, **answer = 5**.
+
+---
+
+## **Summary**
+
+- Model as shortest path with state tracking: [node][used switch at node or not]
+- Use Dijkstra's algorithm over 2*n states.
+- For each node, you can move:
+  - along normal outgoing edges (always),
+  - if switch not yet used at this node, reverse & traverse any incoming edge for double cost (transition to 'switch used').
+- Take the minimum cost to (n-1, with or without using its switch).  
+- Return -1 if unreachable.  
+**Time Complexity:** O(M log N), where M=edges, N=nodes.  
+Works efficiently for the given constraints.
