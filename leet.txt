@@ -1,164 +1,65 @@
-Let's break this problem into steps as you requested.
+Let's break down and solve the problem step by step:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-You're given two strings, `source` and `target`, and a set of operations that allow you to convert specific substrings from `source` into new substrings at given costs. You can apply **multiple operations as long as their substring intervals are either disjoint or identical**. The goal is to reach `target` from `source` **with minimal total cost**. If it's impossible, return `-1`.
+Given a sorted array of lowercase characters `letters` (possibly with duplicates) and a `target` character, **find the smallest character in `letters` that is strictly greater than `target`**. If there isn't such a character (target is greater than or equal to the largest letter), return the first character (`letters[0]`). This is a classic "next greatest letter" problem and is suitable for binary search due to the sorted property.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### Constraints
-
-- `1 <= n = source.size() = target.size() <= 1000`
-- `1 <= #operations <= 100`
-- Each operation: convert `original[i]` to `changed[i]` at cost `cost[i]`
-- Each `original[i]` and `changed[i]` can have length up to `n`, but typically are much shorter.
-- There can be repeated operations mapping the same `original[i]` to `changed[i]` with different costs.
-
-### Edge Cases
-
-- No sequence of operations can ever yield the target (return -1).
-- Multiple operations can overlap only if they are **identical** intervals.
-- Some characters may never be reachable if no operations provide transformation.
-- Multiple ways to transform a substring to the desired form, potentially requiring multiple steps.
+- **Size:** `2 <= letters.length <= 10^4` — Efficient algorithms (logarithmic time) are needed.
+- **Characters:** All elements in `letters` are lowercase English letters.
+- **Sorted:** `letters` is sorted in non-decreasing order, possibly with duplicates but at least two **distinct** letters.
+- **Wrap Around:** If target is greater than or equal to the largest letter, or equal to all letters, return `letters[0]`.
+- **Duplicates:** Multiple equal letters are possible.
+- **Target:** Can be any lowercase English letter.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Observations**
+### Approach: **Binary Search (O(log n))**
 
-- The *operations* are like substring-replacement rules, akin to "multi-pattern string rewriting".
-- Each operation acts like a "macro"—if you have `original[j]` at some position, you can atomically substitute it for `changed[j]` (possibly at cumulative cost using multiple micro-steps).
-- Since operations can't overlap (unless identical intervals), think of this as **interval DP**.
+Since the array is sorted, use **binary search** to find the first character greater than `target`.  
+- If no such character is found (i.e., all are <= target), wrap and return `letters[0]`.
 
-### **Algorithm Sketch**
+#### Steps:
+1. Initialize `left = 0`, `right = n-1`, `resultIndex = 0`.
+2. Binary search for the **first letter > target**:
+   - If `letters[mid] > target`: potential answer, move `right = mid - 1`.
+   - Else: move `left = mid + 1`.
+3. If `left` moves out of bounds (`left == n`), wrap to `letters[0]`. Otherwise, return `letters[left]`.
 
-#### **Step 1: Preprocessing - Chainable Operations**
-
-Some operations may need to chain: e.g. "A"->"B", "B"->"C", so we use **Floyd-Warshall** to compute the *minimal cost to turn any substring x into y* for all possible substrings appearing in original/changed.
-
-But since the strings can be quite large, we instead process **for each substring length**, maintain a map of all possible "original substring" ⇒ "changed substring" with minimal cost.
-
-#### **Step 2: DP on Intervals**
-
-Let `dp[i]` be the **minimal cost to convert source[0:i) to target[0:i)**.
-
-For position `i` (0-indexed, up to n):
-
-- Try no operation: If `source[i-1]==target[i-1]`, we can just inherit dp[i-1]
-- Try all possible operations `op` with length `len`, applied at position `i-len` (end at i-1); only valid if `source[i-len:i]==original`, and after applying the operation we can continue converting the remainder.
-
-But we need a DP on intervals, considering disjointness: we scan forward, at each position, try every operation that can end here, and take the min over all intervals.
-
-#### **More Formally:**
-
-Let `dp[i]` = minimal cost to convert `source[0:i)` to `target[0:i)`.
-
-Initialization: `dp[0] = 0` (empty prefix).
-
-Transition:
-
-For all `i` from 1 to n:
-- If `source[i-1]==target[i-1]`: `dp[i]=min(dp[i], dp[i-1])` (no operation required)
-- For every possible substring length `l` (from `1` to min(i, max_op_len)):
-  - For each operation of length `l` that can change `source[i-l:i]` into `changed`, and **if** after applying the operation the result matches `target[i-l:i]`, then:
-     - `dp[i] = min(dp[i], dp[i-l] + op_cost)`
-
-#### **But, since we can chain operations on the same interval**:
-
-We need **for each substring s → t**, the minimal cost to do so by applying any sequence of operations (i.e., precompute the minimal cost to convert every possible substring appearing in source into any possible changed substring matching target via allowed operations, possibly in multiple steps).  
-This is exactly *a shortest-paths on string transformations*. Since lengths are small, we can precompute all single-interval transformation costs using BFS/DP per interval.
-
-#### **Summary:**
-
-1. For each interval `[l,r)` in source, try to convert `source[l:r]` to `target[l:r]`, using any sequence of operations (possibly chained), and compute minimal cost `cost_interval[l][r]`. If not possible, `INF`.
-2. DP: for each position `i` ([0,n]), `dp[i] = min{ dp[j] + cost_interval[j][i] for all j < i}`. This is classical "interval covering DP".
-3. Answer is `dp[n]` if not `INF`, else -1.
-
-#### **How to compute cost_interval[l][r]?**
-
-- For each interval, use BFS (Dijkstra, since there are costs) to compute the minimal cost to reach `target[l:r]` starting from `source[l:r]`, by any sequence of substring-to-substring operations (of the same length as the interval).
+**This works because the smallest letter greater than target is at the lower bound index.**
 
 ---
 
 ## 4. **C++ Solution**
 
-Here's the implementation:
-
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
 class Solution {
 public:
-    int minimumCost(string source, string target, vector<string>& original, vector<string>& changed, vector<int>& cost) {
-        int n = source.size();
-        int maxOpLen = 0;
+    char nextGreatestLetter(vector<char>& letters, char target) {
+        int n = letters.size();
+        int left = 0, right = n - 1;
 
-        // For each length, build a map: original -> list of {changed, cost}
-        unordered_map<int, unordered_map<string, vector<pair<string, int>>>> op_map;
-        set<int> lens;
-        for (int i = 0; i < original.size(); ++i) {
-            int len = original[i].size();
-            maxOpLen = max(maxOpLen, len);
-            op_map[len][original[i]].emplace_back(changed[i], cost[i]);
-            lens.insert(len);
+        // Standard binary search for the "first greater than target"
+        while (left <= right) {
+            int mid = left + (right - left) / 2;
+            if (letters[mid] > target)
+                right = mid - 1;
+            else
+                left = mid + 1;
         }
 
-        // Precompute for each (l, r): minimal cost to convert source[l:r] -> target[l:r]
-        // Use costs[l][r]: if can't, set to -1/INF
-        // For each interval
-        vector<vector<int>> costs(n+1, vector<int>(n+1, INT_MAX));
-        for (int l = 0; l < n; ++l) {
-            for (int r = l+1; r <= n; ++r) {
-                int len = r - l;
-                if (!lens.count(len)) continue; // no ops of this length
-                string s = source.substr(l, len);
-                string t = target.substr(l, len);
-
-                // BFS/Dijkstra: min cost to convert s => t by allowed operations of len
-                queue<pair<string, int>> q;
-                unordered_map<string, int> dist;
-                q.push({s, 0});
-                dist[s] = 0;
-
-                while (!q.empty()) {
-                    auto [cur, c] = q.front(); q.pop();
-                    // Try all possible operations of this length starting from cur
-                    if (op_map[len].find(cur) != op_map[len].end()) {
-                        for (auto& [next, op_cost] : op_map[len][cur]) {
-                            int next_c = c + op_cost;
-                            if (!dist.count(next) || next_c < dist[next]) {
-                                dist[next] = next_c;
-                                q.push({next, next_c});
-                            }
-                        }
-                    }
-                }
-                if (dist.count(t))
-                    costs[l][r] = dist[t];
-            }
-        }
-
-        // DP: dp[i] = min cost to reach target[0:i] from source[0:i]
-        vector<int> dp(n+1, INT_MAX);
-        dp[0] = 0;
-        for (int i = 1; i <= n; ++i) {
-            // No operation on index i-1
-            if (source[i-1] == target[i-1] && dp[i-1] != INT_MAX)
-                dp[i] = min(dp[i], dp[i-1]);
-            // Try all intervals ending at i (i.e. [j, i)), where a conversion is possible
-            for (int l = max(0, i-maxOpLen); l < i; ++l) {
-                if (costs[l][i] != INT_MAX && dp[l] != INT_MAX) {
-                    dp[i] = min(dp[i], dp[l] + costs[l][i]);
-                }
-            }
-        }
-        return dp[n] == INT_MAX ? -1 : dp[n];
+        // If left is out of bounds, wrap around
+        if (left < n)
+            return letters[left];
+        else
+            return letters[0];
     }
 };
 ```
@@ -167,51 +68,26 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's use **Example 2:**
+### Example 2:
+- **Input:** `letters = ["c", "f", "j"]`, `target = "c"`
+- **Process:**
+  - Array: c f j
+  - We need the first letter > 'c'
+  - Binary search:
+    - mid=1 ('f'), 'f' > 'c', so right=0
+    - mid=0 ('c'), 'c' == 'c', so left=1
+    - Now left=1, so output is letters[1] = 'f'
+- **Output:** **'f'**
 
-```
-Input:
-  source = "abcdefgh"
-  target = "acdeeghh"
-  original = ["bcd", "fgh", "thh"]
-  changed  = ["cde", "thh", "ghh"]
-  cost = [1, 3, 5]
-```
-
-#### Step-by-Step
-
-- The only single-character differences are in intervals [1:4] and [5:8]:
-    - [1:4]: "bcd" in source → "cde" in target; there is an op "bcd"→"cde" at cost 1.
-    - [5:8]: "fgh" in source → "egh" in target; first, "fgh"→"thh" (cost 3), then "thh"→"ghh" (cost 5)
-        - But "egh" is not a direct transformation.
-        - Instead, after both operations, you get "ghh", matching "ghh" in target at [5:8]. But target is "egh", so that's not quite matching. Ah, so only certain substrings are needed.
-    - The use case is: after "fgh"→"thh", then "thh"→"ghh" using allowed transformations.
-
-- So, using the interval [5:8] transformations:
-    - "fgh"→"thh" (cost 3), "thh"→"ghh" (cost 5). But target is "egh".
-    - Actually, the problem wants "egh" at [4:7], not [5:8]. Oops, that's not available via any allowed operation, so maybe the only way is to match operations.
-    - According to the sample, the solution transforms [1:4] and [5:8], which gives total cost 1+3+5=9.
-
-- This confirms how the interval DP propagates:
-    - DP[4] = 1 (using "bcd"->"cde" at cost 1)
-    - DP[8] = DP[4] + 3 ("fgh"->"thh") + 5 ("thh"->"ghh") = 1+3+5 = 9
+**Explanation:** 'f' is the smallest letter greater than 'c' in the array.
 
 ---
 
-# **Summary Table**
+### **Recap**
 
-| Step                | Approach           |
-|---------------------|-------------------|
-| Precompute per-interval cost | BFS on allowed substring operations (for all intervals) |
-| Interval DP         | dp[i] = min(dp[j] + cost_interval[j][i]) over all j<i |
-| C++ Code            | Above     |
+- Use binary search for the lower bound of (target, inf).
+- Wrap to beginning if not found.
+- Time complexity: **O(log n)**
+- Handles edge cases via wrapping.
 
----
-
-## **In summary:**  
-- Map all possible substring conversions via BFS (for each matching length in `original`/`changed`), 
-- Then use interval DP to find overall minimal cost to rewrite `source` into `target` with those substring macrOS.
-
----
-
-Let me know if you want more details or a visual walk-through!
+If you need further clarifications or a Python version, let me know!
