@@ -1,93 +1,101 @@
-Let's break down and solve the problem step by step:
+Let's break down the problem and requirements step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a sorted array of lowercase characters `letters` (possibly with duplicates) and a `target` character, **find the smallest character in `letters` that is strictly greater than `target`**. If there isn't such a character (target is greater than or equal to the largest letter), return the first character (`letters[0]`). This is a classic "next greatest letter" problem and is suitable for binary search due to the sorted property.
+Given an array `nums`, you must split it into 3 **disjoint contiguous subarrays**. The "cost" of each subarray is the value of its **first element**. Find the split (partition) that minimizes the sum of these costs.
+
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Size:** `2 <= letters.length <= 10^4` — Efficient algorithms (logarithmic time) are needed.
-- **Characters:** All elements in `letters` are lowercase English letters.
-- **Sorted:** `letters` is sorted in non-decreasing order, possibly with duplicates but at least two **distinct** letters.
-- **Wrap Around:** If target is greater than or equal to the largest letter, or equal to all letters, return `letters[0]`.
-- **Duplicates:** Multiple equal letters are possible.
-- **Target:** Can be any lowercase English letter.
+- **Constraints:**
+  - `3 <= n <= 50` (small: allows O(n^2) approaches)
+  - `1 <= nums[i] <= 50` (all positive)
+- **Edge Cases:**
+  - Arrays of length 3: only possible split is each element as a subarray
+  - Arrays where optimal split creates a longer last subarray
+  - Arrays where optimal split is each subarray of length 1
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Approach: **Binary Search (O(log n))**
+Since we need to split the array into 3 contiguous subarrays, consider the **positions of split points**.  
+Let the subarrays be:  
+- `nums[0..i-1]`  (first subarray, length at least 1)
+- `nums[i..j-1]` (second subarray, length at least 1)
+- `nums[j..n-1]` (third subarray, length at least 1)
 
-Since the array is sorted, use **binary search** to find the first character greater than `target`.  
-- If no such character is found (i.e., all are <= target), wrap and return `letters[0]`.
+We need `1 <= i < j <= n-1` so that all subarrays are non-empty.
 
-#### Steps:
-1. Initialize `left = 0`, `right = n-1`, `resultIndex = 0`.
-2. Binary search for the **first letter > target**:
-   - If `letters[mid] > target`: potential answer, move `right = mid - 1`.
-   - Else: move `left = mid + 1`.
-3. If `left` moves out of bounds (`left == n`), wrap to `letters[0]`. Otherwise, return `letters[left]`.
+So, for all possible `i` and `j`:
+- sum = nums[0] + nums[i] + nums[j]
+- answer = minimal such sum
 
-**This works because the smallest letter greater than target is at the lower bound index.**
+The complexity is O(n^2), which is efficient for `n <= 50`.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    char nextGreatestLetter(vector<char>& letters, char target) {
-        int n = letters.size();
-        int left = 0, right = n - 1;
-
-        // Standard binary search for the "first greater than target"
-        while (left <= right) {
-            int mid = left + (right - left) / 2;
-            if (letters[mid] > target)
-                right = mid - 1;
-            else
-                left = mid + 1;
+    int minimumCost(vector<int>& nums) {
+        int n = nums.size();
+        int ans = INT_MAX;
+        // i: start of second subarray
+        // j: start of third subarray
+        for (int i = 1; i <= n - 2; ++i) {
+            for (int j = i + 1; j <= n - 1; ++j) {
+                int sum = nums[0] + nums[i] + nums[j];
+                ans = min(ans, sum);
+            }
         }
-
-        // If left is out of bounds, wrap around
-        if (left < n)
-            return letters[left];
-        else
-            return letters[0];
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-### Example 2:
-- **Input:** `letters = ["c", "f", "j"]`, `target = "c"`
-- **Process:**
-  - Array: c f j
-  - We need the first letter > 'c'
-  - Binary search:
-    - mid=1 ('f'), 'f' > 'c', so right=0
-    - mid=0 ('c'), 'c' == 'c', so left=1
-    - Now left=1, so output is letters[1] = 'f'
-- **Output:** **'f'**
+Let's explain Example 1:
 
-**Explanation:** 'f' is the smallest letter greater than 'c' in the array.
+**Input:** `nums = [1,2,3,12]`
+
+Possible splits:
+- i = 1 (second starts at 1), j = 2 (third starts at 2):
+    - [1], [2], [3,12]; cost = 1 + 2 + 3 = 6 (**minimum**)
+- i = 1, j = 3:
+    - [1], [2,3], [12]; cost = 1 + 2 + 12 = 15
+- i = 2, j = 3:
+    - [1,2], [3], [12]; cost = 1 + 3 + 12 = 16
+
+**Answer:** 6
 
 ---
 
-### **Recap**
+### **Summary Table**
 
-- Use binary search for the lower bound of (target, inf).
-- Wrap to beginning if not found.
-- Time complexity: **O(log n)**
-- Handles edge cases via wrapping.
+| i   | j   | Subarrays          | Cost      |
+|-----|-----|--------------------|-----------|
+|  1  |  2  | [1], [2], [3,12]   | 1+2+3=6   |
+|  1  |  3  | [1], [2,3], [12]   | 1+2+12=15 |
+|  2  |  3  | [1,2], [3], [12]   | 1+3+12=16 |
 
-If you need further clarifications or a Python version, let me know!
+---
+
+## **Conclusion**
+
+- Use two loops to try all splits.
+- Calculate costs as `nums[0] + nums[i] + nums[j]` for `1 <= i < j <= n-1`.
+- Take the minimum. This is efficient and correct given the problem constraints.
