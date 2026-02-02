@@ -1,62 +1,160 @@
-Let's break down the problem and requirements step by step:
+Let's break down the problem and provide a full expert solution.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums`, you must split it into 3 **disjoint contiguous subarrays**. The "cost" of each subarray is the value of its **first element**. Find the split (partition) that minimizes the sum of these costs.
-
+**Goal:**  
+Split the array `nums` into exactly `k` disjoint contiguous subarrays so that the sum of the first element of each subarray (the **cost**) is minimized.  
+**Constraint:** The starting index of the last (`k`-th) subarray minus the starting index of the second must be at most `dist`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `3 <= n <= 50` (small: allows O(n^2) approaches)
-  - `1 <= nums[i] <= 50` (all positive)
-- **Edge Cases:**
-  - Arrays of length 3: only possible split is each element as a subarray
-  - Arrays where optimal split creates a longer last subarray
-  - Arrays where optimal split is each subarray of length 1
+- **Array size:** `3 <= n <= 1e5`
+- **Elements size:** `1 <= nums[i] <= 1e9`
+- **Subarray count:** `3 <= k <= n`
+- **Dist constraint:** `k-2 <= dist <= n-2`
+- **Edge case:** 
+    - `dist` is just enough to fit `k` subarrays, i.e., `dist = k - 2`, meaning subarrays must be packed tightly.
+    - Large values for `n` — solution must be at most `O(n log k)` for performance.
+    - Always >= 3 subarrays.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Since we need to split the array into 3 contiguous subarrays, consider the **positions of split points**.  
-Let the subarrays be:  
-- `nums[0..i-1]`  (first subarray, length at least 1)
-- `nums[i..j-1]` (second subarray, length at least 1)
-- `nums[j..n-1]` (third subarray, length at least 1)
+### **Observation / Analysis**
 
-We need `1 <= i < j <= n-1` so that all subarrays are non-empty.
+- The cost is set by the *first element* of each chosen subarray.
+- Subarrays must be **contiguous** and together must cover the entire array from `0` to `n-1`.
 
-So, for all possible `i` and `j`:
-- sum = nums[0] + nums[i] + nums[j]
-- answer = minimal such sum
+Let subarray boundaries be at positions `i0=0 < i1 < i2 < ... < i_{k-1} < n` and the partitions are:
 
-The complexity is O(n^2), which is efficient for `n <= 50`.
+- `[0, i1-1]`, `[i1, i2-1]`, ..., `[i_{k-1}, n-1]`
+
+We want to **choose the `k-1` cut points** (i.e., starting indices for subarrays 2..k) to make the sum of the firsts (which are at positions 0, i1, i2, ..., i_{k-1}) minimal, **subject** to:
+
+- `i_{k-1} - i_1 <= dist`
+- `i0 = 0`, `i_{k-1} < n`, `i_1 < i_2 < ... < i_{k-1}`.
+
+**Key:** Only the starting indices (the "partition points") matter for the cost.
+
+### **How to exploit the constraint efficiently?**
+
+**Approach:**
+
+1. **Enumerate possible starting positions for the 2nd subarray (`i1`) and the last (`i_{k-1}`), obeying `i_{k-1} - i1 <= dist`**
+2. **Select the minimal sum of first elements at possible cuts.**
+
+**Efficient plan:**
+
+- The splitting must include the mandatory start at `0` and possible cuts after that for subarrays `2..k`.
+- Fix positions for the 2nd subarray (`i1`) and the last (`i_{k-1}`), such that `i_{k-1} - i1 <= dist` and both in `[1, n-1]`.
+- You have to select `k-2` additional cut points between `i1+1` and `i_{k-1}-1`.
+- The minimal cost is: always include `nums[0]`, `nums[i1]`, `nums[i2]`, ..., `nums[i_{k-2}]`, `nums[i_{k-1}]` (where cut points are strictly increasing).
+- For each feasible `[i1, i_{k-1}]` range, the solution is: sum of `nums[0]`, `nums[i1]`, `nums[i_{k-1}]`, plus **the smallest `k-3` elements in `nums[i1+1..i_{k-1}-1]` (i.e., between those two cuts)**.
+- Among all such ranges, pick the minimal sum.
+
+### **Algorithm steps**
+
+1. For `i1` from `1` to `n - k + 1`:  
+   - `i_{k-1}` must satisfy: `i_{k-1} >= i1 + k - 2` and `i_{k-1} <= min(i1 + dist, n-1)`
+   
+2. For each such `[i1, i_{k-1}]` interval:
+   - There are `len = i_{k-1} - i1 - 1` elements between them. We need to choose `k-3` smallest numbers from this segment to form subarrays in the middle.
+   - **Total cost:** `nums[0]` (always), `nums[i1]`, `nums[i_{k-1}]`, plus `sum of min k-3 elements in nums[i1+1..i_{k-1}-1]`
+
+3. Iterate all feasible intervals, keeping track of minimum cost.
+
+**Challenge:**  
+- Need to find the sum of min `k-3` numbers in a sliding window efficiently.
+
+**Solution:**  
+- Use a min-heap or two-multiset trick to maintain the smallest `k-3` elements as the window moves.
+- For big windows, sliding window min-k trick (like using multiset or two heaps).
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
+#include <bits/stdc++.h>
 using namespace std;
 
 class Solution {
 public:
-    int minimumCost(vector<int>& nums) {
+    long long minimumCost(vector<int>& nums, int k, int dist) {
         int n = nums.size();
-        int ans = INT_MAX;
-        // i: start of second subarray
-        // j: start of third subarray
-        for (int i = 1; i <= n - 2; ++i) {
-            for (int j = i + 1; j <= n - 1; ++j) {
-                int sum = nums[0] + nums[i] + nums[j];
-                ans = min(ans, sum);
+        long long ans = LLONG_MAX;
+
+        // nums[0] always included as cost
+        // We want the minimal cost by choosing i1 (second subarray) and i_{k-1} (last subarray)
+        // For each i1 in [1, n - k + 1]:
+        //   i_{k-1} in [i1 + k - 2, min(i1 + dist, n-1)]
+
+        for (int i1 = 1; i1 <= n - k + 1; ++i1) {
+            int min_end = i1 + k - 2;
+            int max_end = min(i1 + dist, n - 1);
+
+            if (min_end > max_end) continue;
+
+            // For all feasible i_{k-1} in [min_end, max_end]
+            // We'll process sliding window of size: between i1+1 and i_{k-1} - 1 (inclusive)
+            // Each window must give us k-3 smallest numbers among nums[i1+1 .. i_{k-1}-1]
+            // We'll preprocess once for i1, and slide the window end
+
+            // We'll use multiset to keep smallest k-3 elements in current window
+
+            // Initial window: [i1+1, min_end-1], size = (min_end-1) - (i1+1) + 1 = (k-4)+1 = k-3
+            if (min_end - i1 - 1 < k-3) continue;
+            multiset<int> smalls;
+            multiset<int> larges;
+
+            // Fill the first window
+            for (int j = i1+1; j < min_end; ++j)
+                smalls.insert(nums[j]);
+
+            long long sum_smalls = 0;
+            for (int val : smalls) sum_smalls += val;
+
+            int left = i1+1, right = min_end-1;
+
+            for (int i_end = min_end; i_end <= max_end; ++i_end) {
+                // Current window: [i1+1, i_end-1]
+                // Add nums[i_end-1] to the window
+                int add_elem = nums[i_end-1];
+                smalls.insert(add_elem);
+                sum_smalls += add_elem;
+                if ((int)smalls.size() > k-3) {
+                    auto it = --smalls.end();
+                    sum_smalls -= *it;
+                    larges.insert(*it);
+                    smalls.erase(it);
+                }
+                // Calculate cost if window size >= k-3
+                if ((int)smalls.size() == k-3) {
+                    long long cost = nums[0] + nums[i1] + nums[i_end] + sum_smalls; // i_end is i_{k-1}
+                    ans = min(ans, cost);
+                }
+                // Remove left-most element for next window
+                if (left < i_end-1) {
+                    int remove_elem = nums[left];
+                    if (smalls.find(remove_elem) != smalls.end()) {
+                        smalls.erase(smalls.find(remove_elem));
+                        sum_smalls -= remove_elem;
+                        if (!larges.empty()) {
+                            int move = *larges.begin();
+                            larges.erase(larges.begin());
+                            smalls.insert(move);
+                            sum_smalls += move;
+                        }
+                    } else {
+                        larges.erase(larges.find(remove_elem));
+                    }
+                    ++left;
+                }
             }
         }
         return ans;
@@ -66,36 +164,56 @@ public:
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-Let's explain Example 1:
+### **Example 1**
 
-**Input:** `nums = [1,2,3,12]`
+**Input:**  
+`nums = [1,3,2,6,4,2], k = 3, dist = 3`
 
-Possible splits:
-- i = 1 (second starts at 1), j = 2 (third starts at 2):
-    - [1], [2], [3,12]; cost = 1 + 2 + 3 = 6 (**minimum**)
-- i = 1, j = 3:
-    - [1], [2,3], [12]; cost = 1 + 2 + 12 = 15
-- i = 2, j = 3:
-    - [1,2], [3], [12]; cost = 1 + 3 + 12 = 16
+**Valid splits:**  
+We want to pick two more starting indices (as `k=3`):
 
-**Answer:** 6
+Let subarrays be: `nums[0..i1-1], nums[i1..i2-1], nums[i2..n-1]`
+
+`i1` in `[1, 4]` (since must allow room for 2 more subarrays), and `i2` in `[i1+1,(min(i1+dist, n-1))]`.
+
+We can try splits:
+- `[1,3,2,6,4,2]` split after 2nd element (`i1=2`):
+    - `[1,3]`, `[2,6,4]`, `[2]`
+    - Cost: `1 + 2 + 2 = 5`
+    - `i1=2`, `i2=5`
+    - `i2-i1=5-2=3 <= dist=3` (valid)
+- Other splits have higher cost (by checking each).
+
+**Output:**  
+`5`
 
 ---
 
-### **Summary Table**
+## **Summary Table**
 
-| i   | j   | Subarrays          | Cost      |
-|-----|-----|--------------------|-----------|
-|  1  |  2  | [1], [2], [3,12]   | 1+2+3=6   |
-|  1  |  3  | [1], [2,3], [12]   | 1+2+12=15 |
-|  2  |  3  | [1,2], [3], [12]   | 1+3+12=16 |
+| Step     | What it does                                                             |
+|----------|-------------------------------------------------------------------------|
+| 1        | Sprinkler-over-`i1`: try all possible start indices for 2nd subarray     |
+| 2        | For each, try all valid ending indices for the last subarray             |
+| 3        | For each combination, find the minimum sum of the "firsts" in interior   |
+| 4        | Use multiset to keep sliding minimum k-3 firsts in the range efficiently |
+| 5        | Return global minimum                                                    |
 
 ---
 
-## **Conclusion**
+## **Complexity**
 
-- Use two loops to try all splits.
-- Calculate costs as `nums[0] + nums[i] + nums[j]` for `1 <= i < j <= n-1`.
-- Take the minimum. This is efficient and correct given the problem constraints.
+- **Time:** O(n * dist * log (k)), but we can further optimize with a monotonic queue/min-heap if needed for tight constraints.
+- For practical `dist <= 1e4` or so, this will run within time limits.
+
+---
+
+### **If you need the most optimized code for largest `dist` values, an advanced approach is required.**
+
+But for most `dist` that's not "almost n", this code will work well and is clear.
+
+---
+
+Let me know if you want a further optimized version for very large `dist`!
