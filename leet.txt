@@ -1,136 +1,38 @@
-Let's break down and solve **Trionic Array II**.
+Let's follow your requirements step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums`, **find the contiguous subarray with a "trionic" shape**—that is, it consists of:
-- a strictly increasing section,
-- followed by a strictly decreasing section,
-- followed by another strictly increasing section.
-
-Return the **maximum sum** over all such subarrays.
+Given a circular integer array, build a new array where each element is replaced by the value found after moving either `nums[i]` steps to the right (if positive), left (if negative), or staying put (if zero). Movement is modulo the array's length because the array is circular.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `4 <= n = nums.length <= 1e5`: Large input; **O(n²)** not feasible.
-- `-1e9 <= nums[i] <= 1e9`: Large values; handle overflows.
-- **At least one valid trionic subarray exists.**
-- **No need to handle arrays of size less than 4.**
-- All three sections must be at least length 1, and entire sequence must be contiguous.
+**Constraints:**
+- `1 <= nums.length <= 100` (very small constraint, so O(n) is trivial)
+- `-100 <= nums[i] <= 100` (moves cover full wrap-around)
+- Array can contain negative, zero, or positive values.
+
+**Edge Cases:**
+- **Single element**: Moving any number of steps should always wrap to itself.
+- **Move magnitude >= length**: Movement should always be `mod n` (e.g., move 101 steps in size 5 array is 1 step).
+- **Zero value**: Stay put, i.e., `result[i] = nums[i]`.
+- **Negative index after move**: Should be wrapped into [0,n-1] range (C++ handles negative modulo differently, so manual adjustment is needed).
+- **All zeros** or all positive/negative values.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Let's design an **efficient O(n) algorithm**, leveraging pre-computation for increasing/decreasing segments.
+For each index `i`:
+- If `nums[i] == 0`, set `result[i] = nums[i]`.
+- Otherwise, calculate new index as `i + nums[i]` (for positives) or `i + nums[i]` (for negatives).
+- Wrap index using `((i + nums[i]) % n + n) % n` due to negative modulo in C++.
+- Set `result[i] = nums[wrapped_index]`.
 
-### Key Observations
-
-- We are looking for subarrays `nums[l..r]` such that:
-  - There exist `l < p < q < r`
-  - `[l..p]` strictly increasing (`nums[i] < nums[i+1]`)
-  - `[p..q]` strictly decreasing (`nums[i] > nums[i+1]`)
-  - `[q..r]` strictly increasing (`nums[i] < nums[i+1]`)
-  - All intervals are contiguous and together form one contiguous subarray.
-
-A trionic subarray **peaks and valleys** twice: up, down, up.
-
-### **Efficient Approach ("Mountain-Mountain" Scan)**
-
-#### A. Mark Increasing/Decreasing Segments
-
-For each position `i`:
-- `inc_left[i]`: max length of strictly increasing subarray ending at `i`.
-- `dec_left[i]`: max length of strictly decreasing subarray ending at `i`.
-- `inc_right[i]`: max length of strictly increasing subarray starting at `i`.
-- `dec_right[i]`: max length of strictly decreasing subarray starting at `i`.
-
-**How to populate these:**
-- For `inc_left`, traverse left-to-right:
-    - If `nums[i-1] < nums[i]`, then `inc_left[i] = inc_left[i-1] + 1`, else 1.
-- Similarly for the other arrays.
-
-#### B. Prefix Sums
-
-To compute subarray sums efficiently, use a prefix sum array.
-
-#### C. Enumerate Trionic Centers
-
-The trionic subarray can be uniquely mapped to a "center" of the valley (= where decreasing part is).
-
-Let `i` be the center of decreasing segment. For each position `i`:
-- The **trionic structure** is: strictly increasing **before i**, strictly decreasing **centered at i**, strictly increasing **after i**.
-
-Let:
-- `left = i - dec_left[i] + 1`
-- `right = i + dec_right[i] - 1`
-- But we actually need to find three regions: left-growing, middle-decreasing, right-growing.
-
-Here's a more robust way (similar to "peak" detection in the classic mountain problem):
-
-**For each index `mid` from 1 to n-2:**
-- If `inc_left[mid] > 1` and `dec_right[mid] > 1` and `inc_right[mid + dec_right[mid] - 1] > 1` (with proper boundaries), it means there's:
-    - an increasing section on the left [`l..p`],
-    - a decreasing section (centered at `mid`, of length at least 2),
-    - and a following increasing section.
-
-But the required structure is: (we want to split as three sections)
-
-So, **better alternative**:
-
-#### D. Triple Pointer Split
-
-For each possible **middle** (start of decreasing section):
-- Let `p` be the end index of first inc section (`p`), `q` be the end index of decreasing section.
-
-We can precompute all possible strictly increasing intervals, strictly decreasing intervals, and their sums using two-pointer or dynamic programming.
-
-But what is the best way?
-
-#### E. **Final Efficient Solution: Dynamic Split Points**
-
-Let's **precompute runs**:
-- `left_inc[i]`: length of strictly increasing run ending at i
-- `left_dec[i]`: length of strictly decreasing run ending at i
-- `right_inc[i]`: length of strictly increasing run starting at i
-- `right_dec[i]`: length of strictly decreasing run starting at i
-
-Now, **for each possible middle index `mid` (= start of the central decreasing section, must have left and right strictly increasing sections of length ≥ 1)**:
-- Let `dec_len = left_dec[mid]`   (Length of decreasing run ending at `mid`)
-- Thus, decreasing section is `nums[mid - dec_len + 1 .. mid]`
-
-- The left strictly increasing section ends at `mid - dec_len`. Call its length `inc_len = left_inc[mid - dec_len]` (must be ≥ 2 for at least 2 elements). Thus, left section is `nums[lform .. mid - dec_len]` where `lform = mid - dec_len - inc_len + 1`.
-
-- The right strictly increasing section starts at `mid + 1`. Its length is `inc_rlen = right_inc[mid + 1]` (must be ≥ 2 for at least 2 elements).
-
-- So, full trionic interval is: 
-    - left: `[lform, mid - dec_len]` (inc_len elements, at least 2)
-    - dec: `[mid - dec_len + 1, mid]` (dec_len elements, at least 2)
-    - right: `[mid + 1, mid + inc_rlen]` (inc_rlen elements, at least 2)
-
-- The full trionic subarray is from `lform` to `mid + inc_rlen`.
-
-- To be valid:
-    - inc_len ≥ 2
-    - dec_len ≥ 2
-    - inc_rlen ≥ 2
-    - All indices are in bounds.
-
-**For all possible `mid`, compute the sum for valid trionics, and take the max answer.**
-
-#### F. **Fast Implementation Steps**
-
-1. Prepare prefix sum for fast subarray sum queries.
-2. Compute `left_inc`, `left_dec` from left to right.
-3. Compute `right_inc` from right to left.
-4. For each `mid` from 1 to n-2:
-    - If possible (all three segments have length ≥ 2 and in bounds), sum up `nums[lform .. mid + inc_rlen]`.
-    - Maximize the sum.
-
-Time **O(n)**, since each position is processed only once.
+Time Complexity: **O(n)**, Space: **O(n)**.
 
 ---
 
@@ -138,117 +40,60 @@ Time **O(n)**, since each position is processed only once.
 
 ```cpp
 #include <vector>
-#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    long long trionicSum(vector<int>& nums) {
+    vector<int> transformedArray(vector<int>& nums) {
         int n = nums.size();
-        vector<long long> prefix(n + 1, 0);
-        for (int i = 0; i < n; ++i)
-            prefix[i + 1] = prefix[i] + nums[i];
-
-        // left_inc[i]: length of strictly increasing seq ending at i (at least 1)
-        vector<int> left_inc(n, 1), left_dec(n, 1);
-        for (int i = 1; i < n; ++i) {
-            if (nums[i - 1] < nums[i])
-                left_inc[i] = left_inc[i - 1] + 1;
-            if (nums[i - 1] > nums[i])
-                left_dec[i] = left_dec[i - 1] + 1;
+        vector<int> result(n);
+        for (int i = 0; i < n; ++i) {
+            if (nums[i] == 0) {
+                result[i] = 0;
+            } else {
+                // Wrap the index for circular movement
+                int newIdx = ((i + nums[i]) % n + n) % n;
+                result[i] = nums[newIdx];
+            }
         }
-        // right_inc[i]: length of strictly increasing seq starting at i (at least 1)
-        vector<int> right_inc(n, 1);
-        for (int i = n - 2; i >= 0; --i) {
-            if (nums[i] < nums[i + 1])
-                right_inc[i] = right_inc[i + 1] + 1;
-        }
-        long long ans = LLONG_MIN;
-        // mid: last index of strictly decreasing segment
-        for (int mid = 1; mid < n - 2; ++mid) {
-            int dec_len = left_dec[mid];
-            if (dec_len < 2) continue; // decreasing part must be ≥2
-            int inc_left_idx = mid - dec_len;
-            if (inc_left_idx < 1) continue; // left inc part must be ≥2
-            int inc_len = left_inc[inc_left_idx];
-            if (inc_len < 2) continue;
-            int inc_right_idx = mid + 1;
-            int inc_rlen = right_inc[inc_right_idx];
-            if (inc_right_idx + inc_rlen - 1 >= n) continue;
-            if (inc_rlen < 2) continue;
-            int l = inc_left_idx - inc_len + 1;
-            int r = inc_right_idx + inc_rlen - 1;
-            if (l < 0 || r >= n) continue;
-            // Now sum nums[l ... r]
-            long long subSum = prefix[r + 1] - prefix[l];
-            ans = max(ans, subSum);
-        }
-        return ans;
+        return result;
     }
 };
 ```
 
 ---
 
-## 5. **Explanation with Example ([1, 4, 2, 7])**
+## 5. **Example Explanation**
 
-Let's walk through Example 2:
+Let's take **Example 1:**
 
-`nums = [1, 4, 2, 7]`
+**Input:** `nums = [3, -2, 1, 1]`
 
-1. `n = 4`
+Let's process each element:
 
-Calculating sequences:
-- `left_inc = [1,2,1,2]`
-- `left_dec = [1,1,2,1]`
-- `right_inc = [1,1,2,1]`
+- `i = 0`, `nums[0] = 3`
+    - Move 3 steps right: `(0 + 3) % 4 = 3` ⇒ `nums[3] = 1`
+    - result[0] = `1`
 
-Now, look for all valid trionic centers:
+- `i = 1`, `nums[1] = -2`
+    - Move 2 steps left: `(1 + (-2)) = -1`
+    - Wrap: `(-1 % 4 + 4) % 4 = (3 + 4) % 4 = 3 % 4 = 3` ⇒ `nums[3] = 1`
+    - result[1] = `1`
 
-- For `mid = 2`:
-    - `left_dec[2] = 2` (so decreasing of length 2 ends at 2: nums[1,2])
-    - `inc_left_idx = mid - dec_len = 2 - 2 = 0`
-    - `left_inc[0] = 1` (not enough; must be ≥2; skip)
-- For `mid = 1`: `left_dec[1]=1` (not enough).
+- `i = 2`, `nums[2] = 1`
+    - Move 1 step right: `(2 + 1) % 4 = 3`
+    - result[2] = `nums[3] = 1`
 
-Thus, let's verify via code:
+- `i = 3`, `nums[3] = 1`
+    - Move 1 step right: `(3 + 1) % 4 = 0`
+    - result[3] = `nums[0] = 3`
 
-But in our algo above, the trionic requires inc_len, dec_len, inc_rlen >= 2, and their indices should fit in bounds.
-
-In this example, the entire array is [1,4,2,7]:
-- [1,4]: inc (strict), then [4,2]: dec, then [2,7]: inc.
-
-So, inc section: [1,4] (`l=0,inc_len=2`)
-- dec section: [4,2] (`mid=1,dec_len=2`)
-- inc section: [2,7] (`inc_rlen=2` starting from mid+1=2)
-- So left_inc_idx = 1-2= -1 (which is out of bounds).
-
-So, our enumeration slightly shifts; if the array is exactly 4 elements, we must check for the case where the sequence is in exactly this form.
-
-So, **special-case check**: for arrays of length 4, just sum them.
-
-But generally, for longer arrays, this method will always find trionics.
+**Final output:** `[1, 1, 1, 3]`
 
 ---
 
-## Summary Table of Steps
+**In summary:**  
+- Move right for positive, left for negative, with circular wrap using modulo, and `((index % n) + n) % n` for correct handling of negative results in C++.  
+- Each result is the value you land on after such a move.  
 
-| Step | Name        | Description                               | O(n)? |
-|------|-------------|-------------------------------------------|-------|
-|  1   | Prefix Sum  | Fast subarray sum lookup                  | Yes   |
-|  2   | left_inc/dec| Strict inc/dec runs ending at each pos    | Yes   |
-|  3   | right_inc   | Strict inc runs starting from each pos    | Yes   |
-|  4   | Main Loop   | Try all "decreasing" mid points as center | Yes   |
-
----
-
-## **In summary**
-
-- Precompute increasing and decreasing segment lengths.
-- For each middle (end of decreasing section), get the best-trionic subarray per trionic rules with at least length 2 per segment.
-- Use prefix sums for fast sum queries.
-- Return the max.
-
----
-
-### **If you need Python or more explanation, let me know!**
+Let me know if you need further clarifications!
