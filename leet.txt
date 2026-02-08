@@ -1,80 +1,77 @@
-Let's address your requests step by step:
+Let's solve the **Balanced Binary Tree** LeetCode problem step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given a string `s` of only `a` and `b`, you need to delete as few characters as possible to ensure no `b` appears **before** an `a`. The resulting string must look like all `a`s on the left and all `b`s on the right (possibly some of one type missing). Return the **minimum number of deletions** needed.
+Given a binary tree, determine if it is **height-balanced**.  
+A binary tree is height-balanced if for every node, the height difference of its left and right subtree is **no more than 1**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-    - `1 <= s.length <= 100,000`
-    - Each character is `'a'` or `'b'`
+  - Number of nodes: `0` to `5000`.
+  - Node values: From `-10^4` to `10^4`.
 - **Edge Cases:**
-    - String is already balanced (e.g. all `a`s then all `b`s).
-    - All `a`s or all `b`s (already balanced, answer is 0).
-    - Alternating characters (`"ababab"`, etc.).
-    - All `b`s first, then all `a`s at the end (`"bbbaaa"`).
+  - **Empty tree** (`root == nullptr`): Should return `true` (an empty tree is balanced).
+  - **Single node:** Always balanced.
+  - **Small subtrees differing by more than one in height:** Should be correctly detected.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Key insight:
+### Approach: **Post-order Traversal with Early Stopping**
 
-For the string to be balanced, **all `a`s must appear before all `b`s**.
+- Use recursion to traverse the tree **bottom-up (post-order)**.
+- At each node, compute:
+  - The **height** of the left and right subtrees.
+  - If at any node the height difference > 1, **propagate imbalance upwards**.
+- Use a special value (e.g., `-1`) to signal an imbalance so we can return early.
 
-Let’s try to partition the string at some point:  
-- Delete all `b`s to the **left** of the partition (so only `a`s remain on the left)  
-- Delete all `a`s to the **right** of the partition (so only `b`s remain on the right)
+### **Time Complexity**
+- **O(N)**, where N is the number of nodes.
+- Each node is visited once.
 
-We try every "split point" between characters, compute how many deletions needed, and pick the minimum.
-
-#### Steps:
-
-1. **Precompute right suffix counts of `a`s**  
-   For each index `i`, the number of `a`s in `s[i:]`.
-
-2. **Traverse from left to right, tracking left prefix count of `b`s**  
-   For each split position, deletions = left `b`s + right `a`s.
-
-3. The answer is the minimum over all splits (including the edge case where you delete all `a`s or all `b`s).
-
-#### Time & Space Complexity
-
-- O(n) time for a single pass each direction
-- O(n) space for the suffix array; can optimize to O(1) if we scan twice
+### **Space Complexity**
+- O(H), H is the height of the recursion stack (worst O(N), best O(log N)).
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
+/**
+ * Definition for a binary tree node.
+ * struct TreeNode {
+ *     int val;
+ *     TreeNode *left;
+ *     TreeNode *right;
+ *     TreeNode() : val(0), left(nullptr), right(nullptr) {}
+ *     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+ *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
+ * };
+ */
 class Solution {
 public:
-    int minimumDeletions(string s) {
-        int n = s.size();
+    // Helper function returns height if balanced, -1 if not balanced
+    int check(TreeNode* node) {
+        if (!node) return 0; // Height = 0 for null
+        int left = check(node->left);
+        if (left == -1) return -1; // unbalanced left
+        int right = check(node->right);
+        if (right == -1) return -1; // unbalanced right
 
-        // Compute suffix count of 'a's
-        vector<int> sufA(n + 1, 0);
-        // sufA[i]: number of 'a' in s[i:]
-        for (int i = n - 1; i >= 0; --i) {
-            sufA[i] = sufA[i+1] + (s[i] == 'a' ? 1 : 0);
-        }
+        if (abs(left - right) > 1)
+            return -1; // Current node unbalanced
 
-        int minDel = INT_MAX;
-        int preB = 0;
-        for (int i = 0; i <= n; ++i) {
-            // Partition before index i: delete all b's in [0, i-1] and all a's in [i, n-1]
-            minDel = min(minDel, preB + sufA[i]);
-            if (i < n && s[i] == 'b') {
-                preB++;
-            }
-        }
-        return minDel;
+        return 1 + std::max(left, right);
+    }
+
+    bool isBalanced(TreeNode* root) {
+        return check(root) != -1;
     }
 };
 ```
@@ -83,24 +80,39 @@ public:
 
 ## 5. **Example Explained**
 
-**Example 1:**  
-`s = "aababbab"`
+### Example 1:
 
-Let's analyze:
+Input: `root = [3,9,20,null,null,15,7]`
 
-- Try all splits. For example:
-  - **Split at i=0:** Left is empty, right is `"aababbab"`  
-    - Delete all `a`s on the right: 4 deletions
-  - **Split at i=2 (right after both 'a's):** Left is `"aa"`, right is `"babbab"`  
-    - Left: zero `b` to delete; right: 2 `a`s in `"babbab"`, so 2 deletions
-  - **Split at i=4:** Left: `"aaba"`, right: `"bbab"`  
-    - Left: 1 `b` to delete, right: 1 `a` to delete; total 2 deletions
+The tree structure:
+```
+      3
+     / \
+    9  20
+      /  \
+     15   7
+```
 
-The code checks all these in O(n) using prefix and suffix counts and finds **minimum = 2**.
+- Node `9`: Both children null → height = 1.
+- Node `15`, node `7`: Both children null → height = 1.
+- Node `20`: left/right heights = 1/1 → height = 2.
+- Node `3`: left/right heights = 1/2 → height = 3.
+- Height difference at every node ≤ 1, so the tree is **balanced**.
+
+**Output:** `true`
 
 ---
 
-## **Wrap-up**
+## **Summary Table**
 
-- The core idea is to precompute suffix `a` counts, traverse with prefix `b` counts, and keep track of the minimum deletions needed for every possible partition.
-- The algorithm is O(n) and fits the constraints comfortably.
+| Node | Left Height | Right Height | Diff | Balanced? |
+|------|-------------|--------------|------|-----------|
+| 9    | 0           | 0            | 0    | Yes       |
+| 15   | 0           | 0            | 0    | Yes       |
+| 7    | 0           | 0            | 0    | Yes       |
+| 20   | 1 (15)      | 1 (7)        | 0    | Yes       |
+| 3    | 1 (9)       | 2 (20)       | 1    | Yes       |
+
+---
+
+**In summary:** Use a recursive post-order traversal to check heights and propagate imbalance with an early return if the difference exceeds 1. This ensures `O(N)` runtime and fast detection.
