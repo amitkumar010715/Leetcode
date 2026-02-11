@@ -1,70 +1,91 @@
-Let's break down the problem and answer each of your requirements:
+### 1. Short Summary
+
+Given an array of integers, find the **length** of the **longest contiguous subarray** such that the number of **distinct even numbers** equals the number of **distinct odd numbers** in that subarray.
 
 ---
 
-## 1. Short Summary
+### 2. Constraints & Edge Cases
 
-Given an array `nums`, find the **longest subarray** where the number of **distinct even numbers** is equal to the number of **distinct odd numbers**. Return the length of this subarray.
-
----
-
-## 2. Constraints & Edge Cases
-
-**Constraints:**
-- `1 <= nums.length <= 1500`
-- `1 <= nums[i] <= 10^5`
-
-**Edge Cases:**
-- All numbers are even or all odd ⇒ no balanced subarray except of length `0` or `1` (if 0, 0 is not an answer, if 1, impossible since distinct even ≠ odd).
-- All numbers are equal ⇒ largest balanced subarray is at most 0 or 1.
-- Repeated numbers should not count towards distinctness more than once.
+- **Constraints:**
+  - `1 <= nums.length <= 10^5` (must be `O(n)~O(n log n)`).
+  - `1 <= nums[i] <= 10^5`
+- **Edge Cases:**
+  - All numbers are even/odd: No balanced subarray except possibly 0-length.
+  - All numbers are unique vs. many repetitions.
+  - Repeated even or odd numbers (only distinct count matters).
+  - Minimal input: length 1.
 
 ---
 
-## 3. Optimal Algorithm
+### 3. Optimal Algorithm
 
-### Brute-force (Optimal for n ≤ 1500):
+#### **Key Observations:**
+- We need a subarray where `count_distinct_even == count_distinct_odd`.
+- As we slide through the array, tracking the **current sets** of distinct even and odd numbers in a window would be too slow (`O(n^2)`).
+- The main challenge is handling "distinct count" efficiently.
 
-Because `n` is relatively small (≤1500), we can check all subarrays using two nested loops `(O(n^2))` and for each subarray keep track of the set of distinct evens & odds with hash-sets.
+#### **Algorithm: Hashing with Prefix Mapping**
 
-#### Steps
-- For each starting index `i` in `nums`:
-  - Initialize two empty hash-sets: `evens`, `odds`
-  - For each ending index `j` (from `i` to `n-1`):
-      - If `nums[j]` is even and not in `evens`, insert into `evens`
-      - If odd, insert into `odds` if not present
-      - If `evens.size() == odds.size()`, update `maxlen = max(maxlen, j-i+1)`
-- Return `maxlen`
+**Core Idea:**  
+- Let `delta = (# distinct even seen so far) - (# distinct odd seen so far)` at each prefix.
+- For each prefix position, record the *first* position where a given `delta` occurs.
+- When `delta` is the same at two positions `(l, r)`, it means the number of new distinct evens and odds between positions `(l+1) ... r` are equal.
+- To support this, we incrementally track two sets (`seen_even` and `seen_odd`) as we process the array.
 
-**Complexity:**  
-- Up to 1500 * 1500 = 2.25 million subarrays
-- Each insertion/check in set is O(1) average (unordered_set)
-- **Acceptable** for constraints.
+#### **Detailed Steps:**
+1. Initialize two sets: `seen_even`, `seen_odd`.
+2. Initialize a map `delta_to_index` with `{0: -1}` (delta `0` first seen before start).
+3. For each index `i` in `nums`:
+   - If `nums[i]` is **even** and not in `seen_even`: add to `seen_even`
+   - If `nums[i]` is **odd** and not in `seen_odd`: add to `seen_odd`
+   - Compute `delta = seen_even.size() - seen_odd.size()`
+   - If `delta` previously seen at position `j`, `nums[j+1 .. i]` is candidate.
+     - Update answer with `i-j`
+   - Else, record `delta` and its first occurrence at index `i`
+4. Return the max length found.
+
+**Time complexity:**  
+- Each number only enters `seen_even` or `seen_odd` **once**: O(n)
+- Map lookups and sets: O(1) average.
+- So overall O(n)
 
 ---
 
-## 4. Clean C++ Solution
+### 4. Clean C++ Solution
 
 ```cpp
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 using namespace std;
 
 class Solution {
 public:
     int longestBalancedSubarray(vector<int>& nums) {
-        int n = nums.size();
+        unordered_set<int> seen_even, seen_odd;
+        unordered_map<int, int> delta_to_index;
+        delta_to_index[0] = -1;  // prefix before start
         int maxlen = 0;
-
-        for (int i = 0; i < n; ++i) {
-            unordered_set<int> evens, odds;
-            for (int j = i; j < n; ++j) {
-                if ((nums[j] % 2) == 0)
-                    evens.insert(nums[j]);
-                else
-                    odds.insert(nums[j]);
-                if (evens.size() == odds.size())
-                    maxlen = max(maxlen, j - i + 1);
+        int delta = 0;
+        for (int i = 0; i < nums.size(); ++i) {
+            int x = nums[i];
+            if ((x % 2) == 0) {
+                // even
+                if (seen_even.insert(x).second) { // first time seen
+                    delta += 1;
+                }
+            } else {
+                // odd
+                if (seen_odd.insert(x).second) {
+                    delta -= 1;
+                }
+            }
+            if (delta_to_index.count(delta)) {
+                // The subarray between previous occurrence+1 and i is balanced
+                int len = i - delta_to_index[delta];
+                if (len > maxlen) maxlen = len;
+            } else {
+                delta_to_index[delta] = i;
             }
         }
         return maxlen;
@@ -74,41 +95,31 @@ public:
 
 ---
 
-## 5. Example Explanation
+### 5. Example Explanation
 
-**Example:**  
-`nums = [1,2,3,2]`
+#### Example:  
+`nums = [3,2,2,5,4]`
 
-Check all subarrays:
+Let's walk through:
 
-- `[1]` → evens: {}, odds: {1}
-- `[1,2]` → evens: {2}, odds: {1} (evens:1, odds:1 → balanced, length=2)
-- `[1,2,3]` → evens:{2}, odds:{1,3} (evens:1, odds:2 → not balanced)
-- `[1,2,3,2]` → evens:{2}, odds:{1,3} (same)
+- Index 0, nums[0]=3 (odd): seen_odd = {3}, delta=-1  
+- `delta_to_index[-1]=0`
+- Index 1, nums[1]=2 (even): seen_even={2}, delta=0
+- `delta_to_index[0]=-1` → delta 0 seen at -1 → subarray [0..1], len=2
+- Index 2, nums[2]=2 (even): 2 already in seen_even → delta unchanged  
+- Still, `delta_to_index[0]=-1` → subarray [0..2], len=3
+- Index 3, nums[3]=5 (odd): seen_odd={3,5}, delta=-1  
+- `delta_to_index[-1]=0` → subarray [1..3], len=3
+- Index 4, nums[4]=4 (even): seen_even={2,4}, delta=0
+- `delta_to_index[0]=-1` → subarray [0..4], len=5
 
-Start at index 1:
-- `[2]` → evens:{2}, odds:{}
-- `[2,3]` → evens:{2}, odds:{3} (evens:1, odds:1 → balanced, length=2)
-- `[2,3,2]` → evens:{2}, odds:{3} (evens:1, odds:1 → balanced, length=3) **max so far**
-
-Continue, but no longer balanced ones.
-
-**Final answer: 3** (from `[2,3,2]`)
-- Only 1 distinct even (2)
-- Only 1 distinct odd (3)
+**Maximum is 5** (`[3,2,2,5,4]`), as required.
 
 ---
 
-## **Summary Table**
-
-| Subarray      | Evens | Odds | Balanced? |
-|---------------|-------|------|-----------|
-| [2,3,2]       | 1     | 1    | YES       |
-| [1,2]         | 1     | 1    | YES       |
-| [2,3]         | 1     | 1    | YES       |
-
-**Longest is `[2,3,2]`, length 3.**
-
----
-
-Feel free to ask for a faster (advanced) solution or code optimizations!
+**Summary:**  
+- Use a difference variable for distinct evens vs. odds.
+- Map each difference to its first occurrence index.
+- Sets to track which unique evens/odds have been seen so far.
+- For every prefix, the answer is the largest window where the difference hasn't changed.  
+- Complexity O(n), passes all constraints.
