@@ -1,91 +1,75 @@
-### 1. Short Summary
-
-Given an array of integers, find the **length** of the **longest contiguous subarray** such that the number of **distinct even numbers** equals the number of **distinct odd numbers** in that subarray.
+Let's break down the challenge step by step:
 
 ---
 
-### 2. Constraints & Edge Cases
+## 1. **Short Summary**
 
-- **Constraints:**
-  - `1 <= nums.length <= 10^5` (must be `O(n)~O(n log n)`).
-  - `1 <= nums[i] <= 10^5`
-- **Edge Cases:**
-  - All numbers are even/odd: No balanced subarray except possibly 0-length.
-  - All numbers are unique vs. many repetitions.
-  - Repeated even or odd numbers (only distinct count matters).
-  - Minimal input: length 1.
+Given a string `s`, you need to find the length of its **longest substring** where **each distinct character occurs the same number of times**.
 
 ---
 
-### 3. Optimal Algorithm
+## 2. **Constraints & Edge Cases**
 
-#### **Key Observations:**
-- We need a subarray where `count_distinct_even == count_distinct_odd`.
-- As we slide through the array, tracking the **current sets** of distinct even and odd numbers in a window would be too slow (`O(n^2)`).
-- The main challenge is handling "distinct count" efficiently.
-
-#### **Algorithm: Hashing with Prefix Mapping**
-
-**Core Idea:**  
-- Let `delta = (# distinct even seen so far) - (# distinct odd seen so far)` at each prefix.
-- For each prefix position, record the *first* position where a given `delta` occurs.
-- When `delta` is the same at two positions `(l, r)`, it means the number of new distinct evens and odds between positions `(l+1) ... r` are equal.
-- To support this, we incrementally track two sets (`seen_even` and `seen_odd`) as we process the array.
-
-#### **Detailed Steps:**
-1. Initialize two sets: `seen_even`, `seen_odd`.
-2. Initialize a map `delta_to_index` with `{0: -1}` (delta `0` first seen before start).
-3. For each index `i` in `nums`:
-   - If `nums[i]` is **even** and not in `seen_even`: add to `seen_even`
-   - If `nums[i]` is **odd** and not in `seen_odd`: add to `seen_odd`
-   - Compute `delta = seen_even.size() - seen_odd.size()`
-   - If `delta` previously seen at position `j`, `nums[j+1 .. i]` is candidate.
-     - Update answer with `i-j`
-   - Else, record `delta` and its first occurrence at index `i`
-4. Return the max length found.
-
-**Time complexity:**  
-- Each number only enters `seen_even` or `seen_odd` **once**: O(n)
-- Map lookups and sets: O(1) average.
-- So overall O(n)
+- Constraints:
+    - `1 <= s.length <= 1000`
+    - `s` only has lowercase English letters.
+- Edge Cases:
+    - All characters are unique (`"abc..."`). Whole string is balanced.
+    - All characters are the same (`"aaaa"`). Whole string is balanced.
+    - Multiple possible balanced substrings, possibly overlapping.
+    - Minimum-length substrings (one character) are always balanced (length = 1).
+    - The string contains only two kinds of characters but in imbalanced amounts.
 
 ---
 
-### 4. Clean C++ Solution
+## 3. **Optimal Algorithm**
+
+### Brute Force (works due to small `n`)
+- We can check all substrings (there are O(n^2)) and for each, count the frequency of each character (O(26)).
+- For each substring, **it's balanced if ALL non-zero counts in the frequency array are equal.**
+- Return the length of the longest balanced substring.
+
+#### Steps:
+1. For every pair `(i, j)` where `i <= j`, process substring `s[i..j]`:
+    - Count frequencies of each character in this substring.
+    - If all non-zero frequencies are the same, possibly update answer.
+
+Total complexity: O(n^2 * 26) => 26,000,000 operations (acceptable for n <= 1000).
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <unordered_set>
-#include <unordered_map>
-using namespace std;
+#include <string>
+#include <algorithm>
 
 class Solution {
 public:
-    int longestBalancedSubarray(vector<int>& nums) {
-        unordered_set<int> seen_even, seen_odd;
-        unordered_map<int, int> delta_to_index;
-        delta_to_index[0] = -1;  // prefix before start
+    int longestBalancedSubstring(std::string s) {
+        int n = s.size();
         int maxlen = 0;
-        int delta = 0;
-        for (int i = 0; i < nums.size(); ++i) {
-            int x = nums[i];
-            if ((x % 2) == 0) {
-                // even
-                if (seen_even.insert(x).second) { // first time seen
-                    delta += 1;
+        for (int i = 0; i < n; ++i) {
+            std::vector<int> freq(26, 0);
+            for (int j = i; j < n; ++j) {
+                freq[s[j]-'a']++;
+                // collect all non-zero frequencies
+                int cnt = 0, value = 0;
+                bool balanced = true;
+                for (int k = 0; k < 26; ++k) {
+                    if (freq[k]) {
+                        if (value == 0) value = freq[k];
+                        if (freq[k] != value) {
+                            balanced = false;
+                            break;
+                        }
+                        cnt++;
+                    }
                 }
-            } else {
-                // odd
-                if (seen_odd.insert(x).second) {
-                    delta -= 1;
+                if (balanced && cnt > 0) {
+                    maxlen = std::max(maxlen, j - i + 1);
                 }
-            }
-            if (delta_to_index.count(delta)) {
-                // The subarray between previous occurrence+1 and i is balanced
-                int len = i - delta_to_index[delta];
-                if (len > maxlen) maxlen = len;
-            } else {
-                delta_to_index[delta] = i;
             }
         }
         return maxlen;
@@ -95,31 +79,39 @@ public:
 
 ---
 
-### 5. Example Explanation
+## 5. **Example Explained**
 
-#### Example:  
-`nums = [3,2,2,5,4]`
+**Example:**  
+Input: `s = "abbac"`
 
-Let's walk through:
+- Let's check all substrings:
+    - `"abba"`:  
+        - `freq['a'] = 2`
+        - `freq['b'] = 2`
+        - Both non-zero counts are 2.
+        - This substring (length 4) is balanced.
 
-- Index 0, nums[0]=3 (odd): seen_odd = {3}, delta=-1  
-- `delta_to_index[-1]=0`
-- Index 1, nums[1]=2 (even): seen_even={2}, delta=0
-- `delta_to_index[0]=-1` → delta 0 seen at -1 → subarray [0..1], len=2
-- Index 2, nums[2]=2 (even): 2 already in seen_even → delta unchanged  
-- Still, `delta_to_index[0]=-1` → subarray [0..2], len=3
-- Index 3, nums[3]=5 (odd): seen_odd={3,5}, delta=-1  
-- `delta_to_index[-1]=0` → subarray [1..3], len=3
-- Index 4, nums[4]=4 (even): seen_even={2,4}, delta=0
-- `delta_to_index[0]=-1` → subarray [0..4], len=5
+    - `"abbac"`:  
+        - `freq['a'] = 2`, `freq['b'] = 2`, `freq['c']=1`  
+        - Counts: {2,2,1} are not all equal.
 
-**Maximum is 5** (`[3,2,2,5,4]`), as required.
+So the longest balanced substring is `"abba"` with length 4.
+
+**Output: 4**
 
 ---
 
-**Summary:**  
-- Use a difference variable for distinct evens vs. odds.
-- Map each difference to its first occurrence index.
-- Sets to track which unique evens/odds have been seen so far.
-- For every prefix, the answer is the largest window where the difference hasn't changed.  
-- Complexity O(n), passes all constraints.
+### Summary Table
+
+| Substring   | Frequencies          | Balanced?      |
+|-------------|---------------------|----------------|
+| "a"         | {a:1}               | Yes            |
+| "ab"        | {a:1, b:1}          | Yes            |
+| ...         | ...                 | ...            |
+| "abba"      | {a:2, b:2}          | Yes (**max**)  |
+| ...         | ...                 | ...            |
+| "abbac"     | {a:2, b:2, c:1}     | No             |
+
+---
+
+This solution leverages the problem's manageable size for a straightforward, brute-force (but efficient in this context) scan for balanced substrings.
