@@ -1,117 +1,140 @@
-Let's break down the challenge step by step:
+Let's break this problem down step by step:
 
 ---
 
-## 1. **Short Summary**
+### 1. **Short Summary**
 
-Given a string `s`, you need to find the length of its **longest substring** where **each distinct character occurs the same number of times**.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- Constraints:
-    - `1 <= s.length <= 1000`
-    - `s` only has lowercase English letters.
-- Edge Cases:
-    - All characters are unique (`"abc..."`). Whole string is balanced.
-    - All characters are the same (`"aaaa"`). Whole string is balanced.
-    - Multiple possible balanced substrings, possibly overlapping.
-    - Minimum-length substrings (one character) are always balanced (length = 1).
-    - The string contains only two kinds of characters but in imbalanced amounts.
+Given a string **s** with only 'a', 'b', 'c', find the length of the longest balanced substring, where all *distinct characters* in the substring appear the *same number* of times.
 
 ---
 
-## 3. **Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-### Brute Force (works due to small `n`)
-- We can check all substrings (there are O(n^2)) and for each, count the frequency of each character (O(26)).
-- For each substring, **it's balanced if ALL non-zero counts in the frequency array are equal.**
-- Return the length of the longest balanced substring.
-
-#### Steps:
-1. For every pair `(i, j)` where `i <= j`, process substring `s[i..j]`:
-    - Count frequencies of each character in this substring.
-    - If all non-zero frequencies are the same, possibly update answer.
-
-Total complexity: O(n^2 * 26) => 26,000,000 operations (acceptable for n <= 1000).
+- **Constraints:**
+  - |s| ≤ 1e5 ⇒ We need an <span style='color:darkred'>O(n²)</span> solution at most, but ideally better.
+  - Only 3 possible characters ('a', 'b', 'c').
+- **Edge Cases:**
+  - s with only a single character, e.g., "aaaaa" ⇒ answer: 1
+  - s with two characters only, e.g., "abbbb": answer is 2 ("ab")
+  - s fully balanced, e.g., "abcabc": answer is length of s, if all counts are equal
 
 ---
 
-## 4. **C++ Solution**
+### 3. **Optimal Algorithm**
+
+#### **Observations:**
+
+- For any balanced substring, for the present characters, their counts must be the same.
+- For **one**, **two**, or **three** distinct characters in substring, any combination is possible, as long as their counts match.
+- Since only 3 characters, we can check all possible combinations for 1, 2, or 3 distinct characters.
+
+#### **Plan:**
+
+- For **every possible count k (>=1)**:
+    - For possible number of distinct characters d (1, 2, 3):
+        - We want substrings of length k × d, which when split into d bins, each bin (a, b, c) matches k.
+        - Slide a window of length k*d across s and check for each such window if the window contains d distinct characters, and each has count k.
+
+*This approach reduces the brute O(n³) complexity:*
+- Only for k=1 to n/2 (at most n/2 steps; really, n/3 for three chars)
+- For each, windows of size k⋅d.
+
+- For d=1: Any run of length l is "balanced", answer is max such run.
+- For d=2: For k=1 to n/2, check window size 2*k.
+- For d=3: For k=1 to n/3, check window size 3*k.
+
+We try lengths from big to small, as soon as we find any, we can stop.
+
+---
+
+#### **Algorithm Complexity**
+
+- For each possible window size, sliding window over s (O(n)), and there are O(n) possible window sizes. For only 3 distinct letters, and possible window sizes, it's manageable.
+- Total time is O(n²/3) in worst case, but due to early stopping and limited window sizes, performs well.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
 #include <vector>
 #include <string>
 #include <algorithm>
+using namespace std;
 
 class Solution {
 public:
-    int longestBalancedSubstring(std::string s) {
+    int longestBalancedSubstring(string s) {
         int n = s.size();
-        int maxlen = 0;
-        for (int i = 0; i < n; ++i) {
-            std::vector<int> freq(26, 0);
-            for (int j = i; j < n; ++j) {
-                freq[s[j]-'a']++;
-                // collect all non-zero frequencies
-                int cnt = 0, value = 0;
-                bool balanced = true;
-                for (int k = 0; k < 26; ++k) {
-                    if (freq[k]) {
-                        if (value == 0) value = freq[k];
-                        if (freq[k] != value) {
-                            balanced = false;
-                            break;
+        int res = 1;
+
+        // d: distinct char count (1,2,3)
+        for (int d = 3; d >= 1; --d) {
+            // Max possible k for given d
+            for (int k = n / d; k >= 1; --k) {
+                int len = k * d;
+                if (len > n || len <= res) break; // no longer substrings than found
+                // count sliding window
+                vector<int> count(3, 0);
+                int left = 0, right = 0;
+                // init first window
+                for (; right < len; ++right)
+                    count[s[right] - 'a']++;
+
+                // helper to count distinct and check all counts == k for nonzero char
+                auto balanced = [&](vector<int>& cnt) -> bool {
+                    int nonzero = 0;
+                    for (int val : cnt)
+                        if (val) {
+                            ++nonzero;
+                            if (val != k) return false;
                         }
-                        cnt++;
-                    }
-                }
-                if (balanced && cnt > 0) {
-                    maxlen = std::max(maxlen, j - i + 1);
+                    return nonzero == d;
+                };
+
+                if (balanced(count)) return len; // earliest found, longest
+
+                for (; right < n; ++right) {
+                    count[s[right] - 'a']++;
+                    count[s[left] - 'a']--;
+                    left++;
+                    if (balanced(count)) return len;
                 }
             }
         }
-        return maxlen;
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+### 5. **Example Explanation**
 
-**Example:**  
-Input: `s = "abbac"`
+Let's take **Example 1:** `s = "abbac"`
 
-- Let's check all substrings:
-    - `"abba"`:  
-        - `freq['a'] = 2`
-        - `freq['b'] = 2`
-        - Both non-zero counts are 2.
-        - This substring (length 4) is balanced.
+Walkthrough:
+- For d = 2 (looking for 2 distinct chars), try k = 2; window size = 4.
+    - Slide window [0:4]: "abba"  
+        - 'a':2, 'b':2 ('c':0)
+        - 2 distinct ('a', 'b'), both count 2 ⇒ **balanced**.
+        - So answer is 4, return 4.
+- For d=3, the longest possible window is of size 3*k = 3. Try k=1: "abb", "bba", "bac"
+    - First "abb": not balanced; "bba": not balanced; "bac": 'b','a','c' all 1 → balanced, but length 3 < 4.
 
-    - `"abbac"`:  
-        - `freq['a'] = 2`, `freq['b'] = 2`, `freq['c']=1`  
-        - Counts: {2,2,1} are not all equal.
-
-So the longest balanced substring is `"abba"` with length 4.
-
-**Output: 4**
+So the function would immediately return 4 on the first balanced substring of window size 4.
 
 ---
 
-### Summary Table
+## **Summary Table**
 
-| Substring   | Frequencies          | Balanced?      |
-|-------------|---------------------|----------------|
-| "a"         | {a:1}               | Yes            |
-| "ab"        | {a:1, b:1}          | Yes            |
-| ...         | ...                 | ...            |
-| "abba"      | {a:2, b:2}          | Yes (**max**)  |
-| ...         | ...                 | ...            |
-| "abbac"     | {a:2, b:2, c:1}     | No             |
+| s         | Output | Explanation                                            |
+|-----------|--------|-------------------------------------------------------|
+| abbac     | 4      | "abba" (a:2, b:2)                                     |
+| aabcc     | 3      | "abc" (a:1, b:1, c:1)                                 |
+| aba       | 2      | "ab" or "ba" (a:1, b:1)                               |
+| aaaaa     | 1      | Only 1 distinct char, longest run is length 5, but d=1|
 
 ---
 
-This solution leverages the problem's manageable size for a straightforward, brute-force (but efficient in this context) scan for balanced substrings.
+Let me know if you need further explanation or an even faster implementation!
