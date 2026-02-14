@@ -1,140 +1,104 @@
-Let's break this problem down step by step:
+Let's go step by step:
 
 ---
 
-### 1. **Short Summary**
+## 1. **Summary**
 
-Given a string **s** with only 'a', 'b', 'c', find the length of the longest balanced substring, where all *distinct characters* in the substring appear the *same number* of times.
+Given a pyramid of glasses, where each glass holds only 1 cup, champagne is poured into the top glass. Any overflow splits equally between the glasses below to the left and right. **Given how much champagne is poured and a target glass at (row, glass), return how full (0 to 1) that glass is after all the champagne has settled.**
 
 ---
 
-### 2. **Constraints & Edge Cases**
+## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-  - |s| ≤ 1e5 ⇒ We need an <span style='color:darkred'>O(n²)</span> solution at most, but ideally better.
-  - Only 3 possible characters ('a', 'b', 'c').
+    - `0 <= poured <= 1e9`
+    - `0 <= query_glass <= query_row < 100`
+
 - **Edge Cases:**
-  - s with only a single character, e.g., "aaaaa" ⇒ answer: 1
-  - s with two characters only, e.g., "abbbb": answer is 2 ("ab")
-  - s fully balanced, e.g., "abcabc": answer is length of s, if all counts are equal
+    - Not enough champagne to reach the queried glass → answer is 0.
+    - If there's more than 1 cup in a glass, only 1 cup stays, excess flows down.
+    - Even with an enormous `poured`, no glass can be more than full: max answer is 1.
 
 ---
 
-### 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm**
 
-#### **Observations:**
+### Dynamic Programming (DP):
 
-- For any balanced substring, for the present characters, their counts must be the same.
-- For **one**, **two**, or **three** distinct characters in substring, any combination is possible, as long as their counts match.
-- Since only 3 characters, we can check all possible combinations for 1, 2, or 3 distinct characters.
+Let `dp[r][c]` be the amount of champagne in the glass at row `r`, glass `c`.
 
-#### **Plan:**
+**Core idea:**
+- Start with `dp[0][0] = poured`.
+- For each glass, if it has more than 1 cup, the excess splits equally to the two glasses below (`(r+1, c)` and `(r+1, c+1)`).
+- Iterate row by row, updating the next row based on the current row's overflow.
 
-- For **every possible count k (>=1)**:
-    - For possible number of distinct characters d (1, 2, 3):
-        - We want substrings of length k × d, which when split into d bins, each bin (a, b, c) matches k.
-        - Slide a window of length k*d across s and check for each such window if the window contains d distinct characters, and each has count k.
+**Space Optimization:**
+- Only need two rows at a time: current and next (but actually you can do with a single row, updating from back to front).
 
-*This approach reduces the brute O(n³) complexity:*
-- Only for k=1 to n/2 (at most n/2 steps; really, n/3 for three chars)
-- For each, windows of size k⋅d.
-
-- For d=1: Any run of length l is "balanced", answer is max such run.
-- For d=2: For k=1 to n/2, check window size 2*k.
-- For d=3: For k=1 to n/3, check window size 3*k.
-
-We try lengths from big to small, as soon as we find any, we can stop.
+**Time & Space:**
+- Time: O(query_row^2) (since query_row < 100, this is fast).
+- Space: O(query_row) (with 1D array).
 
 ---
 
-#### **Algorithm Complexity**
-
-- For each possible window size, sliding window over s (O(n)), and there are O(n) possible window sizes. For only 3 distinct letters, and possible window sizes, it's manageable.
-- Total time is O(n²/3) in worst case, but due to early stopping and limited window sizes, performs well.
-
----
-
-### 4. **C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <string>
-#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int longestBalancedSubstring(string s) {
-        int n = s.size();
-        int res = 1;
+    double champagneTower(int poured, int query_row, int query_glass) {
+        vector<double> dp(query_row + 2, 0.0);
+        dp[0] = poured;
 
-        // d: distinct char count (1,2,3)
-        for (int d = 3; d >= 1; --d) {
-            // Max possible k for given d
-            for (int k = n / d; k >= 1; --k) {
-                int len = k * d;
-                if (len > n || len <= res) break; // no longer substrings than found
-                // count sliding window
-                vector<int> count(3, 0);
-                int left = 0, right = 0;
-                // init first window
-                for (; right < len; ++right)
-                    count[s[right] - 'a']++;
-
-                // helper to count distinct and check all counts == k for nonzero char
-                auto balanced = [&](vector<int>& cnt) -> bool {
-                    int nonzero = 0;
-                    for (int val : cnt)
-                        if (val) {
-                            ++nonzero;
-                            if (val != k) return false;
-                        }
-                    return nonzero == d;
-                };
-
-                if (balanced(count)) return len; // earliest found, longest
-
-                for (; right < n; ++right) {
-                    count[s[right] - 'a']++;
-                    count[s[left] - 'a']--;
-                    left++;
-                    if (balanced(count)) return len;
-                }
+        for (int row = 0; row <= query_row; ++row) {
+            // Update from right to left to avoid overwriting values we need!
+            for (int glass = row; glass >= 0; --glass) {
+                double excess = max(0.0, (dp[glass] - 1.0) / 2.0);
+                dp[glass + 1] += excess;
+                dp[glass] = excess;
             }
         }
-        return res;
+        return min(1.0, dp[query_glass]);
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation**
+## 5. **Example Explanation**
 
-Let's take **Example 1:** `s = "abbac"`
+### Example 2
 
-Walkthrough:
-- For d = 2 (looking for 2 distinct chars), try k = 2; window size = 4.
-    - Slide window [0:4]: "abba"  
-        - 'a':2, 'b':2 ('c':0)
-        - 2 distinct ('a', 'b'), both count 2 ⇒ **balanced**.
-        - So answer is 4, return 4.
-- For d=3, the longest possible window is of size 3*k = 3. Try k=1: "abb", "bba", "bac"
-    - First "abb": not balanced; "bba": not balanced; "bac": 'b','a','c' all 1 → balanced, but length 3 < 4.
+```
+Input: poured = 2, query_row = 1, query_glass = 1
+```
 
-So the function would immediately return 4 on the first balanced substring of window size 4.
+- Start: `dp[0] = 2.0`
+- Row 0:
+    - Glass 0: 2.0 → full (1.0), excess = 1.0
+    - Excess splits: 
+        - `dp[0] (row 1, glass 0)` += 0.5
+        - `dp[1] (row 1, glass 1)` += 0.5
+    - After: `dp = [0.5, 0.5]`
+- Row 1:
+    - Glasses 0 and 1: both at 0.5 (not full)
+- Therefore, glass (1, 1): **0.5**
 
----
-
-## **Summary Table**
-
-| s         | Output | Explanation                                            |
-|-----------|--------|-------------------------------------------------------|
-| abbac     | 4      | "abba" (a:2, b:2)                                     |
-| aabcc     | 3      | "abc" (a:1, b:1, c:1)                                 |
-| aba       | 2      | "ab" or "ba" (a:1, b:1)                               |
-| aaaaa     | 1      | Only 1 distinct char, longest run is length 5, but d=1|
+**Output: 0.5**
 
 ---
 
-Let me know if you need further explanation or an even faster implementation!
+### **Summary Table of Steps**
+
+| Row | dp[] after row |
+|-----|---------------|
+| 0   | [2.0, 0.0]    |
+|     | [0.5, 0.5]    | (after processing) |
+| 1   | [0.5, 0.5, 0.0]|
+
+---
+
+**This algorithm is fast, simple, and handles all constraints!**
