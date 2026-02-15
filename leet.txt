@@ -1,67 +1,67 @@
-Let's go step by step:
+Sure! Let's tackle the problem step by step:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-Given a pyramid of glasses, where each glass holds only 1 cup, champagne is poured into the top glass. Any overflow splits equally between the glasses below to the left and right. **Given how much champagne is poured and a target glass at (row, glass), return how full (0 to 1) that glass is after all the champagne has settled.**
+Given two binary strings, add them as if you were adding binary numbers (bit by bit, right to left, considering carries), and return their sum as a binary string.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `0 <= poured <= 1e9`
-    - `0 <= query_glass <= query_row < 100`
-
+- **String Length:** Both strings can have length up to 10,000. This means you **cannot** convert them to integers since they may not fit in built-in types.
+- **Input Nature:** Both strings contain only `'0'` or `'1'`. No leading zeros except possibly a single zero.
 - **Edge Cases:**
-    - Not enough champagne to reach the queried glass → answer is 0.
-    - If there's more than 1 cup in a glass, only 1 cup stays, excess flows down.
-    - Even with an enormous `poured`, no glass can be more than full: max answer is 1.
+    - One or both input strings are `"0"`.
+    - Strings of different lengths.
+    - The sum produces an extra bit due to carry (e.g., adding `"1"` + `"1"` gives `"10"`).
+    - Long inputs — be sure the algorithm is linear in time and space.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Dynamic Programming (DP):
+This is a simulation of binary addition (just like how you add decimal digits by hand):
 
-Let `dp[r][c]` be the amount of champagne in the glass at row `r`, glass `c`.
+1. Set up pointers `i` and `j` at the end of each string (`a` and `b`).
+2. Initialize `carry` to 0.
+3. Loop while `i >= 0` or `j >= 0` or `carry` is non-zero:
+    - Get the digit from `a` if `i >= 0` else 0.
+    - Get the digit from `b` if `j >= 0` else 0.
+    - Compute the sum: `digit_a + digit_b + carry`.
+    - The resulting digit for this position is `sum % 2`.
+    - The new carry is `sum / 2`.
+    - Prepend (or push to a vector/stack and then reverse) the result.
+4. When done, reverse the computed result (if you constructed it backwards).
+5. Return the final string.
 
-**Core idea:**
-- Start with `dp[0][0] = poured`.
-- For each glass, if it has more than 1 cup, the excess splits equally to the two glasses below (`(r+1, c)` and `(r+1, c+1)`).
-- Iterate row by row, updating the next row based on the current row's overflow.
-
-**Space Optimization:**
-- Only need two rows at a time: current and next (but actually you can do with a single row, updating from back to front).
-
-**Time & Space:**
-- Time: O(query_row^2) (since query_row < 100, this is fast).
-- Space: O(query_row) (with 1D array).
+**Time complexity:** O(max(n, m)), where n and m are the lengths of input strings.  
+**Space complexity:** O(max(n, m)) for the result.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
+#include <string>
 using namespace std;
 
 class Solution {
 public:
-    double champagneTower(int poured, int query_row, int query_glass) {
-        vector<double> dp(query_row + 2, 0.0);
-        dp[0] = poured;
-
-        for (int row = 0; row <= query_row; ++row) {
-            // Update from right to left to avoid overwriting values we need!
-            for (int glass = row; glass >= 0; --glass) {
-                double excess = max(0.0, (dp[glass] - 1.0) / 2.0);
-                dp[glass + 1] += excess;
-                dp[glass] = excess;
-            }
+    string addBinary(string a, string b) {
+        string result;
+        int i = (int)a.length() - 1, j = (int)b.length() - 1;
+        int carry = 0;
+        while (i >= 0 || j >= 0 || carry) {
+            int sum = carry;
+            if (i >= 0) sum += a[i--] - '0';
+            if (j >= 0) sum += b[j--] - '0';
+            result += (sum % 2) + '0';
+            carry = sum / 2;
         }
-        return min(1.0, dp[query_glass]);
+        reverse(result.begin(), result.end());
+        return result;
     }
 };
 ```
@@ -70,35 +70,30 @@ public:
 
 ## 5. **Example Explanation**
 
-### Example 2
+**Input:**  
+`a = "1010"`, `b = "1011"`
+
+Let's add right to left:
 
 ```
-Input: poured = 2, query_row = 1, query_glass = 1
+Carry:      1 1 0 0
+           -------
+         1 0 1 0    (a)
+       + 1 0 1 1    (b)
+--------------------
+Index:     3 2 1 0
 ```
+- **At index 3:** `0 + 1 + 0 (carry)` = 1  → result: `1`, carry: 0
+- **At index 2:** `1 + 1 + 0 (carry)` = 2  → result: `0`, carry: 1
+- **At index 1:** `0 + 0 + 1 (carry)` = 1  → result: `1`, carry: 0
+- **At index 0:** `1 + 1 + 0 (carry)` = 2  → result: `0`, carry: 1
+- **After finishing both strings, but carry = 1:** → result: `1`
 
-- Start: `dp[0] = 2.0`
-- Row 0:
-    - Glass 0: 2.0 → full (1.0), excess = 1.0
-    - Excess splits: 
-        - `dp[0] (row 1, glass 0)` += 0.5
-        - `dp[1] (row 1, glass 1)` += 0.5
-    - After: `dp = [0.5, 0.5]`
-- Row 1:
-    - Glasses 0 and 1: both at 0.5 (not full)
-- Therefore, glass (1, 1): **0.5**
+So from backwards, the result string is `10101`.
 
-**Output: 0.5**
+**Output:**  
+`"10101"`
 
 ---
 
-### **Summary Table of Steps**
-
-| Row | dp[] after row |
-|-----|---------------|
-| 0   | [2.0, 0.0]    |
-|     | [0.5, 0.5]    | (after processing) |
-| 1   | [0.5, 0.5, 0.0]|
-
----
-
-**This algorithm is fast, simple, and handles all constraints!**
+Let me know if you want a more detailed step-by-step simulation or any additional explanation!
