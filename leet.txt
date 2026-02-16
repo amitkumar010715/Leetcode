@@ -1,66 +1,51 @@
-Sure! Let's tackle the problem step by step:
+Let's address your requirements one by one:
 
 ---
 
 ## 1. **Short Summary**
 
-Given two binary strings, add them as if you were adding binary numbers (bit by bit, right to left, considering carries), and return their sum as a binary string.
+The task is to reverse the bits in the 32-bit binary representation of an integer. For example, if the input is `00000010100101000001111010011100`, reversing all 32 bits gives `00111001011110000010100101000000`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **String Length:** Both strings can have length up to 10,000. This means you **cannot** convert them to integers since they may not fit in built-in types.
-- **Input Nature:** Both strings contain only `'0'` or `'1'`. No leading zeros except possibly a single zero.
+- **Constraints:**
+  - `0 <= n <= 2^31 - 2`
+  - `n` is even. That means the least significant bit is always zero.
 - **Edge Cases:**
-    - One or both input strings are `"0"`.
-    - Strings of different lengths.
-    - The sum produces an extra bit due to carry (e.g., adding `"1"` + `"1"` gives `"10"`).
-    - Long inputs — be sure the algorithm is linear in time and space.
+  - Input `n` can be zero: Output is also zero.
+  - `n` has leading zeros in binary: those become trailing zeros after reversal.
+  - Since all `n` are even, the last bit in input will always be 0, so the reversed integer will also end with a 0.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This is a simulation of binary addition (just like how you add decimal digits by hand):
+We can reverse the bits as follows:
+- Initialize a result variable to 0.
+- Iterate 32 times (for all bits).
+- At each step, shift `result` left by 1, then add the least significant bit of `n` to `result`.
+- Shift `n` right by 1 to process the next bit.
 
-1. Set up pointers `i` and `j` at the end of each string (`a` and `b`).
-2. Initialize `carry` to 0.
-3. Loop while `i >= 0` or `j >= 0` or `carry` is non-zero:
-    - Get the digit from `a` if `i >= 0` else 0.
-    - Get the digit from `b` if `j >= 0` else 0.
-    - Compute the sum: `digit_a + digit_b + carry`.
-    - The resulting digit for this position is `sum % 2`.
-    - The new carry is `sum / 2`.
-    - Prepend (or push to a vector/stack and then reverse) the result.
-4. When done, reverse the computed result (if you constructed it backwards).
-5. Return the final string.
-
-**Time complexity:** O(max(n, m)), where n and m are the lengths of input strings.  
-**Space complexity:** O(max(n, m)) for the result.
+**Why optimal?**
+- This is O(1) time (since always 32 steps) and O(1) space.
+- If called **many times**, we could use a cache to reverse bytes (8 bits at a time) and assemble, but for single calls or small numbers it's not necessary.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-#include <string>
-using namespace std;
-
 class Solution {
 public:
-    string addBinary(string a, string b) {
-        string result;
-        int i = (int)a.length() - 1, j = (int)b.length() - 1;
-        int carry = 0;
-        while (i >= 0 || j >= 0 || carry) {
-            int sum = carry;
-            if (i >= 0) sum += a[i--] - '0';
-            if (j >= 0) sum += b[j--] - '0';
-            result += (sum % 2) + '0';
-            carry = sum / 2;
+    uint32_t reverseBits(uint32_t n) {
+        uint32_t result = 0;
+        for(int i = 0; i < 32; ++i) {
+            result <<= 1;           // Make room for next bit.
+            result |= (n & 1);      // Add the last bit of n.
+            n >>= 1;                // Shift n to process next bit.
         }
-        reverse(result.begin(), result.end());
         return result;
     }
 };
@@ -70,30 +55,32 @@ public:
 
 ## 5. **Example Explanation**
 
-**Input:**  
-`a = "1010"`, `b = "1011"`
+Let's walk through Example 1:
 
-Let's add right to left:
+**Input:** `n = 43261596`
 
+- Binary: `00000010100101000001111010011100`
+- We'll reverse each of the 32 bits:
+  - The leftmost (most significant) bit becomes the rightmost (least significant) in the result, and so on.
+  - After reversal, the binary is: `00111001011110000010100101000000`
+- This is `964176192` in decimal, so that's the output.
+
+**Visual:**
 ```
-Carry:      1 1 0 0
-           -------
-         1 0 1 0    (a)
-       + 1 0 1 1    (b)
---------------------
-Index:     3 2 1 0
+Original   : 00000010 10010100 00011110 10011100 (spaces just for clarity)
+Reversed   : 00111001 01111000 00101001 01000000
+Decimal    :    43261596    ->   964176192
 ```
-- **At index 3:** `0 + 1 + 0 (carry)` = 1  → result: `1`, carry: 0
-- **At index 2:** `1 + 1 + 0 (carry)` = 2  → result: `0`, carry: 1
-- **At index 1:** `0 + 0 + 1 (carry)` = 1  → result: `1`, carry: 0
-- **At index 0:** `1 + 1 + 0 (carry)` = 2  → result: `0`, carry: 1
-- **After finishing both strings, but carry = 1:** → result: `1`
-
-So from backwards, the result string is `10101`.
-
-**Output:**  
-`"10101"`
 
 ---
 
-Let me know if you want a more detailed step-by-step simulation or any additional explanation!
+## **Summary Table**
+
+| Input (decimal) | Binary 32-bits                           | Output (decimal) | Reversed Binary 32-bits                 |
+|-----------------|------------------------------------------|------------------|-----------------------------------------|
+| 43261596        | 00000010 10010100 00011110 10011100      | 964176192        | 00111001 01111000 00101001 01000000    |
+| 2147483644      | 01111111 11111111 11111111 11111100      | 1073741822       | 00111111 11111111 11111111 11111110    |
+
+---
+
+**If you need follow-up optimization for multiple calls, let me know!**
