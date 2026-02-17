@@ -1,86 +1,88 @@
-Let's address your requirements one by one:
+Sure! Let's break down and solve the **Binary Watch** problem step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-The task is to reverse the bits in the 32-bit binary representation of an integer. For example, if the input is `00000010100101000001111010011100`, reversing all 32 bits gives `00111001011110000010100101000000`.
+Given a number of LEDs (`turnedOn`) that are lit on a binary watch (4 LEDs for hours `0-11`, 6 LEDs for minutes `0-59`), return **all possible valid times** that the watch could display where the total number of 'on' LEDs equals `turnedOn`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `0 <= n <= 2^31 - 2`
-  - `n` is even. That means the least significant bit is always zero.
-- **Edge Cases:**
-  - Input `n` can be zero: Output is also zero.
-  - `n` has leading zeros in binary: those become trailing zeros after reversal.
-  - Since all `n` are even, the last bit in input will always be 0, so the reversed integer will also end with a 0.
+**Constraints:**
+- `0 <= turnedOn <= 10`
+- Hours: Valid range is `0-11` (because 4 bits).
+- Minutes: Valid range is `0-59` (because 6 bits).
+- No leading zero in hours.
+- Minutes should have two digits (can have leading zero).
+
+**Edge Cases:**
+- `turnedOn == 0`: Only `"0:00"` is possible.
+- `turnedOn > 8`: Impossible, as maximum on LEDs is 4 (hour) + 6 (minute) = 10, but only a few assignments may be possible due to value constraints.
+- Invalid times (e.g., hour=12, minute=60) must be skipped.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-We can reverse the bits as follows:
-- Initialize a result variable to 0.
-- Iterate 32 times (for all bits).
-- At each step, shift `result` left by 1, then add the least significant bit of `n` to `result`.
-- Shift `n` right by 1 to process the next bit.
+**Brute force is feasible** due to small ranges:
 
-**Why optimal?**
-- This is O(1) time (since always 32 steps) and O(1) space.
-- If called **many times**, we could use a cache to reverse bytes (8 bits at a time) and assemble, but for single calls or small numbers it's not necessary.
+- Try all hours `[0,11]`
+- Try all minutes `[0,59]`
+- For each pair, count the total number of 'on' bits (`__builtin_popcount` in C++, or hand-coded).
+    - If the sum equals `turnedOn`, add the formatted time to result.
+
+**Time Complexity:** O(12 * 60) = **720** iterations, which is fast.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+#include <string>
+
+using namespace std;
+
 class Solution {
 public:
-    uint32_t reverseBits(uint32_t n) {
-        uint32_t result = 0;
-        for(int i = 0; i < 32; ++i) {
-            result <<= 1;           // Make room for next bit.
-            result |= (n & 1);      // Add the last bit of n.
-            n >>= 1;                // Shift n to process next bit.
+    vector<string> readBinaryWatch(int turnedOn) {
+        vector<string> res;
+        for (int h = 0; h < 12; ++h) {
+            for (int m = 0; m < 60; ++m) {
+                if (__builtin_popcount(h) + __builtin_popcount(m) == turnedOn) {
+                    // Format: hour (no leading 0), minute (2 digits with leading zero if needed)
+                    char buf[6];
+                    sprintf(buf, "%d:%02d", h, m);
+                    res.push_back(buf);
+                }
+            }
         }
-        return result;
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Explain One Example**
 
-Let's walk through Example 1:
+**Example:**  
+Input: `turnedOn = 1`  
+Output:  
+`["0:01","0:02","0:04","0:08","0:16","0:32","1:00","2:00","4:00","8:00"]`
 
-**Input:** `n = 43261596`
+**Explanation**:  
+- Only 1 LED is on.
+- For hours, only one bit is set: (`1`, `2`, `4`, `8`)
+- For minutes, only one bit is set: (`1`, `2`, `4`, `8`, `16`, `32`)
+- We pair `h=0` with minute values with 1 bit on, and `m=0` with hour values with 1 bit on.
+- Format as `hour:minute` (`minute` always in 2 digits).
 
-- Binary: `00000010100101000001111010011100`
-- We'll reverse each of the 32 bits:
-  - The leftmost (most significant) bit becomes the rightmost (least significant) in the result, and so on.
-  - After reversal, the binary is: `00111001011110000010100101000000`
-- This is `964176192` in decimal, so that's the output.
-
-**Visual:**
-```
-Original   : 00000010 10010100 00011110 10011100 (spaces just for clarity)
-Reversed   : 00111001 01111000 00101001 01000000
-Decimal    :    43261596    ->   964176192
-```
+So, every possible time where exactly 1 LED is on will be in that list.
 
 ---
 
-## **Summary Table**
-
-| Input (decimal) | Binary 32-bits                           | Output (decimal) | Reversed Binary 32-bits                 |
-|-----------------|------------------------------------------|------------------|-----------------------------------------|
-| 43261596        | 00000010 10010100 00011110 10011100      | 964176192        | 00111001 01111000 00101001 01000000    |
-| 2147483644      | 01111111 11111111 11111111 11111100      | 1073741822       | 00111111 11111111 11111111 11111110    |
-
----
-
-**If you need follow-up optimization for multiple calls, let me know!**
+**In summary:**  
+Loop through all hour and minute combinations, count the LEDs on, and if it matches `turnedOn`, add the valid formatted string to the result. The C++ solution above provides an efficient way to do this.
