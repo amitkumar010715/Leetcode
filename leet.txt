@@ -1,88 +1,80 @@
-Sure! Let's break down and solve the **Binary Watch** problem step by step.
+Let's address each of your requirements!
 
 ---
 
 ## 1. **Short Summary**
 
-Given a number of LEDs (`turnedOn`) that are lit on a binary watch (4 LEDs for hours `0-11`, 6 LEDs for minutes `0-59`), return **all possible valid times** that the watch could display where the total number of 'on' LEDs equals `turnedOn`.
+Given a positive integer `n`, determine if its binary representation has alternating bits (no two adjacent bits are the same). For example, `5` in binary is `101`, which alternates (`1-0-1`).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- `0 <= turnedOn <= 10`
-- Hours: Valid range is `0-11` (because 4 bits).
-- Minutes: Valid range is `0-59` (because 6 bits).
-- No leading zero in hours.
-- Minutes should have two digits (can have leading zero).
+### Constraints
+- `1 <= n <= 2^31 - 1` (n is a positive 32-bit signed integer)
 
-**Edge Cases:**
-- `turnedOn == 0`: Only `"0:00"` is possible.
-- `turnedOn > 8`: Impossible, as maximum on LEDs is 4 (hour) + 6 (minute) = 10, but only a few assignments may be possible due to value constraints.
-- Invalid times (e.g., hour=12, minute=60) must be skipped.
-
+### Edge Cases
+- **Single bit:** `n = 1` (`1`): Should return `true`.
+- **Alternating starting with 0**: By definition, numbers do not start with leading zeros, so we only care about the actual bits.
+- **Long Alternating Sequence:** Test with numbers like `10` (`1010`), `42` (`101010`).
+- **All bits same:** e.g., `7` (`111`), `3` (`11`) should return `false`.
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Brute force is feasible** due to small ranges:
+**Observation:**  
+If `n` has alternating bits (e.g., `10101010...`), shifting it right by 1 (`n >> 1`) will "line up" the 1s and 0s. If you sum `n` and its right shifted value, their bits will all be 1:
 
-- Try all hours `[0,11]`
-- Try all minutes `[0,59]`
-- For each pair, count the total number of 'on' bits (`__builtin_popcount` in C++, or hand-coded).
-    - If the sum equals `turnedOn`, add the formatted time to result.
+For example, for `n = 5 (101)`:  
+- `n      = 101`
+- `n>>1   = 010`
+- `n ^ (n>>1) = 111` (all bits set to 1).
 
-**Time Complexity:** O(12 * 60) = **720** iterations, which is fast.
+If `n` has alternating bits, then `n ^ (n>>1)` will be a string of 1s in binary. Also, if we add 1 to this, it becomes a power of 2, for which `x & (x+1) == 0`.
+
+So, the check can be:
+```cpp
+int x = n ^ (n >> 1);
+return (x & (x + 1)) == 0;
+```
+- **Time:** O(1)
+- **Space:** O(1)
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <string>
-
-using namespace std;
-
 class Solution {
 public:
-    vector<string> readBinaryWatch(int turnedOn) {
-        vector<string> res;
-        for (int h = 0; h < 12; ++h) {
-            for (int m = 0; m < 60; ++m) {
-                if (__builtin_popcount(h) + __builtin_popcount(m) == turnedOn) {
-                    // Format: hour (no leading 0), minute (2 digits with leading zero if needed)
-                    char buf[6];
-                    sprintf(buf, "%d:%02d", h, m);
-                    res.push_back(buf);
-                }
-            }
-        }
-        return res;
+    bool hasAlternatingBits(int n) {
+        int x = n ^ (n >> 1);
+        return (x & (x + 1)) == 0;
     }
 };
 ```
 
 ---
 
-## 5. **Explain One Example**
+## 5. **Example Explanation**
 
-**Example:**  
-Input: `turnedOn = 1`  
-Output:  
-`["0:01","0:02","0:04","0:08","0:16","0:32","1:00","2:00","4:00","8:00"]`
+Let's walk through `n = 5`:
 
-**Explanation**:  
-- Only 1 LED is on.
-- For hours, only one bit is set: (`1`, `2`, `4`, `8`)
-- For minutes, only one bit is set: (`1`, `2`, `4`, `8`, `16`, `32`)
-- We pair `h=0` with minute values with 1 bit on, and `m=0` with hour values with 1 bit on.
-- Format as `hour:minute` (`minute` always in 2 digits).
-
-So, every possible time where exactly 1 LED is on will be in that list.
+1. **Binary Representation:**  
+   `n  = 5` → `101`
+   
+2. **Shift Right by 1:**  
+   `n >> 1` → `10` (in binary `010`)
+   
+3. **XOR:**  
+   `101 ^ 010 = 111` (binary) = `7` (decimal)
+   
+4. **Check:**  
+   `x = 7`, `x + 1 = 8` (binary `1000`)
+   
+   `7 & 8 = 0` (i.e. `0111 & 1000 = 0000`)
+   
+5. **Result:**  
+   Returns `true`.
 
 ---
-
-**In summary:**  
-Loop through all hour and minute combinations, count the LEDs on, and if it matches `turnedOn`, add the valid formatted string to the result. The C++ solution above provides an efficient way to do this.
