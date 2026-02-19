@@ -1,55 +1,66 @@
-Let's address each of your requirements!
+Let's break down the problem step by step as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a positive integer `n`, determine if its binary representation has alternating bits (no two adjacent bits are the same). For example, `5` in binary is `101`, which alternates (`1-0-1`).
+Given a binary string, **count the number of substrings** with equal numbers of consecutive 0's and 1's, where all the 0's and all the 1's in a substring are grouped together. Each valid substring is considered for every occurrence.
+
+#### Example
+For s = "00110", "0011" and "01" and "10" are valid substrings (grouped runs).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### Constraints
-- `1 <= n <= 2^31 - 1` (n is a positive 32-bit signed integer)
+- `1 <= s.length <= 1e5` — so the algorithm must be *linear* (O(n)).
+- `s[i]` is '0' or '1', no other characters.
+- Edge Cases:
+    - Very short strings: e.g. "0", "1" — should output 0.
+    - No valid substrings: e.g. "0000" or "1111" — output is 0.
+    - Valid overlaps: e.g. "0101" → substrings like "01", "10", "01".
 
-### Edge Cases
-- **Single bit:** `n = 1` (`1`): Should return `true`.
-- **Alternating starting with 0**: By definition, numbers do not start with leading zeros, so we only care about the actual bits.
-- **Long Alternating Sequence:** Test with numbers like `10` (`1010`), `42` (`101010`).
-- **All bits same:** e.g., `7` (`111`), `3` (`11`) should return `false`.
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Observation:**  
-If `n` has alternating bits (e.g., `10101010...`), shifting it right by 1 (`n >> 1`) will "line up" the 1s and 0s. If you sum `n` and its right shifted value, their bits will all be 1:
+This is a classic **group counting** problem.
 
-For example, for `n = 5 (101)`:  
-- `n      = 101`
-- `n>>1   = 010`
-- `n ^ (n>>1) = 111` (all bits set to 1).
+### Key Observations:
+- For valid substrings, we need sequences like `00...11...` (or vice versa). Count adjacent *runs* of 0's and 1's.
+- For each adjacent pair of groups (e.g. 2 zeros then 3 ones), the **number of good substrings for this border** is the min of the two group sizes (here, min(2,3) = 2).
+    - For "0011" → 2 zeros, 2 ones: min(2,2) = 2 (substrings: "0011", "01").
 
-If `n` has alternating bits, then `n ^ (n>>1)` will be a string of 1s in binary. Also, if we add 1 to this, it becomes a power of 2, for which `x & (x+1) == 0`.
+### Algorithm Steps:
 
-So, the check can be:
-```cpp
-int x = n ^ (n >> 1);
-return (x & (x + 1)) == 0;
-```
-- **Time:** O(1)
-- **Space:** O(1)
+1. Initialize counters: `prev_run_len` and `cur_run_len`.
+2. Loop through the string:
+    - If character same as previous, increment `cur_run_len`.
+    - Else (group change): add `min(prev_run_len, cur_run_len)` to answer, set `prev_run_len = cur_run_len`, reset `cur_run_len = 1`.
+3. After the loop, add one final `min(prev_run_len, cur_run_len)` for last group pair.
+4. **Time complexity:** O(n), one pass.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 class Solution {
 public:
-    bool hasAlternatingBits(int n) {
-        int x = n ^ (n >> 1);
-        return (x & (x + 1)) == 0;
+    int countBinarySubstrings(string s) {
+        int prev_run_len = 0, cur_run_len = 1;
+        int result = 0;
+        for (int i = 1; i < s.size(); ++i) {
+            if (s[i] == s[i-1]) {
+                ++cur_run_len;
+            } else {
+                result += min(prev_run_len, cur_run_len);
+                prev_run_len = cur_run_len;
+                cur_run_len = 1;
+            }
+        }
+        result += min(prev_run_len, cur_run_len); // for the last group pair
+        return result;
     }
 };
 ```
@@ -58,23 +69,38 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's walk through `n = 5`:
+**Example:** `s = "00110011"`
 
-1. **Binary Representation:**  
-   `n  = 5` → `101`
-   
-2. **Shift Right by 1:**  
-   `n >> 1` → `10` (in binary `010`)
-   
-3. **XOR:**  
-   `101 ^ 010 = 111` (binary) = `7` (decimal)
-   
-4. **Check:**  
-   `x = 7`, `x + 1 = 8` (binary `1000`)
-   
-   `7 & 8 = 0` (i.e. `0111 & 1000 = 0000`)
-   
-5. **Result:**  
-   Returns `true`.
+- Let's track *consecutive runs*:
+
+    - "00" (2 zeros)
+    - "11" (2 ones)
+    - "00" (2 zeros)
+    - "11" (2 ones)
+
+- Now pair-wise, for each boundary:
+    - [00][11]: min(2,2) = 2  ("0011", "01")
+    - [11][00]: min(2,2) = 2  ("1100", "10")
+    - [00][11]: min(2,2) = 2  ("0011", "01")
+
+- So **total = 2 + 2 + 2 = 6**.
+
+### Valid substrings:
+- "0011", "01", "1100", "10", "0011" (again), "01" (again).
+
+----
+
+## **Summary Table**
+
+| Step | prev_run_len | cur_run_len | result | Notes         |
+|------|--------------|-------------|--------|--------------|
+| 1    | 0            | 2 (00)      | 0      |              |
+| 2    | 2 (00)       | 2 (11)      | 2      | 1st switch   |
+| 3    | 2 (11)       | 2 (00)      | 4      | 2nd switch   |
+| 4    | 2 (00)       | 2 (11)      | 6      | Last add     |
 
 ---
+
+## **Takeaway**
+
+To solve efficiently, group consecutive characters, and use the minimal run length between adjacent groups — O(n) runtime and O(1) space!
