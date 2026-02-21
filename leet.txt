@@ -1,134 +1,93 @@
-Let's approach the problem step by step:
+Let's break down the problem and provide everything requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a **special binary string** (`s`), repeatedly swap consecutive *special* substrings to produce the lexicographically largest possible string. Each special substring is balanced (`#1's == #0's`) and every prefix contains at least as many 1's as 0's (like a valid parentheses sequence). Find the largest string possible after any number of such operations.
+Given two integers, `left` and `right`, count how many numbers in the range `[left, right]` (inclusive) have a **prime number of set bits** in their binary representation (the number of `1`'s in their binary form).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints**
-  - `1 <= s.length <= 50` (Small; allows for recursion and memoization)
-  - Only `'0'` and `'1'` characters.
-  - Each `s` input is *guaranteed* to be a special binary string.
-- **Edge Cases**
-  - Minimal length: `s = "10"` (no swaps possible)
-  - Already optimal: input is the lex greatest reachable string.
-  - Fully nested (e.g., `"111000"`): need to recursively handle subparts.
+- `1 ≤ left ≤ right ≤ 10^6`
+- `0 ≤ right - left ≤ 10^4`  
+  (At most ~10,000 numbers to check – brute force per number is acceptable.)
+- The max number (`right`) is `10^6` (about 20 bits in binary).
+- **Edge cases:**
+    - Minimal range: `left == right` (single number).
+    - Numbers whose binary representation has very few set bits (e.g., powers of 2).
+    - Largest possible range (`right - left = 10,000`).
+    - `1` is not a prime, so a number with `1` set bit (i.e., powers of two) should not be counted.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Observations**
+- **Step 1:** Precompute all **prime numbers** up to 20 (since max bits for `10^6` is ~20), and store in a set (for fast lookup).
+- **Step 2:** For every `n` in `[left, right]`:
+    - Count the number of set bits in its binary representation (`__builtin_popcount` in C++).
+    - If the set bit count is prime (from our set), increment answer.
+- **Step 3:** Return the result.
 
-- Any *special binary string* can be decomposed into contiguous *top-level* special substrings.
-- To maximize lex order, we should order these top-level substrings in descending lex order, recursively applying the same process to their *insides*.
-- Thus, recursively:
-  1. **Split** the string into top-level special substrings.
-  2. **Recursively process** the insides.
-  3. Sort processed substrings in descending lex order and **concatenate**.
-
-### **Why this works?**
-- Swapping is only allowed between consecutive top-level special substrings (since special substrings can nest but cannot overlap).
-- Recursing ensures even nested structures are maximized.
-
-#### **Algorithm Steps**
-1. Decompose `s` into top-level special substrings:
-    - For each `i`: track a balance counter (`+1` for '1', `-1` for '0').
-    - When balance is zero, `s[start..i]` is a *special* substring.
-2. Recursively maximize inside each substring (after removing wrapping '1' and '0'), then re-wrap.
-3. After processing all substrings, **sort them in descending lex order**, then join.
+- **Complexity:**  
+  For each of up to 10,001 numbers, you count up to 20 bits:  
+  O(N), where N = `right-left+1` (≤ 10^4).
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
+#include <unordered_set>
+using namespace std;
+
 class Solution {
 public:
-    string makeLargestSpecial(string s) {
-        vector<string> subs;
-        int count = 0, start = 0;
-        int n = s.size();
-
-        for (int i = 0; i < n; ++i) {
-            count += (s[i] == '1' ? 1 : -1);
-            if (count == 0) {
-                // s[start] == '1', s[i] == '0', so inside is special
-                // Recursively process the inside
-                string inner = s.substr(start + 1, i - start - 1);
-                subs.push_back("1" + makeLargestSpecial(inner) + "0");
-                start = i + 1;
-            }
+    // Precompute all primes up to 20
+    bool isPrime(int x) {
+        static unordered_set<int> primes{2, 3, 5, 7, 11, 13, 17, 19};
+        return primes.count(x) > 0;
+    }
+    
+    int countPrimeSetBits(int left, int right) {
+        int count = 0;
+        for (int n = left; n <= right; ++n) {
+            int bits = __builtin_popcount(n);
+            if (isPrime(bits)) ++count;
         }
-        // Sort substrings in descending lex order
-        sort(subs.rbegin(), subs.rend());
-
-        string result;
-        for (const string& sub : subs) result += sub;
-        return result;
+        return count;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Walkthrough**
 
-### Input: `"11011000"`
+**Example:**  
+Input: `left = 6, right = 10`
 
-Let's step through the algorithm:
+Let's compute each number:
 
-#### **Step 1: Decomposition**
-- Track: `count` (start at 0)
-- i=0: '1' ➔ count=1
-- i=1: '1' ➔ count=2
-- i=2: '0' ➔ count=1
-- i=3: '1' ➔ count=2
-- i=4: '1' ➔ count=3
-- i=5: '0' ➔ count=2
-- i=6: '0' ➔ count=1
-- i=7: '0' ➔ count=0 (**split at 0-7**)
+| Number | Binary | Set Bits | Prime? |
+|--------|--------|----------|--------|
+| 6      | 110    | 2        | Yes    |
+| 7      | 111    | 3        | Yes    |
+| 8      | 1000   | 1        | No     |
+| 9      | 1001   | 2        | Yes    |
+| 10     | 1010   | 2        | Yes    |
 
-So only one top-level special substring: `"11011000"`
+- 6: 2 set bits → **prime**
+- 7: 3 set bits → **prime**
+- 8: 1 set bit  → not prime
+- 9: 2 set bits → **prime**
+- 10: 2 set bits → **prime**
 
-#### **Step 2: Find inner special substrings (inside indices 1..6 = `"101100"`)**
+**Total:** 4 numbers (`6, 7, 9, 10`) have a prime number of set bits.
 
-Decompose `"101100"`:
-- i=0: '1' ➔ count=1
-- i=1: '0' ➔ count=0 (**split at 0-1 ➔ `"10"`**)
-- i=2: '1' ➔ count=1
-- i=3: '1' ➔ count=2
-- i=4: '0' ➔ count=1
-- i=5: '0' ➔ count=0 (**split at 2-5 ➔ `"1100"`**)
-
-#### **Step 3: Recursively process insides**
-
-For `"101100"`'s subs: `"10"`, `"1100"`
-
-- `"10"` is already special and minimal (no inner substrings)
-- `"1100"`: inside is `"10"`, so process yields `"1" + "10" + "0" = "1100"`
-
-Sort `["10", "1100"]` descending: `"1100"`, `"10"`
-
-Concatenate: `"110010"`
-
-#### **Step 4: Rewrap and return**
-
-Outer: `"1" + "110010" + "0" = "11100100"`
+**Output:** `4`
 
 ---
 
-**Final output:**  
-`"11100100"`
-
----
-
-**Summary**  
-The optimal approach is to recursively decompose into top-level special substrings, process recursively, and sort at every level in lex descending order.
-
----
+Let me know if you'd like further clarification or Python code as well!
