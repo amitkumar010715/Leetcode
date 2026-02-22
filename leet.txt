@@ -1,93 +1,103 @@
-Let's break down the problem and provide everything requested:
+Sure! Here’s a comprehensive answer as per your requirements:
 
 ---
 
-## 1. **Short Summary**
+## **1. Short Summary**
 
-Given two integers, `left` and `right`, count how many numbers in the range `[left, right]` (inclusive) have a **prime number of set bits** in their binary representation (the number of `1`'s in their binary form).
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- `1 ≤ left ≤ right ≤ 10^6`
-- `0 ≤ right - left ≤ 10^4`  
-  (At most ~10,000 numbers to check – brute force per number is acceptable.)
-- The max number (`right`) is `10^6` (about 20 bits in binary).
-- **Edge cases:**
-    - Minimal range: `left == right` (single number).
-    - Numbers whose binary representation has very few set bits (e.g., powers of 2).
-    - Largest possible range (`right - left = 10,000`).
-    - `1` is not a prime, so a number with `1` set bit (i.e., powers of two) should not be counted.
+Given a positive integer `n`, find the longest distance between any two **adjacent** `1`s in its binary representation (distance is the number of bit positions between them, counted inclusively). Return `0` if there are fewer than two `1`s.
 
 ---
 
-## 3. **Optimal Algorithm**
+## **2. Constraints & Edge Cases**
 
-- **Step 1:** Precompute all **prime numbers** up to 20 (since max bits for `10^6` is ~20), and store in a set (for fast lookup).
-- **Step 2:** For every `n` in `[left, right]`:
-    - Count the number of set bits in its binary representation (`__builtin_popcount` in C++).
-    - If the set bit count is prime (from our set), increment answer.
-- **Step 3:** Return the result.
+**Constraints:**
+- `1 <= n <= 10^9`  
+  (n fits in 32 bits, so binary representation is at most 30 bits.)
 
-- **Complexity:**  
-  For each of up to 10,001 numbers, you count up to 20 bits:  
-  O(N), where N = `right-left+1` (≤ 10^4).
+**Edge Cases:**
+- `n` has only one `1` (like `n = 8` => `1000`), so no valid pair: **should return 0**.
+- `n` is very small (`n = 1`), so only one bit set: **return 0**.
+- `n` is of form `11...1` (like 15 => `1111`): all ones, gap is 1 everywhere, so answer is 1.
 
 ---
 
-## 4. **C++ Solution**
+## **3. Optimal Algorithm**
+
+### **Idea**
+
+We will scan the bits of `n` **from least significant to most significant (right to left)**, keeping track of the indices (bit positions) where we see `1`. Every time we find a new `1`, we compute the distance from the previous `1` and keep the largest gap seen.
+
+**Step-by-step:**
+1. Initialize `prev` to -1 (to track previous position of a `1`), `maxGap` to 0.
+2. For each bit position `i` (start at 0), if bit is `1`:
+    - If `prev != -1`, distance = `i - prev`, update `maxGap` if necessary.
+    - Update `prev` to `i`.
+3. Move to next bit (`i++`), right shift `n`.
+4. At the end, return `maxGap`.
+
+**Time Complexity:**  
+- O(log n): at most 30-32 steps.
+
+**Space Complexity:**  
+- O(1): only counters.
+
+---
+
+## **4. Clean C++ Solution**
 
 ```cpp
-#include <unordered_set>
-using namespace std;
-
 class Solution {
 public:
-    // Precompute all primes up to 20
-    bool isPrime(int x) {
-        static unordered_set<int> primes{2, 3, 5, 7, 11, 13, 17, 19};
-        return primes.count(x) > 0;
-    }
-    
-    int countPrimeSetBits(int left, int right) {
-        int count = 0;
-        for (int n = left; n <= right; ++n) {
-            int bits = __builtin_popcount(n);
-            if (isPrime(bits)) ++count;
+    int binaryGap(int n) {
+        int prev = -1;
+        int maxGap = 0;
+        int pos = 0;
+        while (n > 0) {
+            if (n & 1) {
+                if (prev != -1) {
+                    maxGap = std::max(maxGap, pos - prev);
+                }
+                prev = pos;
+            }
+            n >>= 1;
+            pos++;
         }
-        return count;
+        return maxGap;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## **5. Explanation of Example**
 
-**Example:**  
-Input: `left = 6, right = 10`
+Let’s explain **Example 1**:  
+**Input:** n = 22  
+**Binary:** 10110 (positions, from right (LSB): 0 1 2 3 4)
 
-Let's compute each number:
+Diagram:
+```
+4 3 2 1 0   (bit positions)
+1 0 1 1 0   (bits, 22)
+```
 
-| Number | Binary | Set Bits | Prime? |
-|--------|--------|----------|--------|
-| 6      | 110    | 2        | Yes    |
-| 7      | 111    | 3        | Yes    |
-| 8      | 1000   | 1        | No     |
-| 9      | 1001   | 2        | Yes    |
-| 10     | 1010   | 2        | Yes    |
+Scan from LSB (right):
+- At pos=1: found first 1.
+- At pos=2: found next 1, gap = 2-1 = 1 (**maxGap = 1**).
+- At pos=4: found another 1, gap = 4-2 = 2 (**maxGap = 2**).
 
-- 6: 2 set bits → **prime**
-- 7: 3 set bits → **prime**
-- 8: 1 set bit  → not prime
-- 9: 2 set bits → **prime**
-- 10: 2 set bits → **prime**
-
-**Total:** 4 numbers (`6, 7, 9, 10`) have a prime number of set bits.
-
-**Output:** `4`
+**No more 1s**, so answer is **2**.
 
 ---
 
-Let me know if you'd like further clarification or Python code as well!
+## **Summary Table**
+
+| n   | Binary | Gaps           | Answer |
+|-----|--------|----------------|--------|
+| 22  | 10110  | 2-1=1, 4-2=2   | 2      |
+| 8   | 1000   | none           | 0      |
+| 5   |  101   | 2-0=2          | 2      |
+
+---
+
+Let me know if you'd like further clarifications or Python/Java solutions!
