@@ -1,103 +1,119 @@
-Sure! Here’s a comprehensive answer as per your requirements:
+Certainly! Let's walk through the problem and solution:
 
 ---
 
-## **1. Short Summary**
+## 1. **Short Summary**
 
-Given a positive integer `n`, find the longest distance between any two **adjacent** `1`s in its binary representation (distance is the number of bit positions between them, counted inclusively). Return `0` if there are fewer than two `1`s.
-
----
-
-## **2. Constraints & Edge Cases**
-
-**Constraints:**
-- `1 <= n <= 10^9`  
-  (n fits in 32 bits, so binary representation is at most 30 bits.)
-
-**Edge Cases:**
-- `n` has only one `1` (like `n = 8` => `1000`), so no valid pair: **should return 0**.
-- `n` is very small (`n = 1`), so only one bit set: **return 0**.
-- `n` is of form `11...1` (like 15 => `1111`): all ones, gap is 1 everywhere, so answer is 1.
+Given a binary string `s` and an integer `k`, determine if **every possible binary code of length `k`** appears as a substring in `s`. There are `2^k` possible codes. If all appear, return true; else false.
 
 ---
 
-## **3. Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-### **Idea**
-
-We will scan the bits of `n` **from least significant to most significant (right to left)**, keeping track of the indices (bit positions) where we see `1`. Every time we find a new `1`, we compute the distance from the previous `1` and keep the largest gap seen.
-
-**Step-by-step:**
-1. Initialize `prev` to -1 (to track previous position of a `1`), `maxGap` to 0.
-2. For each bit position `i` (start at 0), if bit is `1`:
-    - If `prev != -1`, distance = `i - prev`, update `maxGap` if necessary.
-    - Update `prev` to `i`.
-3. Move to next bit (`i++`), right shift `n`.
-4. At the end, return `maxGap`.
-
-**Time Complexity:**  
-- O(log n): at most 30-32 steps.
-
-**Space Complexity:**  
-- O(1): only counters.
+- **Constraints:**
+  - `1 <= s.length <= 5 * 10^5`
+  - `1 <= k <= 20`
+  - `s[i]` is either `'0'` or `'1'`
+- **Edge Cases:**
+  - If `k > s.length`, impossible for all codes to appear: return `false`.
+  - If `k == 1`, need both "0" and "1" present.
+  - If `k == s.length`, only one substring exists; must check if all codes fit.
+  - Large values of `k` (up to 20) mean there can be up to about a million codes (`2^20 = 1048576`). 
 
 ---
 
-## **4. Clean C++ Solution**
+## 3. **Optimal Algorithm**
+
+Given the large limits, we need an efficient way:
+- There are at most `s.length - k + 1` substrings of length `k` in `s`.
+- Each code is a binary string, which we can map to an integer in `0..2^k-1`.
+- Use a **bitset** or an **unordered_set<int>** to record seen codes.
+- Use a rolling hash (convert substrings to integer values efficiently).
+
+**Algorithm Steps:**
+1. Edge case: if `k > s.length`, return false.
+2. Use a rolling integer to encode the last `k` bits as we iterate.
+3. For each position once the first window is ready:
+   - Add the integer value to a set/bitset.
+   - If ever all `2^k` codes are seen, return true (early stopping).
+4. Return `true` if all codes seen, else `false`.
+
+**Complexity:**  
+- **Time:** O(n)  
+- **Space:** O(2^k) (for the set/bitset)  
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
+#include <string>
+#include <unordered_set>
+using namespace std;
+
 class Solution {
 public:
-    int binaryGap(int n) {
-        int prev = -1;
-        int maxGap = 0;
-        int pos = 0;
-        while (n > 0) {
-            if (n & 1) {
-                if (prev != -1) {
-                    maxGap = std::max(maxGap, pos - prev);
-                }
-                prev = pos;
+    bool hasAllCodes(string s, int k) {
+        int need = 1 << k; // total codes needed
+        int allOnes = need - 1;  // mask for last k bits
+        unordered_set<int> seen;
+        int hash = 0;
+        int n = s.size();
+        
+        for (int i = 0; i < n; ++i) {
+            // shift in the next bit
+            hash = ((hash << 1) & allOnes) | (s[i] - '0');
+            if (i >= k - 1) {
+                // start recording from i == k - 1
+                seen.insert(hash);
+                if ((int)seen.size() == need) return true; // early exit
             }
-            n >>= 1;
-            pos++;
         }
-        return maxGap;
+        return (int)seen.size() == need;
     }
 };
 ```
 
 ---
 
-## **5. Explanation of Example**
+## 5. **Example Explained**
 
-Let’s explain **Example 1**:  
-**Input:** n = 22  
-**Binary:** 10110 (positions, from right (LSB): 0 1 2 3 4)
+**Example Input:**  
+`s = "00110110", k = 2`
 
-Diagram:
-```
-4 3 2 1 0   (bit positions)
-1 0 1 1 0   (bits, 22)
-```
+**All possible codes of length 2:**  
+- "00" (binary 0)
+- "01" (binary 1)
+- "10" (binary 2)
+- "11" (binary 3)
 
-Scan from LSB (right):
-- At pos=1: found first 1.
-- At pos=2: found next 1, gap = 2-1 = 1 (**maxGap = 1**).
-- At pos=4: found another 1, gap = 4-2 = 2 (**maxGap = 2**).
+**Check substrings of length 2:**
+- `s[0..1] = "00"`
+- `s[1..2] = "01"`
+- `s[2..3] = "11"`
+- `s[3..4] = "10"`
+- `s[4..5] = "01"`
+- `s[5..6] = "11"`
+- `s[6..7] = "10"`
 
-**No more 1s**, so answer is **2**.
-
----
-
-## **Summary Table**
-
-| n   | Binary | Gaps           | Answer |
-|-----|--------|----------------|--------|
-| 22  | 10110  | 2-1=1, 4-2=2   | 2      |
-| 8   | 1000   | none           | 0      |
-| 5   |  101   | 2-0=2          | 2      |
+Collecting unique codes, we see all four ("00", "01", "10", "11") occur, so return **true**.
 
 ---
 
-Let me know if you'd like further clarifications or Python/Java solutions!
+**Summary Table:**
+
+| Window Index | Substring | Binary #
+|--------------|-----------|----------
+| 0            | '00'      | 0
+| 1            | '01'      | 1
+| 2            | '11'      | 3
+| 3            | '10'      | 2
+| 4            | '01'      | 1
+| 5            | '11'      | 3
+| 6            | '10'      | 2
+
+All codes covered!
+
+---
+
+If you need an explanation for any other example or more detail on the rolling hash, just ask!
