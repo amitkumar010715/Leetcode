@@ -1,101 +1,114 @@
-Sure, let’s go through the solution step by step:
+Let's break down the problem and provide a complete solution:
 
 ---
 
-## 1. Short Summary
+## 1. **Short Summary**
 
-Given a binary tree where each node contains a `0` or `1`, each root-to-leaf path forms a binary number. The task is to **sum** all such numbers for every root-to-leaf path.
-
----
-
-## 2. Constraints & Edge Cases
-
-**Constraints:**
-- The tree has 1 to 1000 nodes (manageable for DFS).
-- Node values are only `0` or `1`.
-- The sum fits in a 32-bit integer (no overflow concerns).
-
-**Edge Cases:**
-- Tree with only the root node.
-- All left-leaning or right-leaning trees.
-- Unbalanced trees.
-- All paths yield binary numbers with leading zeros.
+Given an integer array, sort its elements based on the number of `1`s in their binary representation (bit count). For numbers with the same bit count, sort by their numeric value in ascending order.
 
 ---
 
-## 3. Optimal Algorithm
+## 2. **Constraints & Edge Cases**
 
-### Approach
-
-We'll use **DFS (depth-first search)** to traverse the tree:
-
-- At each node, we keep a running number (`curr`), forming the binary number as we descend.
-- As we traverse:  
-  - At each step, perform `curr = (curr << 1) | node->val`.
-- On reaching a leaf, we add the current binary number to the running total.
-
-### Time & Space Complexity
-
-- **Time:** O(n), since we visit each node once.
-- **Space:** O(h), where `h` is height of the tree (stack space).
+- **Constraints**
+  - `1 <= arr.length <= 500`
+  - `0 <= arr[i] <= 10^4`
+- **Edge Cases**
+  - All elements are the same (`[5,5,5]`).
+  - All elements have the same bit count (`[2, 4, 8, 16]`).
+  - The array includes `0`, which has a bit count of 0.
+  - The array is already sorted either by value or bit count.
 
 ---
 
-## 4. Clean C++ Solution
+## 3. **Optimal Algorithm**
+
+- Calculate the number of set bits (`1`s) for each element (can use built-in functions or implement it manually).
+- Sort using a custom comparator:
+    - **First** by set bit count (ascending).
+    - **Second** by actual value (ascending).
+- This can be done in `O(N log N)` time.
+
+**Bit Counting:**  
+For each integer `x`, you can use `__builtin_popcount(x)` in C++ (or manually count by shifting and masking).
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
-/**
- * Definition for a binary tree node.
- * struct TreeNode {
- *     int val;
- *     TreeNode *left;
- *     TreeNode *right;
- *     TreeNode() : val(0), left(nullptr), right(nullptr) {}
- *     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
- *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
- * };
- */
+#include <vector>
+#include <algorithm>
+
 class Solution {
 public:
-    int sumRootToLeaf(TreeNode* root) {
-        return dfs(root, 0);
+    int bitCount(int x) {
+        int count = 0;
+        while (x) {
+            x &= (x - 1); // Remove the lowest set bit
+            ++count;
+        }
+        return count;
     }
     
-    int dfs(TreeNode* node, int curr) {
-        if (!node) return 0;
-        curr = (curr << 1) | node->val;
-        // If leaf, return the current sum
-        if (!node->left && !node->right) {
-            return curr;
-        }
-        // Otherwise, sum left and right subtree
-        return dfs(node->left, curr) + dfs(node->right, curr);
+    std::vector<int> sortByBits(std::vector<int>& arr) {
+        std::sort(arr.begin(), arr.end(), [this](int a, int b) {
+            int ca = bitCount(a), cb = bitCount(b);
+            if (ca == cb)
+                return a < b;
+            return ca < cb;
+        });
+        return arr;
+    }
+};
+```
+
+- If your compiler supports it, replace `bitCount(x)` with `__builtin_popcount(x)` (GNU/Clang) or `std::popcount(x)` (C++20):
+
+```cpp
+#include <vector>
+#include <algorithm>
+
+class Solution {
+public:
+    std::vector<int> sortByBits(std::vector<int>& arr) {
+        std::sort(arr.begin(), arr.end(), [](int a, int b) {
+            int ca = __builtin_popcount(a), cb = __builtin_popcount(b);
+            if (ca == cb)
+                return a < b;
+            return ca < cb;
+        });
+        return arr;
     }
 };
 ```
 
 ---
 
-## 5. Example Explanation
+## 5. **Example Explanation**
 
-Consider the tree:
-```
-      1
-     / \
-    0   1
-   / \ / \
-  0  1 0  1
-```
-Paths (Root to Leaf):
-- 1→0→0 = 100 (binary) = 4
-- 1→0→1 = 101 (binary) = 5
-- 1→1→0 = 110 (binary) = 6
-- 1→1→1 = 111 (binary) = 7
+**Input:** `arr = [0,1,2,3,4,5,6,7,8]`
 
-**Sum:** 4 + 5 + 6 + 7 = 22
+- **Bit counts:**
+    - `0  = 0b0000` → **0** ones
+    - `1  = 0b0001` → **1** one
+    - `2  = 0b0010` → **1** one
+    - `3  = 0b0011` → **2** ones
+    - `4  = 0b0100` → **1** one
+    - `5  = 0b0101` → **2** ones
+    - `6  = 0b0110` → **2** ones
+    - `7  = 0b0111` → **3** ones
+    - `8  = 0b1000` → **1** one
 
-The C++ code builds each binary number from the root to the leaf and sums up their decimal values, yielding the correct output `22` for this example.
+- **Group by number of 1's:**
+    - `0` → [0] (0 ones)
+    - `1` → [1,2,4,8] (1 one)
+    - `2` → [3,5,6] (2 ones)
+    - `3` → [7] (3 ones)
+
+- **Result (merge all groups, each sorted numerically):**
+    - `[0, 1, 2, 4, 8, 3, 5, 6, 7]`
 
 ---
 
-Let me know if you want the iterative version or more details!
+If you have any specific follow-ups or want code using a different approach, let me know!
