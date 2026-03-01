@@ -1,52 +1,37 @@
-Let's break down the problem and solve it step by step:
+Let's break down the solution as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a number `n`, consider all numbers from 1 to n, write each in binary, and concatenate their binary strings together. Convert the resulting huge binary string into a decimal number and return its value modulo \( 10^9+7 \).
+To partition a number `n` (as a string) into the minimum number of **deci-binary** numbers (numbers with digits only 0 or 1), you need as many deci-binary numbers as the largest digit in `n`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints**:
-  - `1 ≤ n ≤ 10^5`
-  - The problem is about constructing and interpreting a huge binary number—so string operations are impractical (memory and time!).
-  - The modulo ensures the value stays within practical bounds.
-- **Edge Cases**:
-  - For small n (e.g., 1), the binary string is "1" → output is 1.
-  - For large n (up to \( 10^5 \)), must avoid forming large strings or numbers directly.
-  - Always positive integers.
+- `1 <= n.length <= 10^5` — `n` can be very large, so we can't convert it to an integer.
+- `n` consists only of digits, and **no leading zeros**.
+- Edge cases:
+    - Single digit (`n = "1"` or `"9"`) — answer is the digit.
+    - Very large numbers — must process as strings only.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Observations
+**Key Insight:**
+Each deci-binary number can contribute at most **1** toward each digit. To construct a digit `d` in position `i`, we need at least `d` deci-binary numbers so that their sum at position `i` is `d`.
 
-Instead of forming large binary strings:
-- For each integer `i` from 1 to n:
-    1. Find the binary length (`len`) of `i`.
-    2. Left shift the current result by `len` bits, then OR with `i`.
-    3. Take modulo at each step to prevent overflow.
+**Therefore:**
+The minimum number is the **maximum digit** in `n`.
 
-In C++, you can use the function `__builtin_clz` or just use simple bit length observation.
+**Algorithm:**
+- Scan `n`.
+- Find the maximum digit.
+- Return that digit (as an integer).
 
-To find `len` efficiently:
-- The binary length of `i` is `floor(log2(i)) + 1`
-- Or, we can just increment `len` whenever `i` is a power of two.
-
-Here’s the idea:
-```cpp
-int ans = 0;
-int L = 0; // Number of bits needed
-for (int i = 1; i <= n; i++) {
-    if ((i & (i - 1)) == 0) L++; // If i is a power of two, increase length
-    ans = ((1LL * ans << L) | i) % MOD;
-}
-```
-`(i & (i-1)) == 0` is a power of two test.
+**Time Complexity:** O(n), where n is the number of digits.
 
 ---
 
@@ -55,53 +40,32 @@ for (int i = 1; i <= n; i++) {
 ```cpp
 class Solution {
 public:
-    int concatenatedBinary(int n) {
-        const int MOD = 1e9 + 7;
-        long long ans = 0;
-        int len = 0;
-        for (int i = 1; i <= n; ++i) {
-            // Check if i is a power of two
-            if ((i & (i - 1)) == 0) ++len;
-            ans = ((ans << len) % MOD + i) % MOD;
+    int minPartitions(string n) {
+        char max_digit = '0';
+        for (char c : n) {
+            if (c > max_digit) max_digit = c;
         }
-        return (int)ans;
+        return max_digit - '0';
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-Let's take **n = 3**:
+**Example:**  
+n = "82734"
 
-- Numbers: 1 ("1"), 2 ("10"), 3 ("11")
-- Concatenated: `"1" + "10" + "11"` → `"11011"`
+**Step-by-Step:**
+- The digits are: `8, 2, 7, 3, 4`
+- The maximum digit is `8`
+- So, we need at least 8 deci-binary numbers whose sum is "82734".
 
-Step by step:
-- `ans = 0, len = 0`
-- For i = 1:
-    - It's a power of two, len = 1
-    - ans = (0 << 1) + 1 = 1
-- For i = 2:
-    - It's a power of two, len = 2
-    - ans = (1 << 2) + 2 = 4 + 2 = 6
-- For i = 3:
-    - Not a power of two, len = 2
-    - ans = (6 << 2) + 3 = 24 + 3 = 27
-
-So, the answer is **27**.
+**Why?**  
+Because, for the highest digit `8`, you need to stack up at least 8 deci-binary numbers with `1` in that position to reach 8. You cannot do it with 7 or fewer.
 
 ---
 
-## **Summary Table**
-
-| i | len | ans (before) | ans (after) |
-|---|-----|--------------|-------------|
-| 1 | 1   | 0            | 1           |
-| 2 | 2   | 1            | 6           |
-| 3 | 2   | 6            | 27          |
-
----
-
-**This approach is O(n), works efficiently under the constraints, and is memory- and time-optimal!**
+**In short:**  
+**Answer is the maximum digit in `n`.**
