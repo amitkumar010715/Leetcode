@@ -1,71 +1,117 @@
-Let's break down the solution as requested:
+Let's break down the problem and solve it step by step.
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-To partition a number `n` (as a string) into the minimum number of **deci-binary** numbers (numbers with digits only 0 or 1), you need as many deci-binary numbers as the largest digit in `n`.
+Given an n x n binary grid, you can swap two **adjacent rows** any number of times. Your goal is to **rearrange the rows** such that all cells **above the main diagonal** are zeros (i.e., for all `i < j`, `grid[i][j] == 0`). Find the **minimum number of swaps** needed, or return -1 if it is impossible.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= n.length <= 10^5` — `n` can be very large, so we can't convert it to an integer.
-- `n` consists only of digits, and **no leading zeros**.
-- Edge cases:
-    - Single digit (`n = "1"` or `"9"`) — answer is the digit.
-    - Very large numbers — must process as strings only.
+- `1 ≤ n ≤ 200` (so brute force row permutations is infeasible)
+- Each cell is either 0 or 1.
+- For **validity**, row *i* must have zeros at all indices `j` where `j > i`.
+- Some rows may be impossible to move to the required position if they don't have enough trailing zeros.
+- **Edge Cases:**
+  - All zeros → already valid.
+  - Some row cannot satisfy the required trailing zero count, so impossible for that i.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Key Insight:**
-Each deci-binary number can contribute at most **1** toward each digit. To construct a digit `d` in position `i`, we need at least `d` deci-binary numbers so that their sum at position `i` is `d`.
+### Key Idea
 
-**Therefore:**
-The minimum number is the **maximum digit** in `n`.
+- Rearranging rows is like sorting them to match diagonal constraints. Swapping adjacent rows is like performing a bubble sort where you can only swap neighboring elements.
+- For each row `i`, you need (at least) `n - i - 1` **trailing zeros** (positions right of the diagonal).
+- Precompute for each row the **number of trailing zeros**.
+- For row `i`, find the **first row (from i to n-1)** that has at least `n-i-1` trailing zeros. If not found, return -1.
+  - Otherwise: swap it up to position `i` (each swap moves it up by 1, like bubble sort), increment swap count by (`found_index - i`), and proceed to next `i`.
 
-**Algorithm:**
-- Scan `n`.
-- Find the maximum digit.
-- Return that digit (as an integer).
+### Steps
 
-**Time Complexity:** O(n), where n is the number of digits.
+1. For each row, count **number of zeros at the end of the row** (trailing zeros).
+2. For each row `i` from `0` to `n-1`:
+    - Calculate `need = n - i - 1` trailing zeros.
+    - Starting from row `i`, look for first row with at least `need` trailing zeros.
+    - If not found, return -1.
+    - Else, bubble it up to position `i` (costs `row_found - i` swaps), update the trailing zero counts accordingly.
+3. Return total number of swaps.
+
+This is **O(N^2)** time complexity—acceptable for `n ≤ 200`.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+using namespace std;
+
 class Solution {
 public:
-    int minPartitions(string n) {
-        char max_digit = '0';
-        for (char c : n) {
-            if (c > max_digit) max_digit = c;
+    int minSwaps(vector<vector<int>>& grid) {
+        int n = grid.size();
+        vector<int> trailingZeros(n, 0);
+        // Step 1: Calculate trailing zeros for each row
+        for (int i = 0; i < n; ++i) {
+            int cnt = 0;
+            for (int j = n - 1; j >= 0; --j) {
+                if (grid[i][j] == 0) ++cnt;
+                else break;
+            }
+            trailingZeros[i] = cnt;
         }
-        return max_digit - '0';
+
+        int ans = 0;
+        // Step 2: For each row, find suitable row to swap up
+        for (int i = 0; i < n; ++i) {
+            int need = n - i - 1;
+            int j = i;
+            while (j < n && trailingZeros[j] < need) ++j;
+            if (j == n) return -1; // Not found
+            // Swap up, increase count
+            while (j > i) {
+                swap(trailingZeros[j], trailingZeros[j - 1]);
+                --j;
+                ++ans;
+            }
+        }
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-**Example:**  
-n = "82734"
+Consider: `grid = [[0,0,1],[1,1,0],[1,0,0]]`
 
-**Step-by-Step:**
-- The digits are: `8, 2, 7, 3, 4`
-- The maximum digit is `8`
-- So, we need at least 8 deci-binary numbers whose sum is "82734".
+- Compute trailing zeros for each row:
+    - Row 0: [0,0,1] → 0 zeros at end
+    - Row 1: [1,1,0] → 1 zero at end
+    - Row 2: [1,0,0] → 2 zeros at end
+    - trailingZeros = `[0, 1, 2]`
+- For position 0 (need at least 2 trailing zeros):
+    - Row 2 has 2 → Found at index 2, swap it up (swap with row 1, then row 0): **2 swaps**
+    - trailingZeros after swaps: [2,0,1]
+- For position 1 (need at least 1 trailing zero):
+    - Rows 1 or 2: row 2 at index 2 has 1 trailing zero, swap up one place: **1 swap**
+    - trailingZeros after swap: [2,1,0]
+- For position 2 (need 0 trailing zeros): done.
 
-**Why?**  
-Because, for the highest digit `8`, you need to stack up at least 8 deci-binary numbers with `1` in that position to reach 8. You cannot do it with 7 or fewer.
+Total swaps: 2 + 1 = **3**
 
 ---
 
-**In short:**  
-**Answer is the maximum digit in `n`.**
+> **In summary:**  
+> For each row `i`, you bubble the first row with enough trailing zeros up to position `i`, adding to the swaps.  
+> If you can't find such a row, return -1; otherwise, sum up swaps.
+
+---
+
+**This covers the summary, edge cases, algorithm, clean code, and example.**  
+Let me know if you want Python, Java, or a more detailed trace!
