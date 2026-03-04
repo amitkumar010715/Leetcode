@@ -1,147 +1,95 @@
-Let's go through your requirements step by step:
+Let's solve the problem step by step:
 
 ---
 
-### 1. **Short Summary**
+## 1. **Short Summary**
 
-Given values `n` and `k`, you want the `k`-th bit (1-indexed) of a recursively constructed binary string:
-- **Base:** S₁ = "0"
-- **Recurrence:** Sᵢ = Sᵢ₋₁ + "1" + reverse(invert(Sᵢ₋₁))
-
-You **RETURN** the k-th bit in Sₙ without building the full string (which explodes exponentially).
+Given an `m x n` binary matrix, **count the number of "special positions"**. A position `(i, j)` is "special" if:
+- `mat[i][j] == 1`
+- All other cells in row `i` and column `j` are `0`.
 
 ---
 
-### 2. **Constraints & Edge Cases**
+## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - 1 ≤ n ≤ 20
-  - 1 ≤ k ≤ 2ⁿ - 1 (length of Sₙ is always odd and exponential)
-- **Edge Cases:**
-  - k = 1 (first character)
-  - k = 2ⁿ - 1 (last character)
-  - n = 1 (S₁ = "0")
-- You CANNOT build the entire string for large n due to exponential size (even for n=20, Sₙ has nearly a million bits!).
-
----
-
-### 3. **Optimal Algorithm**
-
-#### **Key Insight:**
-
-- **Structure of Sₙ:**
-  - Sₙ = [Sₙ₋₁] + '1' + reverse(invert([Sₙ₋₁]))
-
-- **Observation:**
-  - The string is symmetrical, with a center '1'. The right half is reverse(invert) of the left.
-
-#### **Recursive Solution:**
-
-Let lenₙ = 2ⁿ - 1 (length of Sₙ)
-
-- **If k == mid** (mid = (lenₙ / 2) + 1, the center):  
-    → Return '1'
-
-- **If k < mid** (in the left part, which is Sₙ₋₁):  
-    → The k-th bit is the same as in Sₙ₋₁.
-
-- **If k > mid** (in the right part):  
-    → Corresponds to reverse(invert(Sₙ₋₁)).
-    → Let mirrored = lenₙ - k + 1 (the symmetric counterpart in Sₙ₋₁).
-    → The answer is INVERT( result(n-1, mirrored) )
-
-#### **Pseudocode:**
-
-```text
-FindKthBit(n, k):
-    if n == 1: return '0'
-    mid = (1 << (n-1))
-    if k == mid:
-        return '1'
-    elif k < mid:
-        return FindKthBit(n-1, k)
-    else:
-        mirrored = (1 << n) - k
-        return invert(FindKthBit(n-1, mirrored))
-```
-
-- **invert('0') = '1', invert('1') = '0'**
-
-#### **Time Complexity:** O(n)
-- Max recursion depth is n.
+- `1 <= m, n <= 100` (matrix can be up to 100 x 100, so brute force O(m * n * (m + n)) is acceptable, but O(m * n) is ideal).
+- All cell values are only `0` or `1`.
+- Edge cases:
+    - Matrix with only one row or one column.
+    - Matrix with no `1`s, or all zeros.
+    - Multiple `1`s in a row or column (none of those can be a special position).
+    - Multiple special positions are possible.
 
 ---
 
-### 4. **Clean C++ Solution**
+## 3. **Optimal Algorithm**
+
+1. **Count `1`s in each row and each column:**  
+    - For each row `i`, compute `row_count[i] = sum of 1s in row i`.
+    - For each column `j`, compute `col_count[j] = sum of 1s in column j`.
+    - This takes O(m*n) time.
+
+2. **Check each position:**
+    - For all positions `(i, j)` where `mat[i][j] == 1`, if `row_count[i] == 1` **and** `col_count[j] == 1`, then this is a special position.
+    - This check in O(1) time, overall O(m*n).
+
+**Total Time Complexity:** O(m*n)  
+**Space:** O(m+n) for row and column counts.
+
+---
+
+## 4. **Clean C++ Solution**
 
 ```cpp
 class Solution {
 public:
-    char findKthBit(int n, int k) {
-        if (n == 1) return '0';
-        int mid = 1 << (n - 1);
-        if (k == mid) return '1';
-        if (k < mid) {
-            return findKthBit(n - 1, k);
-        } else {
-            char bit = findKthBit(n - 1, (1 << n) - k);
-            return bit == '0' ? '1' : '0';
-        }
+    int numSpecial(vector<vector<int>>& mat) {
+        int m = mat.size(), n = mat[0].size();
+        vector<int> rowCount(m, 0), colCount(n, 0);
+
+        // Count 1s in each row and column
+        for (int i = 0; i < m; ++i)
+            for (int j = 0; j < n; ++j)
+                if (mat[i][j] == 1) {
+                    ++rowCount[i];
+                    ++colCount[j];
+                }
+        
+        int result = 0;
+        // Check each cell
+        for (int i = 0; i < m; ++i)
+            for (int j = 0; j < n; ++j)
+                if (mat[i][j] == 1 && rowCount[i] == 1 && colCount[j] == 1)
+                    ++result;
+        
+        return result;
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation**
+## 5. **Example Explained**
 
-#### **Example: n = 4, k = 11**
+**Example 2 Input:**
+```
+mat = [
+  [1,0,0],
+  [0,1,0],
+  [0,0,1]
+]
+```
+- `rowCount = [1, 1, 1]`
+- `colCount = [1, 1, 1]`
 
-Let's walk through the recursion.
+Check positions:
+- `(0,0) == 1` and `rowCount[0]==1` and `colCount[0]==1` ⇒ **special**
+- `(1,1) == 1` and `rowCount[1]==1` and `colCount[1]==1` ⇒ **special**
+- `(2,2) == 1` and `rowCount[2]==1` and `colCount[2]==1` ⇒ **special**
 
-- **Compute:** S₄, k = 11
-- Length of S₄ = 2⁴ - 1 = 15
-- Center (mid) = 8
-
-1. **k = 11 > 8**, so we are in the right part.
-    - mirrored = 16 - 11 = 5
-    - Find S₃, k=5, and invert the bit.
-
-2. **S₃**, mid = 4
-    - k = 5 > 4, right part
-    - mirrored = 8 - 5 = 3
-    - Find S₂, k=3, invert.
-
-3. **S₂**, mid = 2
-    - k = 3 > 2, right part
-    - mirrored = 4 - 3 = 1
-    - Find S₁, k=1, invert.
-
-4. **S₁, k=1:** return '0'.
-
-Now, go back up inverts:
-- invert '0' = '1' (S₂)
-- invert '1' = '0' (S₃)
-- invert '0' = '1' (S₄)
-
-**The answer:** `"1"`
+**Output:** `3` (all diagonal '1's are special positions).
 
 ---
 
-## **Summary Table**
-
-| Step         | n | k     | mid | mirrored | Action                | Bit       |
-|--------------|---|-------|-----|----------|-----------------------|-----------|
-| S₄, k=11     | 4 | 11    | 8   | 5        | S₃, 5, invert        | ?         |
-| S₃, k=5      | 3 | 5     | 4   | 3        | S₂, 3, invert        | ?         |
-| S₂, k=3      | 2 | 3     | 2   | 1        | S₁, 1, invert        | ?         |
-| S₁, k=1      | 1 | 1     | -   | -        | base case            | '0'       |
-| back S₂, 3   |   |       |     |          | invert('0')          | '1'       |
-| back S₃, 5   |   |       |     |          | invert('1')          | '0'       |
-| back S₄, 11  |   |       |     |          | invert('0')          | '1'       |
-
-**Final Answer:** `"1"`
-
----
-
-Let me know if you want an **iterative** version as well!
+**In summary:**  
+We efficiently count the number of '1's in each row and column, then check only the positions with a unique '1' in both its row and column to find special positions. This gives an O(m*n) solution with simple code!
