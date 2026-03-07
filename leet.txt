@@ -1,45 +1,48 @@
-Let's break down and solve the problem:
+Let's solve the LeetCode problem **"Minimum Number of Flips to Make the Binary String Alternating"** step-by-step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-You are given a binary string `s` (no leading zeros). Return `true` if all `1`s in `s` form **at most one contiguous segment** (block); otherwise, return `false`.
+Given a binary string, you can repeatedly rotate (move first char to the end) and/or flip any character (`0 <-> 1`). The goal is to **minimize** the number of flips needed so, after any number of rotations, the string becomes alternating (like `"0101..."` or `"1010..."`). Return this minimum number of flips.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- `1 <= s.length <= 100` — short length, can check character by character.
-- Each character is `'0'` or `'1'`.
-- `s[0] == '1'` — no leading zeros.
-
-**Edge Cases:**
-- All `1`s: e.g., `"111111"` → `true`
-- No `0` at all: same as above.
-- All `1`s at start, then all `0`s: `"1110000"` → `true`
-- `1`s, then `0`s, then more `1`s: `"110011"` → `false`
-- Only one `1`: `"1"` or `"100"` → `true`
-- Alternating: `"101"` → `false`
-- String like `"10"` or `"1"` → `true`
+- **Length:** `1 <= s.length <= 1e5` (so `O(N)` is required)
+- **Characters:** Only '0' and '1'
+- The string can be rotated any number of times; so the *starting position is flexible*
+- Goal: Minimize flips for any arrangement.
+  
+**Edge Cases**:
+- Already alternating: no flips needed
+- All same character: up to half need flipping
+- Length can be odd or even
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-We need to check **how many segments of `1`s** there are.
-Key idea: Once a `0` is found after a block of `1`s, if another `1` is found later, that's a new segment and we should return `false`.
+**Key observations**:
+- There are only **two possible alternating patterns** for a string of length N:
+    1. Pattern A: 0,1,0,1,0,1...
+    2. Pattern B: 1,0,1,0,1,0...
 
-### Approach
-- Use a flag (e.g., `found_zero`) to track if we've seen a `0` **after** the first segment of `1`s.
-- Loop through the string:
-  - If we see a `0`, set `found_zero=true`
-  - If we see a `1` **after** we've seen a `0`, return `false`.
+- Since rotation is allowed, we must check **all possible cyclic substrings of length N** in the original string. (Rotating string is equivalent to picking any length-N window on `s+s`).
 
-### Complexity
-- **Time:** O(n)
-- **Space:** O(1)
+**Efficient approach (sliding window):**
+1. Create string `t = s + s` to easily simulate all rotations.
+2. For each possible rotation (i.e., each window of length N in t), compute:
+    - The number of flips to Pattern A within window
+    - The number of flips to Pattern B within window
+3. The minimal flips over all rotations & patterns is the answer.
+
+**Sliding window detail**:
+- Precompute `patternA` and `patternB` for length `2*N`
+- Count mismatches for the first window, then slide one by one, updating count efficiently (`O(1)`/slide).
+
+**Time Complexity:** `O(N)`
 
 ---
 
@@ -48,50 +51,69 @@ Key idea: Once a `0` is found after a block of `1`s, if another `1` is found lat
 ```cpp
 class Solution {
 public:
-    bool checkOnesSegment(string s) {
-        bool found_zero = false;
-        for (char c : s) {
-            if (c == '0') {
-                found_zero = true;
-            } else { // c == '1'
-                if (found_zero) {
-                    // Found a '1' after a '0'
-                    return false;
-                }
-            }
+    int minFlips(string s) {
+        int n = s.size();
+        string t = s + s; // Simulate all rotations
+
+        // Build pattern A and B for t
+        vector<int> patternA(2*n), patternB(2*n);
+        for (int i = 0; i < 2 * n; ++i) {
+            patternA[i] = i % 2;         // "010101..." (starts with '0')
+            patternB[i] = 1 - (i % 2);   // "101010..." (starts with '1')
         }
-        return true;
+
+        // Count initial differences for the first window
+        int diffA = 0, diffB = 0, res = n; // min can be at most n
+        for (int i = 0; i < n; ++i) {
+            diffA += ((t[i] - '0') != patternA[i]);
+            diffB += ((t[i] - '0') != patternB[i]);
+        }
+        res = min(diffA, diffB);
+
+        // Slide window over t
+        for (int i = n; i < 2*n; ++i) {
+            // Remove effect of outgoing char (i-n), add incoming char (i)
+            // For Pattern A
+            diffA -= ((t[i - n] - '0') != patternA[i - n]);
+            diffA += ((t[i]     - '0') != patternA[i]);
+            // For Pattern B
+            diffB -= ((t[i - n] - '0') != patternB[i - n]);
+            diffB += ((t[i]     - '0') != patternB[i]);
+            // Update min
+            res = min(res, min(diffA, diffB));
+        }
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-**Example**:  
-Input: `"1001"`
-- First character: `'1'` — first segment starts.
-- Second character: `'0'` — end of first segment, set found_zero = true.
-- Third character: `'0'` — keep found_zero true.
-- Fourth character: `'1'` — we've seen a zero before and now a new `1`, so we know there is a **second segment of ones**.
+### Example: `s = "111000"`
 
-**Output:** `false`
+- `n = 6`
+- Patterns for length 6:  
+  - "010101"
+  - "101010"
+
+- Form `"111000111000"` (s+s)
+- Now, slide window of 6:
+
+    | Window            | Flips to "010101" | Flips to "101010" |
+    |-------------------|-------------------|-------------------|
+    | 1 1 1 0 0 0       | 4                 | 2                 |
+    | 1 1 0 0 0 1       | 3                 | 3                 |
+    | 1 0 0 0 1 1       | 2                 | 4                 |
+    | 0 0 0 1 1 1       | 2                 | 4                 |
+    | 0 0 1 1 1 0       | 3                 | 3                 |
+    | 0 1 1 1 0 0       | 4                 | 2                 |
+
+- Minimum flips over all is **2**.
+
+**So, answer is `2`.**
 
 ---
 
-**Summary Table of Examples:**
-
-| `s`      | Output | Reason                                                                                            |
-|----------|--------|---------------------------------------------------------------------------------------------------|
-| "1"      | true   | Only 1, one segment.                                                                              |
-| "110"    | true   | All ones at the start, then zeros. One segment.                                                   |
-| "1001"   | false  | 1s, then 0s, then more 1s: two segments of ones.                                                  |
-| "101"    | false  | 1,0,1: two segments.                                                                              |
-| "111"    | true   | All ones. One segment.                                                                            |
-| "10"     | true   | 1,0: one segment.                                                                                 |
-
-
----
-
-Let me know if you need further clarifications!
+Let me know if you want test code or further explanation!
