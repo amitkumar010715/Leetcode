@@ -1,160 +1,67 @@
-Let's break down the problem and solution:
+Sure! Here’s a structured solution:
 
 ---
 
 ## 1. **Short Summary**
 
-We are asked to count the number of binary arrays of length `zero + one` that have exactly `zero` zeroes and `one` ones, with the **additional constraint:** every subarray of length **greater than `limit`** must contain both 0 and 1 (i.e., cannot be all 0s or all 1s). Find the count modulo \( 10^9+7 \).
+Given a non-negative integer `n`, the problem asks for its *bitwise complement* with respect to its binary representation (i.e., flip every bit from 0 to 1 and vice versa), and to return the corresponding integer value.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Main constraints:**
-  - `zero, one, limit` ∈ [1, 1000]
-- **Edge cases:**
-  - If the limit is equal to or greater than `zero + one`, *any* array is valid.
-  - If `zero` or `one` is 0, only one type of value is present; but problem guarantees positive for both.
-  - When `limit = 1`, no two consecutive 0s or 1s can appear (no two of same in a row).
-  - If `limit` is large, arranging is only subject to used count.
+- **Constraints:**  
+  - `0 <= n < 10^9`
+- **Edge Cases:**  
+  - `n = 0`: Binary is "0"; flipping gives "1" (`1` in decimal).
+  - Input always fits within a 32-bit signed integer.
+  - The complement should only flip the bits in the original number's binary digits (i.e., leading zeros are ignored).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Let’s formalize the constraints:
+1. **Find a bitmask** that has 1s in all places where `n` has bits (i.e., the smallest number of the form 2^k - 1 that is >= n). For instance, if `n = 5` (`101`₂), the mask is `111`₂.
+2. **Flip the bits** by taking the bitwise NOT of `n`, but restrict to relevant bits by using the mask:
+    ```
+    complement = (~n) & mask
+    ```
+3. **Return complement**.
 
-- For any subarray with size `>(limit)`, it should **not** be all 0’s or all 1’s. This is equivalent to: **no run of more than `limit` consecutive 0’s or 1’s** is allowed in the array.
-
-So, **the problem reduces to:  
-Count the number of arrays with exactly `zero` zeroes and `one` ones, such that no more than `limit` consecutive 0s or 1s appear.**
-
-This is a classic combinatorial DP problem ("no more than K same consecutive elements with fixed counts"), similar to the "arrangement with forbidden runs."
-
-### **State**
-
-Let `dp[zero][one][last][count]` be number of ways to arrange `zero` 0’s and `one` 1’s, where last number is `last` (0 or 1), and current run of `last` is length `count` (`1 <= count <= limit`).
-
-But since the only restriction is on the **current run**, it's enough.
-
-### **State Reduction & DP**
-
-Let’s fix the first digit (because arrays can start with either 0 or 1), and design a DP as follows.
-
-Let’s define:
-
-> `dp[zero][one][last][cnt]`  
-> = ways to place `zero` 0's and `one` 1's, last digit used is `last`, run-length of `cnt`
-
-Transitions:
-- If last is 0:
-  - If more 0’s remain and `cnt < limit`:  
-    Place another 0: `dp[zero-1][one][0][cnt+1]`
-  - If ones remain:  
-    Switch to 1, start new run: `dp[zero][one-1][1][1]`
-- If last is 1:
-  - If more 1’s remain and `cnt < limit`:  
-    Place another 1: `dp[zero][one-1][1][cnt+1]`
-  - If zeroes remain:  
-    Switch to 0, start new run: `dp[zero-1][one][0][1]`
-
-Base case:  
-- When both `zero == 0` and `one == 0`, return 1.
-
-Final answer:  
-- Start with both:  
-  - If zero >= 1: sum += `dp[zero-1][one][0][1]`
-  - If one >= 1: sum += `dp[zero][one-1][1][1]`
-
-##### **Memoization**
-The DP state space is size 1000*1000*2*1000 == 2*10^9—not feasible. But in practice, we can optimize by:
-- Only storing states with nonzero count.
-- Limiting count by K.
-
-BUT, we can do bottom-up with 3D array: [zero+1][one+1][2][limit+1].
+- **Time Complexity:** O(1) or O(log n), due to bit counting.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-using namespace std;
-
 class Solution {
 public:
-    int MOD = 1e9 + 7;
-    int findStableArrays(int zero, int one, int limit) {
-        // dp[z][o][last][run]
-        vector<vector<vector<vector<int>>>> dp(zero+1, vector<vector<vector<int>>>(
-            one+1, vector<vector<int>>(2, vector<int>(limit+2, -1))));
-        return (count(zero, one, 0, 0, limit, dp) + count(zero, one, 1, 0, limit, dp)) % MOD;
-    }
-    
-    int count(int z, int o, int last, int run, int limit, 
-              vector<vector<vector<vector<int>>>> &dp)
-    {
-        if(z == 0 && o == 0) return 1;
-        if(dp[z][o][last][run] != -1) return dp[z][o][last][run];
-        
-        int res = 0;
-        if(last == 0) {
-            // last is 0, run zeros
-            if(z > 0 && run < limit) // take another 0
-                res = (res + count(z-1, o, 0, run+1, limit, dp)) % MOD;
-            if(o > 0) // take 1, start new run
-                res = (res + count(z, o-1, 1, 1, limit, dp)) % MOD;  
-        } else {
-            // last is 1, run ones
-            if(o > 0 && run < limit)
-                res = (res + count(z, o-1, 1, run+1, limit, dp)) % MOD;
-            if(z > 0)
-                res = (res + count(z-1, o, 0, 1, limit, dp)) % MOD;
+    int bitwiseComplement(int n) {
+        if (n == 0) return 1;
+        int mask = 0;
+        int temp = n;
+        while (temp > 0) {
+            mask = (mask << 1) | 1;
+            temp >>= 1;
         }
-        return dp[z][o][last][run] = res;
+        return (~n) & mask;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explanation**
 
-**Example 2:**
-```
-zero = 1, one = 2, limit = 1
-```
+**Example:**  
+n = 10
 
-*We want all arrays with 1 zero, 2 ones, and no two same digits in a row.*
+- Binary: `1010`
+- Mask: Since `1010` has 4 bits, mask is `1111` (binary), i.e., 15 (decimal).
+- `~n` in bits: `...11111111111111111111111111110101` (bitwise NOT in 32 bits for 10 is all-ones except the original bits)
+- `(~10) & 15` is `0101` in binary, which is `5` in decimal.
 
-Possible permutations with 1 zero, 2 ones: `[1,1,0]`, `[1,0,1]`, `[0,1,1]`
-- `[1,1,0]` is invalid: two 1s in a row
-- `[1,0,1]` is valid: never two same in a row
-- `[0,1,1]` is invalid: two 1s at end
-
-So, the answer is `1`.
-
-**How our DP finds it:**
-- Start with 0: consume one 0, so left (0,2; last=0, run=1)  
-    - Next, cannot place another 0 (z==0). Must place 1: (0,1; last=1, run=1)
-        - Can place another 1: (0,0; last=1, run=2), but since x > limit, not allowed (`limit=1`), so only valid is to stop at (0,1;last=1,run=1); need o=0 for base case. But fail.
-- Start with 1: (1,1; last=1, run=1)
-    - Next, can place another 1: (1,0; last=1,run=2) but the run would be 2, which is forbidden for `limit=1`, so not allowed.
-    - Must place 0: (0,1;last=0,run=1)
-        - Can only place 1: (0,0;last=1,run=1) —> valid, so `1`.
+**Thus, `bitwiseComplement(10)` returns `5`.**
 
 ---
-
-### **Summary Table**
-
-| Step         | Array        | Valid?  | Reason                            |
-|--------------|-------------|---------|-----------------------------------|
-| [1, 1, 0]    |             |   ❌    | Run of 2 ones at front            |
-| [1, 0, 1]    |             |   ✔️    | Never two of same in a row        |
-| [0, 1, 1]    |             |   ❌    | Run of 2 ones at end              |
-
-**Answer: 1**
-
----
-
-Let me know if you have any questions about the approach or code!
