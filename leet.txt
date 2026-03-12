@@ -1,67 +1,210 @@
-Sure! Here’s a structured solution:
+Let's break down the problem as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a non-negative integer `n`, the problem asks for its *bitwise complement* with respect to its binary representation (i.e., flip every bit from 0 to 1 and vice versa), and to return the corresponding integer value.
+Given an undirected graph with some required edges, and the ability to upgrade up to `k` optional edges (doubling their strength), pick a **spanning tree** that maximizes the minimal edge strength ("stability"). Find this maximum possible stability, or `-1` if it's impossible to build a spanning tree.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**  
-  - `0 <= n < 10^9`
-- **Edge Cases:**  
-  - `n = 0`: Binary is "0"; flipping gives "1" (`1` in decimal).
-  - Input always fits within a 32-bit signed integer.
-  - The complement should only flip the bits in the original number's binary digits (i.e., leading zeros are ignored).
+- `n` can be up to \(10^5\).
+- `edges.length` up to \(10^5\).
+- Some edges are **mandatory** (`must==1`). They **must** be in the spanning tree.
+- **No duplicate edges**, edges are undirected.
+- Each optional edge can be upgraded at most once; you can upgrade at most `k` of them (in total).
+- Spanning tree **must not have a cycle**; must connect all nodes with exactly `n-1` edges.
+- If the **must-edges** themselves contain a cycle or don't connect all nodes, it's **impossible**.
+- Need to maximize the **minimum strength** among edges in the spanning tree.
+
+#### Edge Cases:
+- **Cycles in must-edges:** If must-edges already create a cycle, output -1.
+- **Disconnected via must-edges + opt-edges:** If you cannot connect all nodes using available edges (after considering upgrades), output -1.
+- **All upgrade edges weaker than some required value:** Output -1 for values that cannot be achieved even after upgrades.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-1. **Find a bitmask** that has 1s in all places where `n` has bits (i.e., the smallest number of the form 2^k - 1 that is >= n). For instance, if `n = 5` (`101`₂), the mask is `111`₂.
-2. **Flip the bits** by taking the bitwise NOT of `n`, but restrict to relevant bits by using the mask:
-    ```
-    complement = (~n) & mask
-    ```
-3. **Return complement**.
+### **Overall Approach**
 
-- **Time Complexity:** O(1) or O(log n), due to bit counting.
+- Since we want the maximal possible *minimal* edge in the spanning tree, this is a **max-min/binary search** style problem.
+- For a given target "stability" S, is it possible to build a spanning tree where every edge used has (possibly upgraded) strength ≥ S, using at most `k` upgrades?
+
+#### Steps:
+
+1. **Binary Search** on answer S, where S = stability (minimal edge in tree). Range: 1 to maximum possible strength × 2.
+2. For each candidate S, check if it is *possible* to build a spanning tree meeting all constraints, including the number of upgrades (`k`), must-edges, etc.
+   - **Process must-edges** first:
+     - If a must-edge has strength < S (cannot be upgraded!), **fail**.
+     - If must-edges form a cycle, **fail** (spanning tree must be acyclic).
+     - Use DSU (Disjoint Set Union) to track components created by must-edges.
+   - **Prepare list of eligible optional edges:** For each optional edge (`must==0`):
+     - If original strength ≥ S → can use without upgrade.
+     - If original strength < S but upgraded strength (s×2) ≥ S → can use but must count as upgraded.
+     - If even upgraded strength < S → ignore.
+   - **Build spanning tree from must-edges + optional edges:**
+     - Use Kruskal's-style process: Try to add edges to connect all components, counting upgrades, never exceeding `k` upgrades.
+     - If able to connect all `n` nodes using ≤ k upgraded edges, success for S. Else, S is not possible.
+
+3. Return the largest S for which the above is possible.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-class Solution {
-public:
-    int bitwiseComplement(int n) {
-        if (n == 0) return 1;
-        int mask = 0;
-        int temp = n;
-        while (temp > 0) {
-            mask = (mask << 1) | 1;
-            temp >>= 1;
-        }
-        return (~n) & mask;
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+struct DSU {
+    vector<int> parent, rank;
+    int components;
+    DSU(int n): parent(n), rank(n,1), components(n) {
+        for (int i = 0; i < n; ++i) parent[i] = i;
+    }
+    int find(int x) {
+        if (parent[x] != x) parent[x] = find(parent[x]);
+        return parent[x];
+    }
+    bool unite(int x, int y) {
+        int rx = find(x), ry = find(y);
+        if (rx == ry) return false;
+        if(rank[rx] < rank[ry]) swap(rx, ry);
+        parent[ry] = rx;
+        if(rank[rx]==rank[ry]) rank[rx]++;
+        components--;
+        return true;
     }
 };
+
+struct Edge {
+    int u, v, strength, must;
+};
+
+bool isPossible(int n, const vector<Edge>& must_edges, const vector<Edge>& opt_edges, int k, int S) {
+    int used_upgrades = 0;
+    DSU dsu(n);
+    // 1. Add all must-edges (all must have strength >= S)
+    for(const auto& e : must_edges) {
+        if(e.strength < S) return false; // not strong enough and can't upgrade
+        if(!dsu.unite(e.u, e.v)) return false; // cycle detected
+    }
+
+    // 2. Prepare eligible optional edges, with whether needs upgrade or not
+    // Edges with original strength >= S: use without upgrade
+    // Edges with upgraded strength >= S: can only use by upgrading (costs upgrade)
+    vector<tuple<bool,int,int,int>> optionals; // (needs_upgrade, u, v, strength)
+    for(const auto& e : opt_edges) {
+        if(e.strength >= S) {
+            optionals.emplace_back(false, e.u, e.v, e.strength);
+        }
+        else if(e.strength * 2 >= S) {
+            optionals.emplace_back(true, e.u, e.v, e.strength);
+        }
+    }
+
+    // 3. Try to connect remaining components adding remaining edges
+    // Order: prefer "no-upgrade" edges to minimize upgrades used
+    // Kruskal style
+    sort(optionals.begin(), optionals.end()); // so needs_upgrade=false comes first
+
+    for(auto& [needs_upgrade, u, v, s] : optionals) {
+        if(dsu.find(u)==dsu.find(v)) continue;
+        if(needs_upgrade) {
+            if(used_upgrades >= k) continue;
+            used_upgrades++;
+        }
+        dsu.unite(u, v);
+        if(dsu.components == 1) return true;
+    }
+    return dsu.components == 1;
+}
+
+int maximizeStability(int n, vector<vector<int>>& edges, int k) {
+    vector<Edge> must_edges, opt_edges;
+    int maxS = 0;
+    for(auto& e : edges) {
+        if(e[3]==1) must_edges.push_back({e[0], e[1], e[2], 1});
+        else        opt_edges.push_back({e[0], e[1], e[2], 0});
+        maxS = max(maxS, e[2]*2);
+    }
+
+    int left = 1, right = maxS, ans = -1;
+    while(left <= right) {
+        int mid = left + (right-left)/2;
+        if(isPossible(n, must_edges, opt_edges, k, mid)) {
+            ans = mid; // possible, try bigger stability
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+    return ans;
+}
 ```
 
 ---
 
 ## 5. **Example Explanation**
 
-**Example:**  
-n = 10
+**Let's walk through Example 2:**
 
-- Binary: `1010`
-- Mask: Since `1010` has 4 bits, mask is `1111` (binary), i.e., 15 (decimal).
-- `~n` in bits: `...11111111111111111111111111110101` (bitwise NOT in 32 bits for 10 is all-ones except the original bits)
-- `(~10) & 15` is `0101` in binary, which is `5` in decimal.
+```plaintext
+n = 3,
+edges = [[0,1,4,0],[1,2,3,0],[0,2,1,0]],
+k = 2
+```
+- All edges are optional (`must == 0`).
+- Upgrades allowed: k=2.
 
-**Thus, `bitwiseComplement(10)` returns `5`.**
+#### Step 1: Prepare edges, max initial strength 4 (upgrade makes 8).
+
+#### Run binary search for S:
+- Try S=8: Need both edges in spanning tree to be at least 8 (i.e., after upgrade).
+  - Edge [0,1] can become 8 after upgrade.
+  - Edge [1,2] can become 6 after upgrade. **Not enough for S=8**.
+  - So S=8 impossible.
+
+- Try S=6:
+  - [0,1]=8(upgraded): possible.
+  - [1,2]=6(upgraded): possible.
+  - [0,2]=2(upgraded): can't reach 6 (only 2*2=4). discard.
+  - Need two edges to connect all (`n-1`=2 edges).
+    - Use [0,1] (upgrade), [1,2] (upgrade): uses both upgrades, possible.
+    - So S=6 is possible.
+
+- Try S=7: Only [0,1]=8 (upgraded) is possible, [1,2] (upgraded)=6<7, can't do it. So S=6 is **maximal stability**.
 
 ---
+
+## **Summary Table for Example 2**
+
+| Edge        | Base | Upgrade |   Used   |
+|-------------|------|---------|----------|
+|  [0,1]      |  4   |   8     | upgraded |
+|  [1,2]      |  3   |   6     | upgraded |
+|  [0,2]      |  1   |   2     | can't use|
+
+Both upgraded: their minimum is 6 (stability).
+
+---
+
+### ❗ C++ function signature:
+```cpp
+int maximizeStability(int n, vector<vector<int>>& edges, int k);
+```
+
+---
+
+## **Summary**
+
+- Use binary search over possible minimal edge strengths ("stability").
+- For each candidate, greedily check if it's possible using must-edges and optimal upgrades.
+- Use DSU for cycle/connection detection.
+- Answer is the highest S found, or -1.
+
+If you have any more questions or need detailed code comments, let me know!
