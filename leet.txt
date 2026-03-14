@@ -1,156 +1,140 @@
-Sure! Let's break this down step by step.
+Let's address your requirements one-by-one:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a mountain of height `mountainHeight`, and an array of workers `workerTimes`, each worker can remove any amount of height (let's say `x` units) in  
-`workerTimes[i] * (1 + 2 + ... + x) = workerTimes[i] * (x * (x+1)/2)` seconds (for worker `i`).  
-All workers work **in parallel** and can split the work arbitrarily.
-
-**Goal:** Allocate the total height among workers to minimize the **maximum** time any worker spends.
+Given integers `n` and `k`, find the k-th **lexicographically smallest** "happy string" of length n (over {'a','b','c'}) where no two adjacent characters are equal. If there are fewer than k such strings, return an empty string.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= mountainHeight <= 1e5`
-- `1 <= workerTimes.length <= 1e4`
-- `1 <= workerTimes[i] <= 1e6`
+**Constraints:**
+- 1 ≤ n ≤ 10  
+- 1 ≤ k ≤ 100
 
-**Edge cases:**
-- Only 1 worker: must do the whole job, time = `workerTimes[0] * (mountainHeight * (mountainHeight + 1))/2`.
-- Workers with different speeds, possibly some quite slow.
-- Single unit mountain (easy).
-- Each worker could get 0 allocation if optimal.
+**Key Observations:**
+- The set of possible characters is very small (`a`, `b`, `c`).
+- At each position (after the first), only 2 choices (different from previous) are valid.
+- The total number of happy strings of length n = 3 × 2<sup>n-1</sup>
+
+**Edge Cases:**
+- When k exceeds the total number of happy strings, you should return `""`.
+- For n = 1, the happy strings are simply `"a"`, `"b"`, `"c"`.
+- Lexicographical order should be strictly maintained.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-We need to **minimize** the maximum time taken by any worker, i.e., assign heights to each worker (sum of all = `mountainHeight`) such that the slowest is as fast as possible.
+### Approach: "Jumping" Lexicographically
 
-Let’s formalize:
+**Idea**:  
+Build the string character by character.  
+For each position, try adding a valid character in lexicographical order, and count how many strings can be formed with that choice.  
+If the k-th string is not within the current branch, skip it and update k accordingly.
 
-- Assign to worker `i`, `x_i` units such that `sum(x_i) = mountainHeight`.
-- Each takes: `workerTimes[i] * (x_i * (x_i + 1) / 2)` seconds.
+**Algorithm Steps:**
+1. Calculate total possible strings: `total = 3 * pow(2, n-1)`
+   - If `k > total`, return `""`
+2. Start from the first character; for each character position:
+   - Try `'a'`, `'b'`, `'c'` (skip if the same as the previous character).
+   - For each candidate character, compute how many strings can be formed fixing this character at current position.
+      - Remaining positions: r
+      - Possible strings from here: 2<sup>r-1</sup> per valid path
+   - If k is within those, fix character and proceed.
+   - Else, subtract those and try next.
 
-Want: `minimize max_i(time_i)` over all assignments.
-
-This is a **convex, monotonic partitioning** problem. We can **binary search** the answer (the minimum maximum time):
-
-**Approach:**
-1. Binary search over answer `T` (minimum seconds required, 1..large).
-2. For each mid value `T`, check if it's possible to assign the units so that all workers have `<= T` time.
-   - For each worker, maximum height reducible with `T` seconds is `max_x` such that:
-     ```
-     workerTimes[i] * (x * (x + 1) / 2) <= T
-     -->
-     x^2 + x - (2*T/workerTimes[i]) <= 0
-     ```
-   - Solve quadratic for x:
-     ```
-     x = floor( (-1 + sqrt(1 + 8*T/workerTimes[i])) / 2 )
-     ```
-3. Sum all workers' possible heights under time `T`. If sum >= `mountainHeight`, it’s possible.
-
-**Binary search for minimal T.**
+**Complexity:**
+- Since `n` is at most 10, O(n) work.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
+#include <string>
 #include <vector>
-#include <cmath>
-#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    long long maxHeightForTime(long long t, int workerTime) {
-        // Solve x^2 + x - 2*t/workerTime <= 0
-        // x = (-1 + sqrt(1 + 8*t/workerTime)) / 2
-        if(t < workerTime) return 0;
-        long long k = 2*t/workerTime;
-        long long x = (-1 + sqrt(1 + 4.0 * k*2)) / 2;
-        return x;
-    }
-    
-    int minimumSeconds(int mountainHeight, vector<int>& workerTimes) {
-        int n = workerTimes.size();
-        long long left = 1, right = 1e15, ans = -1;  // right big enough
-        while(left <= right){
-            long long mid = left + (right - left)/2;
-            long long total = 0;
-            for(int wt : workerTimes){
-                // max height for this worker in 'mid' seconds
-                long long k = 2*mid/wt;
-                long long x = (long long)(-1 + sqrt(1 + 4.0*k)) / 2;
-                if(x < 0) x = 0;
-                total += x;
-                if(total >= mountainHeight) break;
-            }
-            if(total >= mountainHeight){
-                ans = mid;
-                right = mid - 1;
-            } else {
-                left = mid + 1;
+    string getHappyString(int n, int k) {
+        string result = "";
+        char chars[3] = {'a','b','c'};
+        int total = 3 * (1 << (n-1));
+
+        if (k > total) return "";
+
+        char prev = 0;
+        for (int i = 0; i < n; ++i) {
+            for (int ci = 0; ci < 3; ++ci) {
+                if (i > 0 && chars[ci] == prev) continue;
+                // At position i, with previous letter 'prev', choosing chars[ci]
+                int rem = n - i - 1;
+                int comb = 1 << rem; // 2^(rem)
+                if (k > comb) {
+                    k -= comb;
+                } else {
+                    result.push_back(chars[ci]);
+                    prev = chars[ci];
+                    break;
+                }
             }
         }
-        return (int)ans;
+        return result;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-### Example 1
+### Example: `n = 3`, `k = 9`
+- **Total possible happy strings:** 3 × 2<sup>2</sup> = 12
+- **Lex-order:**  
+  1. aba  
+  2. abc  
+  3. aca  
+  4. acb  
+  5. bab  
+  6. bac  
+  7. bca  
+  8. bcb  
+  9. **cab**  
+  10. cac  
+  11. cba  
+  12. cbc  
 
-**Input:**  
-`mountainHeight = 4`, `workerTimes = [2,1,1]`
+Let's step through:
 
-Let's check mid = 3 (our expected answer):
+#### Step-by-step:
 
-- `worker 0`:  
-  time: 2, max height:  
-    2 * (x(x+1)/2) <= 3  
-    => x(x+1) <= 3  
-    try x=1: 1*2=2, OK; x=2: 2*3=6, too big  
-    so x=1
+1. First letter: try `'a'` (covers 4 strings), `'b'` (next 4), `'c'` (last 4)
+   - `'a'` (strings 1–4): skip, k = 5
+   - `'b'` (strings 5–8): skip, k = 9 - 8 = 1
+   - `'c'` (strings 9–12): pick!
 
-- `worker 1`:  
-  1 * (x(x+1)/2) <= 3  
-    x(x+1) <= 6  
-    x=2: 2*3=6, OK; x=3: 3*4=12>6  
-    so x=2
+2. Now, `prev = 'c'`, remaining 2 characters, k = 1
+   - Next letter can't be `'c'`, try `'a'` (covers 2 strings), `'b'` (covers 2)
+   - `'a'` (strings 9–10): k = 1, pick!
+   
+3. Last letter, can't be `'a'`, try `'b'`, `'c'`
+   - `'b'` (string 9): k = 1, pick!
 
-- `worker 2`: (same as worker 1) --> x=2
-
-But total sum: 1+2+2=5 > 4, so possible.
-
-But to make sum=4, pick {1,2,1} (as in the explanation).
-
-So minimum time for allocation [1,2,1] is:  
-workerTimes[0] * (1) = 2  
-workerTimes[1] * (1+2) = 1*3 = 3  
-workerTimes[2] * (1) = 1  
-Max among these: **3**
-
-**So answer is 3.**
-
----
-
-### **Summary Table**
-
-| Step                  | Description  |
-|-----------------------|--------------|
-| Problem type          | Binary Search over answer|
-| Inner function        | Max height per worker for given time (solve quadratic)|
-| Complexity            | O(N log(MaxTime)), where N = workers|
+Result: **cab** (the 9th happy string).
 
 ---
 
-Let me know if you'd like, I can provide additional commentary on the code, edge test cases, or a simpler implementation!
+## **Summary Table**  
+| n | k | Output |
+|---|---|--------|
+| 1 | 3 |  "c"   |
+| 1 | 4 |  ""    |
+| 3 | 9 | "cab"  |
+
+---
+
+Let me know if you'd like the code explained in greater detail, or more sample runs!
