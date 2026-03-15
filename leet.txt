@@ -1,89 +1,127 @@
-Let's address your requirements one-by-one:
+Let's address the problem as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given integers `n` and `k`, find the k-th **lexicographically smallest** "happy string" of length n (over {'a','b','c'}) where no two adjacent characters are equal. If there are fewer than k such strings, return an empty string.
+You need to build a dynamic array with API calls:
+- `append(val)`: add a value to the end,
+- `addAll(inc)`: add an increment to **every element**,
+- `multAll(m)`: multiply **every element**,
+- `getIndex(idx)`: return value at index modulo \(10^9+7\), or -1 if out of bounds.
+
+The challenge is to ensure **all operations (especially getIndex) are efficient**, as the naive approach would be too slow for many operations.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- 1 ≤ n ≤ 10  
-- 1 ≤ k ≤ 100
-
-**Key Observations:**
-- The set of possible characters is very small (`a`, `b`, `c`).
-- At each position (after the first), only 2 choices (different from previous) are valid.
-- The total number of happy strings of length n = 3 × 2<sup>n-1</sup>
-
-**Edge Cases:**
-- When k exceeds the total number of happy strings, you should return `""`.
-- For n = 1, the happy strings are simply `"a"`, `"b"`, `"c"`.
-- Lexicographical order should be strictly maintained.
+- Values and operations (`val`, `inc`, `m`) are small (1 to 100).
+- Sequence length (`idx`) can be up to \(10^5\).
+- You may have up to \(10^5\) calls in total.
+- Edge Cases:
+  - Out-of-bound index queries.
+  - Append values when additive/multiplicative operations have already occurred.
+  - Chains of `addAll` and `multAll` operations must be combined efficiently.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Approach: "Jumping" Lexicographically
+### **Key Observations**
 
-**Idea**:  
-Build the string character by character.  
-For each position, try adding a valid character in lexicographical order, and count how many strings can be formed with that choice.  
-If the k-th string is not within the current branch, skip it and update k accordingly.
+- *Naive manipulation* (updating every value) on each operation leads to O(N) time per operation. This is **too slow**.
+- Each value can be represented with some **stored value and the global "multiplicative" and "additive" state** at the time of append.
 
-**Algorithm Steps:**
-1. Calculate total possible strings: `total = 3 * pow(2, n-1)`
-   - If `k > total`, return `""`
-2. Start from the first character; for each character position:
-   - Try `'a'`, `'b'`, `'c'` (skip if the same as the previous character).
-   - For each candidate character, compute how many strings can be formed fixing this character at current position.
-      - Remaining positions: r
-      - Possible strings from here: 2<sup>r-1</sup> per valid path
-   - If k is within those, fix character and proceed.
-   - Else, subtract those and try next.
+### **Efficient Representation**
 
-**Complexity:**
-- Since `n` is at most 10, O(n) work.
+At each step, maintain:
+- `mul` = overall multiplication factor applied since creation.
+- `add` = overall addition applied since creation.
+
+For each element, when you `append(val)`, capture:
+- `applied_mul` and `applied_add` at that time.
+
+**When querying at index i:**
+- Let
+  - `val_i` = value appended at i,
+  - `mul_i`, `add_i` = the values of `mul` and `add` at the moment `val_i` was appended,
+  - `cur_mul`, `cur_add` = current `mul`, `add`.
+
+The value at position i is:
+```
+value = val_i * (cur_mul / mul_i) + (cur_add - add_i * (cur_mul / mul_i))
+```
+
+All math must be mod \(10^9+7\).
+
+#### **How does this work?**
+- After you append, you can factor all later `multAll` and `addAll` as:
+    - `val' = val* all_mult + all_adds`
+- For each element, just store the multipliers/adders up to that append, then "catch up" to now on query using modular arithmetic (and modular inverses for divide).
+
+#### **Why division?**
+- Because `multAll` is applied multiplicatively, so to "undo" the effect up to the append time, you multiply by the modular inverse.
+
+#### **Time complexity:**
+- `O(1)` for all operations, using modular inverses for division.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <string>
-#include <vector>
-using namespace std;
+class Fancy {
+    using ll = long long;
+    const int MOD = 1e9 + 7;
+    vector<ll> values, appendMul, appendAdd;
+    ll mul = 1, add = 0;
 
-class Solution {
-public:
-    string getHappyString(int n, int k) {
-        string result = "";
-        char chars[3] = {'a','b','c'};
-        int total = 3 * (1 << (n-1));
-
-        if (k > total) return "";
-
-        char prev = 0;
-        for (int i = 0; i < n; ++i) {
-            for (int ci = 0; ci < 3; ++ci) {
-                if (i > 0 && chars[ci] == prev) continue;
-                // At position i, with previous letter 'prev', choosing chars[ci]
-                int rem = n - i - 1;
-                int comb = 1 << rem; // 2^(rem)
-                if (k > comb) {
-                    k -= comb;
-                } else {
-                    result.push_back(chars[ci]);
-                    prev = chars[ci];
-                    break;
-                }
-            }
+    // Helper to compute modular inverse under MOD
+    ll modinv(ll a) {
+        ll res = 1, p = MOD - 2;
+        while (p) {
+            if (p & 1) res = res * a % MOD;
+            a = a * a % MOD;
+            p >>= 1;
         }
-        return result;
+        return res;
+    }
+public:
+    Fancy() {
+        values.clear();
+        appendMul.clear();
+        appendAdd.clear();
+        mul = 1;
+        add = 0;
+    }
+    
+    void append(int val) {
+        values.push_back(val);
+        appendMul.push_back(mul);
+        appendAdd.push_back(add);
+    }
+    
+    void addAll(int inc) {
+        add = (add + inc) % MOD;
+    }
+    
+    void multAll(int m) {
+        mul = mul * m % MOD;
+        add = add * m % MOD;
+    }
+    
+    int getIndex(int idx) {
+        if (idx >= values.size()) return -1;
+        ll val = values[idx];
+        ll mulAtInsert = appendMul[idx], addAtInsert = appendAdd[idx];
+        // Now, update val to current state:
+        // x' = val * (cur_mul / insert_mul) + (cur_add - insert_add * (cur_mul / insert_mul))
+        ll inv = modinv(mulAtInsert);
+        ll m = mul * inv % MOD;
+        ll a = (add - addAtInsert * m % MOD + MOD) % MOD;
+        ll res = (val * m % MOD + a) % MOD;
+        return (int)res;
     }
 };
 ```
@@ -92,49 +130,40 @@ public:
 
 ## 5. **Example Explanation**
 
-### Example: `n = 3`, `k = 9`
-- **Total possible happy strings:** 3 × 2<sup>2</sup> = 12
-- **Lex-order:**  
-  1. aba  
-  2. abc  
-  3. aca  
-  4. acb  
-  5. bab  
-  6. bac  
-  7. bca  
-  8. bcb  
-  9. **cab**  
-  10. cac  
-  11. cba  
-  12. cbc  
+Let's follow this sequence:
+```
+fancy.append(2);   // fancy sequence: [2]
+fancy.addAll(3);   // [5]
+fancy.append(7);   // [5, 7]
+fancy.multAll(2);  // [10, 14]
+fancy.getIndex(0); // return 10
 
-Let's step through:
+fancy.addAll(3);   // [13, 17]
+fancy.append(10);  // [13, 17, 10]
+fancy.multAll(2);  // [26, 34, 20]
+fancy.getIndex(0); // return 26
+fancy.getIndex(1); // return 34
+fancy.getIndex(2); // return 20
+```
 
-#### Step-by-step:
+**Let's work through getIndex(2):**
+- When appending 10, state is: mul=2, add=3
+  - store val=10, mul=2, add=3
+- After `multAll(2)`, global mul=4, add=6
 
-1. First letter: try `'a'` (covers 4 strings), `'b'` (next 4), `'c'` (last 4)
-   - `'a'` (strings 1–4): skip, k = 5
-   - `'b'` (strings 5–8): skip, k = 9 - 8 = 1
-   - `'c'` (strings 9–12): pick!
-
-2. Now, `prev = 'c'`, remaining 2 characters, k = 1
-   - Next letter can't be `'c'`, try `'a'` (covers 2 strings), `'b'` (covers 2)
-   - `'a'` (strings 9–10): k = 1, pick!
-   
-3. Last letter, can't be `'a'`, try `'b'`, `'c'`
-   - `'b'` (string 9): k = 1, pick!
-
-Result: **cab** (the 9th happy string).
+- For index 2:
+    - cur_mul=4, cur_add=6, insert_mul=2, insert_add=3,
+    - m = cur_mul / insert_mul = 4 * inv(2) mod MOD = 2
+    - a = cur_add - insert_add*m = 6 - 3*2 = 0
+    - value = val * m + a = 10*2 + 0 = 20
 
 ---
 
-## **Summary Table**  
-| n | k | Output |
-|---|---|--------|
-| 1 | 3 |  "c"   |
-| 1 | 4 |  ""    |
-| 3 | 9 | "cab"  |
+**Summary**
+- Track the global multiplication/addition values;
+- For each append, store their values at insert time;
+- Use modular inverse to calculate the effect of operations since append.
 
 ---
 
-Let me know if you'd like the code explained in greater detail, or more sample runs!
+**This C++ solution is fully optimal, O(1) per operation, as required.**
