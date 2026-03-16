@@ -1,127 +1,90 @@
-Let's address the problem as requested:
+Let's break down your requirements:
 
 ---
 
 ## 1. **Short Summary**
 
-You need to build a dynamic array with API calls:
-- `append(val)`: add a value to the end,
-- `addAll(inc)`: add an increment to **every element**,
-- `multAll(m)`: multiply **every element**,
-- `getIndex(idx)`: return value at index modulo \(10^9+7\), or -1 if out of bounds.
-
-The challenge is to ensure **all operations (especially getIndex) are efficient**, as the naive approach would be too slow for many operations.
+Given a grid, **find the three largest distinct sums** of the border cells of *all possible rhombuses* ("diamond shapes") in the grid, including single-cell rhombuses.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- Values and operations (`val`, `inc`, `m`) are small (1 to 100).
-- Sequence length (`idx`) can be up to \(10^5\).
-- You may have up to \(10^5\) calls in total.
-- Edge Cases:
-  - Out-of-bound index queries.
-  - Append values when additive/multiplicative operations have already occurred.
-  - Chains of `addAll` and `multAll` operations must be combined efficiently.
+- `1 <= m, n <= 50` (allowing O(m * n * min(m, n)) solutions)
+- Grid elements are always positive and ≤ 10⁵.
+- "Area 0" rhombus is just a single cell.
+- "Borders" include only perimeter cells, not the interior.
+- Grids could be 1D (e.g., `m=1` or `n=1`), so handle tiny grids (should only have 1-cell rhombuses).
+- All numbers can be equal, so expect possible <3 distinct sums.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Observations**
+### **Main Idea**
+Enumerate every possible rhombus (by center and size/arm length), compute its sum, and store distinct sums.
 
-- *Naive manipulation* (updating every value) on each operation leads to O(N) time per operation. This is **too slow**.
-- Each value can be represented with some **stored value and the global "multiplicative" and "additive" state** at the time of append.
+- For each cell `(i, j)`, consider it as the center of the rhombus.
+- For "area 0" (size = 0): It's the cell `(i, j)` itself.
+- For larger sizes `k`: 
+    - The corners are: `(i - k, j)`, `(i, j + k)`, `(i + k, j)`, `(i, j - k)`.
+    - k can range from 1 up to the maximum value such that all these points remain in-bounds.
+    - For each `k`, sum the four border "arms":
+        - Up-right
+        - Down-right
+        - Down-left
+        - Up-left
+    - **Careful**: Don't double-count the corners at each tip.
 
-### **Efficient Representation**
-
-At each step, maintain:
-- `mul` = overall multiplication factor applied since creation.
-- `add` = overall addition applied since creation.
-
-For each element, when you `append(val)`, capture:
-- `applied_mul` and `applied_add` at that time.
-
-**When querying at index i:**
-- Let
-  - `val_i` = value appended at i,
-  - `mul_i`, `add_i` = the values of `mul` and `add` at the moment `val_i` was appended,
-  - `cur_mul`, `cur_add` = current `mul`, `add`.
-
-The value at position i is:
-```
-value = val_i * (cur_mul / mul_i) + (cur_add - add_i * (cur_mul / mul_i))
-```
-
-All math must be mod \(10^9+7\).
-
-#### **How does this work?**
-- After you append, you can factor all later `multAll` and `addAll` as:
-    - `val' = val* all_mult + all_adds`
-- For each element, just store the multipliers/adders up to that append, then "catch up" to now on query using modular arithmetic (and modular inverses for divide).
-
-#### **Why division?**
-- Because `multAll` is applied multiplicatively, so to "undo" the effect up to the append time, you multiply by the modular inverse.
-
-#### **Time complexity:**
-- `O(1)` for all operations, using modular inverses for division.
+### **Algorithm**
+1. For all centers `(i, j)`, for all possible arm lengths `k`:
+   - If the rhombus fits within the grid (none of its corners are out of bounds):
+     - Traverse each of the four sides for length k and sum up the border elements.
+     - Be careful to only count the four corners once (as opposite sides will meet).
+2. Store sums in a set (to keep unique).
+3. At the end, return the three largest sums from the set.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
-class Fancy {
-    using ll = long long;
-    const int MOD = 1e9 + 7;
-    vector<ll> values, appendMul, appendAdd;
-    ll mul = 1, add = 0;
+#include <vector>
+#include <set>
+#include <algorithm>
+using namespace std;
 
-    // Helper to compute modular inverse under MOD
-    ll modinv(ll a) {
-        ll res = 1, p = MOD - 2;
-        while (p) {
-            if (p & 1) res = res * a % MOD;
-            a = a * a % MOD;
-            p >>= 1;
-        }
-        return res;
-    }
+class Solution {
 public:
-    Fancy() {
-        values.clear();
-        appendMul.clear();
-        appendAdd.clear();
-        mul = 1;
-        add = 0;
-    }
-    
-    void append(int val) {
-        values.push_back(val);
-        appendMul.push_back(mul);
-        appendAdd.push_back(add);
-    }
-    
-    void addAll(int inc) {
-        add = (add + inc) % MOD;
-    }
-    
-    void multAll(int m) {
-        mul = mul * m % MOD;
-        add = add * m % MOD;
-    }
-    
-    int getIndex(int idx) {
-        if (idx >= values.size()) return -1;
-        ll val = values[idx];
-        ll mulAtInsert = appendMul[idx], addAtInsert = appendAdd[idx];
-        // Now, update val to current state:
-        // x' = val * (cur_mul / insert_mul) + (cur_add - insert_add * (cur_mul / insert_mul))
-        ll inv = modinv(mulAtInsert);
-        ll m = mul * inv % MOD;
-        ll a = (add - addAtInsert * m % MOD + MOD) % MOD;
-        ll res = (val * m % MOD + a) % MOD;
-        return (int)res;
+    vector<int> getBiggestThree(vector<vector<int>>& grid) {
+        int m = grid.size(), n = grid[0].size();
+        set<int> s;
+        
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                // Area 0 rhombus (just the cell itself)
+                s.insert(grid[i][j]);
+                // Try all possible arm lengths k >= 1
+                int maxK = min({i, j, m - 1 - i, n - 1 - j});
+                for (int k = 1; k <= maxK; ++k) {
+                    int sum = 0;
+                    int x = i, y = j;
+                    // Go from top to right
+                    for (int d = 0; d < k; ++d) sum += grid[x - d][y + d];
+                    // Go from right to bottom
+                    for (int d = 0; d < k; ++d) sum += grid[x + d][y + k - d];
+                    // Go from bottom to left
+                    for (int d = 0; d < k; ++d) sum += grid[x + k - d][y - d];
+                    // Go from left to top
+                    for (int d = 0; d < k; ++d) sum += grid[x - d][y - k + d];
+                    // Add four corners except the overlapped ones
+                    s.insert(sum);
+                }
+            }
+        }
+        vector<int> ans(s.rbegin(), s.rend());
+        if (ans.size() > 3) ans.resize(3);
+        return ans;
     }
 };
 ```
@@ -130,40 +93,39 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's follow this sequence:
+### Sample Input
 ```
-fancy.append(2);   // fancy sequence: [2]
-fancy.addAll(3);   // [5]
-fancy.append(7);   // [5, 7]
-fancy.multAll(2);  // [10, 14]
-fancy.getIndex(0); // return 10
-
-fancy.addAll(3);   // [13, 17]
-fancy.append(10);  // [13, 17, 10]
-fancy.multAll(2);  // [26, 34, 20]
-fancy.getIndex(0); // return 26
-fancy.getIndex(1); // return 34
-fancy.getIndex(2); // return 20
+grid = [
+   [1,2,3],
+   [4,5,6],
+   [7,8,9]
+]
 ```
 
-**Let's work through getIndex(2):**
-- When appending 10, state is: mul=2, add=3
-  - store val=10, mul=2, add=3
-- After `multAll(2)`, global mul=4, add=6
+**All possible rhombus border sums:**
 
-- For index 2:
-    - cur_mul=4, cur_add=6, insert_mul=2, insert_add=3,
-    - m = cur_mul / insert_mul = 4 * inv(2) mod MOD = 2
-    - a = cur_add - insert_add*m = 6 - 3*2 = 0
-    - value = val * m + a = 10*2 + 0 = 20
+- Area 0 (all single cells): 1,2,3,4,5,6,7,8,9
+- For center (1,1) and k=1:
+    - Borders: (0,1):2; (1,2):6; (2,1):8; (1,0):4 → sum: 2+6+8+4=20
+
+So all border sums: {1,2,3,4,5,6,7,8,9,20}
+
+Distinct, sorted descending: 20,9,8,7,6,5,4,3,2,1
+
+Return top 3: **[20,9,8]**
 
 ---
 
-**Summary**
-- Track the global multiplication/addition values;
-- For each append, store their values at insert time;
-- Use modular inverse to calculate the effect of operations since append.
+### **Summary Table (for this example):**
+
+| Shape | Sum |
+|-------|-----|
+| Large rhombus (center 5, k=1) | 20 |
+| Area 0 rhombus (cell 9) | 9 |
+| Area 0 rhombus (cell 8) | 8 |
+| ... | ... |
 
 ---
 
-**This C++ solution is fully optimal, O(1) per operation, as required.**
+**In summary:**  
+Iterate all possible rhombuses in the grid, sum borders, store unique sums, return top 3.
