@@ -1,79 +1,72 @@
-Let's address each requirement step by step:
+Let's break down the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a binary matrix, you can **rearrange the columns** in any order, any number of times.  
-Find the maximum possible area of a submatrix (**contiguous block**) consisting entirely of 1s, over all possible column orders.
+Given a matrix `grid` and an integer `k`, **count how many submatrices, starting from the top-left corner (0,0)** (i.e., submatrices of the form grid[0..i][0..j]), **have a sum <= k**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Matrix Size:** `1 <= m * n <= 10^5` (the product, so matrices can be very large and non-square)
-- **Values:** Only 0 or 1.
-- **Edge Cases:**
-  - All zeros: max area is `0`.
-  - All ones: max area is size of matrix.
-  - Very wide (n >> m) or very tall (m >> n): watch out for row-major and column-major logic.
-  - A single row or column.
+- Matrix size: up to 1000 x 1000 (so O(N³) or O(N⁴) is not feasible!)
+- Each cell: between 0 and 1000 (non-negative)
+- k: up to 10⁹
+- Must **include (0,0)** as top-left, but can extend any amount to the right and down.
+- **Edge Cases**:
+    - k very small: maybe no submatrix valid
+    - All grid cells are 0: all possible (i, j) included
+    - Single row or column (m=1 or n=1)
+    - k very large: all possible submatrices are valid
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Algorithm**
 
-### *High-level Idea*
+### **Observation**
+- Only consider submatrices of the form grid[0..i][0..j] for all (i,j). So, it's like enumerating all *top-left-anchored* rectangles.
 
-- **Column rearrangement** allows us to place the "tallest columns" (longest consecutive 1s up to each row) together, maximizing rectangle area inside any row.
-- For each row, we can treat the current state as a "histogram" of heights. By **sorting the histogram for the row in descending order**, we can compute the largest rectangle using first `k` columns with height ≥ the `k`-th tallest.
+### **Matrix Prefix Sums**
+- To quickly get the sum of grid[0..i][0..j] in O(1):
 
-### *Details*
+Let `pre[i][j] = sum of grid[0..i][0..j]`
 
-1. **Compute heights:** For each cell, compute the current height of consecutive 1s **above and including** row `i` (if `matrix[i][j]` is 1, it is `heights[i-1][j] + 1`, else 0).
-2. For each row, sort the array of column heights in descending order.
-3. For position `k` (starting at 0), maximal rectangle area using first `k+1` columns is:  
-   `area = heights[k] * (k+1)`  
-   This works because, after sorting, for first `k+1` columns, each column is **at least** `heights[k]` tall.
-4. Keep the maximal area across all rows.
+Formula:
+```
+pre[i][j] = grid[i][j] 
+            + (i > 0 ? pre[i-1][j] : 0)
+            + (j > 0 ? pre[i][j-1] : 0)
+            - (i > 0 && j > 0 ? pre[i-1][j-1] : 0)
+```
 
-### *Time Complexity*
+### **Counting**
+- For each (i, j), if `pre[i][j] <= k`, count it.
 
-- Preprocessing all heights: O(m \* n)
-- Sorting each row: O(m \* n log n) worst-case (but with constraints, we need O(m \* n log n) to work; that's ~ 2 million ops at most for moderate n, so acceptable).
+### **Total Time Complexity**
+- O(m*n), since we just fill prefix sum table, then scan each (i,j).
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-using namespace std;
-
 class Solution {
 public:
-    int largestSubmatrix(vector<vector<int>>& matrix) {
-        int m = matrix.size(), n = matrix[0].size();
-        // Calculate heights
-        for (int i = 1; i < m; ++i) {
-            for (int j = 0; j < n; ++j) {
-                if (matrix[i][j])
-                    matrix[i][j] += matrix[i-1][j];
-            }
-        }
-        int maxArea = 0;
-        // For each row
+    int countSubmatrices(vector<vector<int>>& grid, int k) {
+        int m = grid.size(), n = grid[0].size();
+        vector<vector<int>> pre(m, vector<int>(n, 0));
+        int ans = 0;
         for (int i = 0; i < m; ++i) {
-            // Copy and sort the heights for this row
-            vector<int> heights = matrix[i];
-            sort(heights.begin(), heights.end(), greater<int>());
-            for (int k = 0; k < n; ++k) {
-                int area = heights[k] * (k+1);
-                if (area > maxArea) maxArea = area;
+            for (int j = 0; j < n; ++j) {
+                pre[i][j] = grid[i][j];
+                if (i > 0) pre[i][j] += pre[i-1][j];
+                if (j > 0) pre[i][j] += pre[i][j-1];
+                if (i > 0 && j > 0) pre[i][j] -= pre[i-1][j-1];
+                if (pre[i][j] <= k) ++ans;
             }
         }
-        return maxArea;
+        return ans;
     }
 };
 ```
@@ -82,61 +75,40 @@ public:
 
 ## 5. **Example Explanation**
 
-Take:
+Given:
 ```
-matrix = [
-  [0,0,1],
-  [1,1,1],
-  [1,0,1]
-]
+grid = [[7,2,9],
+        [1,5,0],
+        [2,6,6]], k = 20
 ```
 
-**Heights Calculation:**
+Let's compute prefix sums:
 
-At each cell, show how many consecutive 1s from top to current row:
+|    | 0       | 1       | 2       |
+|----|---------|---------|---------|
+|0   | **7**   | 9 (7+2) | 18 (7+2+9)|
+|1   | 8       | 15      | 24      |
+|2   | 10      | 23      | 38      |
 
-```
-Row 0:  0 0 1
-Row 1:  1 1 2
-Row 2:  2 0 3
-```
+Calculate:
+- pre[0][0] = 7   (valid, <=20)
+- pre[0][1] = 9   (valid)
+- pre[0][2] = 18  (valid)
+- pre[1][0] = 8   (valid)
+- pre[1][1] = 15  (valid)
+- pre[1][2] = 24  (not valid)
+- pre[2][0] = 10  (valid)
+- pre[2][1] = 23  (not valid)
+- pre[2][2] = 38  (not valid)
 
-**Row 1:** (heights = [1,1,2])  
-Sort descending: [2,1,1]  
-Possible areas:
-- 2*1 = 2 (using tallest col alone)
-- 1*2 = 2 (using 2 highest cols)
-- 1*3 = 3 (using all three)
-
-**Row 2:** (heights = [2,0,3])  
-Sort: [3,2,0]
-- 3*1=3
-- 2*2=4 ← maximum area here!
-- 0*3=0
-
-**So max area is 4.**
+Valid cells: (0,0),(0,1),(0,2),(1,0),(1,1),(2,0) ⇒ **6 submatrices**.
 
 ---
 
-### **Summary Table**
+## **Summary Table**
 
-| Row | Heights    | Sorted      | Areas (by prefix)   |
-|-----|------------|-------------|---------------------|
-|  0  | 0 0 1      | 1 0 0       | 1, 0, 0             |
-|  1  | 1 1 2      | 2 1 1       | 2, 2, 3             |
-|  2  | 2 0 3      | 3 2 0       | 3, 4, 0             |
-
-Largest = 4.
+You only need an O(mn) solution using the 2D prefix sum trick. For every possible bottom-right corner (i,j), if the sum of grid[0..i][0..j] is ≤ k, it's a valid submatrix. Count all such pairs.
 
 ---
 
-## **Summary**
-
-- Calculate "heights" for each cell.
-- For each row, sort heights descending.
-- For each prefix, area = height * number columns.
-- Return max area over all rows.
-
----
-
-Let me know if you'd like follow-ups or optimizations!
+**This solution is optimal due to the problem's constraints.**
