@@ -1,72 +1,127 @@
-Let's break down the problem step by step:
+Let's address your requirements step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a matrix `grid` and an integer `k`, **count how many submatrices, starting from the top-left corner (0,0)** (i.e., submatrices of the form grid[0..i][0..j]), **have a sum <= k**.
+Given a grid of 'X', 'Y', and '.', count the number of **submatrices** containing the top-left cell `grid[0][0]`, having **equal number of 'X' and 'Y'** (and at least one 'X').
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- Matrix size: up to 1000 x 1000 (so O(N³) or O(N⁴) is not feasible!)
-- Each cell: between 0 and 1000 (non-negative)
-- k: up to 10⁹
-- Must **include (0,0)** as top-left, but can extend any amount to the right and down.
-- **Edge Cases**:
-    - k very small: maybe no submatrix valid
-    - All grid cells are 0: all possible (i, j) included
-    - Single row or column (m=1 or n=1)
-    - k very large: all possible submatrices are valid
+- Grid size: 1 ≤ rows, cols ≤ 1000 (up to **1,000,000** cells).
+- Only valid values: 'X', 'Y', or '.'.
+- **Submatrices must always include (0, 0)**.
+- Ignore submatrices with **no 'X'**.
+- Ignore submatrices with unequal numbers of 'X' and 'Y'.
+- **Edge cases**:
+    - No 'X'/'Y' at all.
+    - All 'X' but no 'Y'.
+    - Smallest grid: 1x1 (`[['X']]` etc.)
+    - All '.'.
+    - Large rectangles.
 
 ---
 
-## 3. **Algorithm**
+## 3. **Optimal Algorithm**
 
-### **Observation**
-- Only consider submatrices of the form grid[0..i][0..j] for all (i,j). So, it's like enumerating all *top-left-anchored* rectangles.
+### CORE IDEA:
+- All submatrices must have **top-left at (0, 0)** and **bottom-right at (r2, c2)**.
+- For each possible (r2, c2), we consider submatrix from (0, 0) to (r2, c2).
+- We need a **fast way** to check:
+    - Number of 'X' in rectangle (0,0)-(r2,c2)
+    - Number of 'Y' in rectangle (0,0)-(r2,c2)
+    - Number of '.' are ignored for counting
 
-### **Matrix Prefix Sums**
-- To quickly get the sum of grid[0..i][0..j] in O(1):
+So, for fast queries:
+- Precompute 2D prefix sums: `Sx`, `Sy`:
+    - `Sx[i][j]`: # of 'X's in rect (0,0)-(i,j)
+    - `Sy[i][j]`: # of 'Y's in rect (0,0)-(i,j)
 
-Let `pre[i][j] = sum of grid[0..i][0..j]`
+But checking **all** (r2,c2) would be O(N^2), which is feasible, but the challenge is (if explicitly checked) to check all **submatrices within (0,0)-(r2,c2)** — that's too slow.
 
-Formula:
+BUT, the problem asks for all **submatrices that include (0,0)** *(i.e., top-left is always (0,0)),* and *any* (r2,c2) as bottom-right.
+
+But wait: the submatrix **must contain (0,0)** (not necessarily be top-left (0,0)), so all submatrices that include (0,0).
+
+#### But from problem statement **"that contain grid[0][0]"**, not necessarily start at (0,0).
+
+So, for **each possible bottom-right (r2,c2)**, and **all rectangles whose top-left is (0,0)-(r2,c2)** and whose bottom-right is (r2,c2), but top-left _must be_ (r1,c1) with 0 <= r1 <= r2, 0 <= c1 <= c2, and the rectangle (r1,c1)-(r2,c2) must contain (0,0).  
+For a submatrix to include (0,0), it must have `r1<=0<=r2 and c1<=0<=c2`, i.e. fixed for the case where `(r1, c1) = (0,0)` and any (r2,c2).
+
+So, for fixed top-left (r1, c1), the submatrices containing (0,0) are **all rectangles whose top-left is (r1,c1), where r1<=0 and c1<=0**, i.e. **the set of submatrices whose top-left is (r1,c1) with r1 <= 0 and c1 <= 0 and bottom-right is any (r2,c2) with r2 >= 0, c2 >= 0**.
+
+But since `r1` and `c1` cannot be negative, only possible is `(r1,c1) = (0,0)`.  
+So, **all submatrices starting from (0,0) (top-left) and ending at (r2,c2)** for all `r2, c2`.
+
+**So this reduces to: For all submatrices starting at (0,0) and ending at (r2, c2), does it have equal # of 'X' and 'Y', and at least one 'X'?**
+
+Therefore, for all (r2,c2), compute:
+- # of 'X's: Sx[r2][c2]
+- # of 'Y's: Sy[r2][c2]
+
+Only count if Sx[r2][c2] > 0 and Sx[r2][c2] == Sy[r2][c2].
+
+Thus the answer is simply:
+
+```cpp
+int ans = 0;
+for (int r = 0; r < N; ++r)
+    for (int c = 0; c < M; ++c)
+        if (Sx[r][c] > 0 && Sx[r][c] == Sy[r][c])
+            ++ans;
 ```
-pre[i][j] = grid[i][j] 
-            + (i > 0 ? pre[i-1][j] : 0)
-            + (j > 0 ? pre[i][j-1] : 0)
-            - (i > 0 && j > 0 ? pre[i-1][j-1] : 0)
-```
 
-### **Counting**
-- For each (i, j), if `pre[i][j] <= k`, count it.
-
-### **Total Time Complexity**
-- O(m*n), since we just fill prefix sum table, then scan each (i,j).
+**Time complexity:** O(N*M) for filling prefix sums and then O(N*M) for checking — efficient.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+#include <string>
+using namespace std;
+
 class Solution {
 public:
-    int countSubmatrices(vector<vector<int>>& grid, int k) {
-        int m = grid.size(), n = grid[0].size();
-        vector<vector<int>> pre(m, vector<int>(n, 0));
-        int ans = 0;
-        for (int i = 0; i < m; ++i) {
-            for (int j = 0; j < n; ++j) {
-                pre[i][j] = grid[i][j];
-                if (i > 0) pre[i][j] += pre[i-1][j];
-                if (j > 0) pre[i][j] += pre[i][j-1];
-                if (i > 0 && j > 0) pre[i][j] -= pre[i-1][j-1];
-                if (pre[i][j] <= k) ++ans;
+    int countEqualFrequencySubmatrices(vector<vector<char>>& grid) {
+        int n = grid.size();
+        int m = grid[0].size();
+
+        vector<vector<int>> sx(n, vector<int>(m, 0));
+        vector<vector<int>> sy(n, vector<int>(m, 0));
+        
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < m; ++j) {
+                int addx = (grid[i][j] == 'X' ? 1 : 0);
+                int addy = (grid[i][j] == 'Y' ? 1 : 0);
+                sx[i][j] = addx;
+                sy[i][j] = addy;
+                if (i > 0) {
+                    sx[i][j] += sx[i-1][j];
+                    sy[i][j] += sy[i-1][j];
+                }
+                if (j > 0) {
+                    sx[i][j] += sx[i][j-1];
+                    sy[i][j] += sy[i][j-1];
+                }
+                if (i > 0 && j > 0) {
+                    sx[i][j] -= sx[i-1][j-1];
+                    sy[i][j] -= sy[i-1][j-1];
+                }
             }
         }
-        return ans;
+        
+        int count = 0;
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < m; ++j) {
+                if (sx[i][j] > 0 && sx[i][j] == sy[i][j])
+                    count++;
+            }
+        }
+        return count;
     }
 };
 ```
@@ -75,40 +130,53 @@ public:
 
 ## 5. **Example Explanation**
 
-Given:
+Take **Example 1:**
+
 ```
-grid = [[7,2,9],
-        [1,5,0],
-        [2,6,6]], k = 20
+grid = [
+    ['X','Y','.'],
+    ['Y','.','.']
+]
 ```
 
-Let's compute prefix sums:
+- Prefix sums up to each (i,j):
+    - (0,0): 'X' → Sx=1, Sy=0 (not equal, skip)
+    - (0,1): 'X','Y' → Sx=1, Sy=1 (**valid**, has 'X')
+    - (0,2): 'X','Y','.' → Sx=1, Sy=1 (**valid**)
+    - (1,0): ['X','Y','Y']: Sx=1, Sy=2 (not equal)
+    - (1,1): ['X','Y','Y','.']: Sx=1, Sy=2 (not equal)
+    - (1,2): entire grid; has ['X', 'Y', '.', 'Y', '.', '.'] → Sx=1, Sy=2 (not equal)
 
-|    | 0       | 1       | 2       |
-|----|---------|---------|---------|
-|0   | **7**   | 9 (7+2) | 18 (7+2+9)|
-|1   | 8       | 15      | 24      |
-|2   | 10      | 23      | 38      |
+But actually let's check:
+- (0,0)-(0,1): ['X','Y'] → Xs=1, Ys=1 (**counted**)
+- (0,0)-(0,2): ['X','Y','.'] → Xs=1, Ys=1 (**counted**)
+- (0,0)-(1,1): ['X','Y','Y','.'] → Xs=1, Ys=2 (not counted)
+- (0,0)-(1,2): ['X','Y','.','Y','.','.'] → Xs=1, Ys=2 (not counted)
+- (1,0)-(1,0): 'Y' (doesn't contain (0,0), not allowed)
+- (1,1)-(1,1): '.' (doesn't contain (0,0), not allowed)
+- Etc.
 
-Calculate:
-- pre[0][0] = 7   (valid, <=20)
-- pre[0][1] = 9   (valid)
-- pre[0][2] = 18  (valid)
-- pre[1][0] = 8   (valid)
-- pre[1][1] = 15  (valid)
-- pre[1][2] = 24  (not valid)
-- pre[2][0] = 10  (valid)
-- pre[2][1] = 23  (not valid)
-- pre[2][2] = 38  (not valid)
+So, **Total: 3 submatrices:**
+- (0,0)-(0,1)
+- (0,0)-(0,2)
+- (0,0)-(1,0): ['X','Y'], but that's not really a submatrix starting at (0,0), unless defined as such.
+- In reality, only rectangles with top-left (0,0) and bottom-right anywhere that have equal 'X'/'Y', at least one 'X'.
 
-Valid cells: (0,0),(0,1),(0,2),(1,0),(1,1),(2,0) ⇒ **6 submatrices**.
+**So the code above will count all correct submatrices as expected.**
 
 ---
 
 ## **Summary Table**
 
-You only need an O(mn) solution using the 2D prefix sum trick. For every possible bottom-right corner (i,j), if the sum of grid[0..i][0..j] is ≤ k, it's a valid submatrix. Count all such pairs.
+| Rectangle (top-left, bottom-right) | Elements        | #X | #Y | Valid?      |
+|------------------------------------|-----------------|----|----|-------------|
+| (0,0)-(0,0)                        | ['X']           | 1  | 0  | NO          |
+| (0,0)-(0,1)                        | ['X','Y']       | 1  | 1  | YES         |
+| (0,0)-(0,2)                        | ['X','Y','.']   | 1  | 1  | YES         |
+| (0,0)-(1,0)                        | ['X','Y']       | 1  | 1  | YES         |
+| (0,0)-(1,1)                        | ['X','Y','Y','.']|1 |2  | NO           |
+| (0,0)-(1,2)                        | ['X','Y','.','Y','.','.']|1|2 | NO      |
+
+**So the answer is 3.**
 
 ---
-
-**This solution is optimal due to the problem's constraints.**
