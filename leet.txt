@@ -1,79 +1,46 @@
-Let's address your requirements step by step:
+Let's break your request into five parts:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a grid of 'X', 'Y', and '.', count the number of **submatrices** containing the top-left cell `grid[0][0]`, having **equal number of 'X' and 'Y'** (and at least one 'X').
+Given a matrix `grid` and integer `k`, for every possible `k x k` submatrix, compute the minimum difference between any two **distinct** values within it (absolute value). If all values are the same, return 0.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- Grid size: 1 ≤ rows, cols ≤ 1000 (up to **1,000,000** cells).
-- Only valid values: 'X', 'Y', or '.'.
-- **Submatrices must always include (0, 0)**.
-- Ignore submatrices with **no 'X'**.
-- Ignore submatrices with unequal numbers of 'X' and 'Y'.
-- **Edge cases**:
-    - No 'X'/'Y' at all.
-    - All 'X' but no 'Y'.
-    - Smallest grid: 1x1 (`[['X']]` etc.)
-    - All '.'.
-    - Large rectangles.
+### Constraints
+- Matrix size: **`1 <= m, n <= 30`**
+- Cell value range: **`-10^5 <= grid[i][j] <= 10^5`**
+- Submatrix size: **`1 <= k <= min(m, n)`**
+- `k` could be as small as 1 (single element submatrices).
+
+### Edge Cases
+- If **`k == 1`**: Each submatrix is a single cell &rarr; result is always `0`.
+- If all values in submatrix are the same &rarr; result is `0`.
+- Matrix size equals `k` &rarr; only one submatrix to check.
+- Matrix contains negative and positive numbers.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### CORE IDEA:
-- All submatrices must have **top-left at (0, 0)** and **bottom-right at (r2, c2)**.
-- For each possible (r2, c2), we consider submatrix from (0, 0) to (r2, c2).
-- We need a **fast way** to check:
-    - Number of 'X' in rectangle (0,0)-(r2,c2)
-    - Number of 'Y' in rectangle (0,0)-(r2,c2)
-    - Number of '.' are ignored for counting
+### Observations
+- The maximum number of submatrices = `(m-k+1)*(n-k+1)`, up to ~900 for 30x30 grid.
+- Each submatrix contains at most 900 (30x30) elements.
+- **Naive**: For each submatrix, collect elements, deduplicate, sort and compute min diff. Complexity is acceptable given the bounds.
 
-So, for fast queries:
-- Precompute 2D prefix sums: `Sx`, `Sy`:
-    - `Sx[i][j]`: # of 'X's in rect (0,0)-(i,j)
-    - `Sy[i][j]`: # of 'Y's in rect (0,0)-(i,j)
+### Steps
+1. **For each `(i, j)` starting point** of a `k x k` submatrix:
+    - Collect **all values** in window, insert into a container to **deduplicate** (e.g., `std::set` for automatic sorting & uniqueness).
+    - If only one unique value, ans = 0.
+    - Otherwise, traverse sorted values & compute the minimum adjacent difference.
+2. Store the minimum difference for each top-left position.
 
-But checking **all** (r2,c2) would be O(N^2), which is feasible, but the challenge is (if explicitly checked) to check all **submatrices within (0,0)-(r2,c2)** — that's too slow.
-
-BUT, the problem asks for all **submatrices that include (0,0)** *(i.e., top-left is always (0,0)),* and *any* (r2,c2) as bottom-right.
-
-But wait: the submatrix **must contain (0,0)** (not necessarily be top-left (0,0)), so all submatrices that include (0,0).
-
-#### But from problem statement **"that contain grid[0][0]"**, not necessarily start at (0,0).
-
-So, for **each possible bottom-right (r2,c2)**, and **all rectangles whose top-left is (0,0)-(r2,c2)** and whose bottom-right is (r2,c2), but top-left _must be_ (r1,c1) with 0 <= r1 <= r2, 0 <= c1 <= c2, and the rectangle (r1,c1)-(r2,c2) must contain (0,0).  
-For a submatrix to include (0,0), it must have `r1<=0<=r2 and c1<=0<=c2`, i.e. fixed for the case where `(r1, c1) = (0,0)` and any (r2,c2).
-
-So, for fixed top-left (r1, c1), the submatrices containing (0,0) are **all rectangles whose top-left is (r1,c1), where r1<=0 and c1<=0**, i.e. **the set of submatrices whose top-left is (r1,c1) with r1 <= 0 and c1 <= 0 and bottom-right is any (r2,c2) with r2 >= 0, c2 >= 0**.
-
-But since `r1` and `c1` cannot be negative, only possible is `(r1,c1) = (0,0)`.  
-So, **all submatrices starting from (0,0) (top-left) and ending at (r2,c2)** for all `r2, c2`.
-
-**So this reduces to: For all submatrices starting at (0,0) and ending at (r2, c2), does it have equal # of 'X' and 'Y', and at least one 'X'?**
-
-Therefore, for all (r2,c2), compute:
-- # of 'X's: Sx[r2][c2]
-- # of 'Y's: Sy[r2][c2]
-
-Only count if Sx[r2][c2] > 0 and Sx[r2][c2] == Sy[r2][c2].
-
-Thus the answer is simply:
-
-```cpp
-int ans = 0;
-for (int r = 0; r < N; ++r)
-    for (int c = 0; c < M; ++c)
-        if (Sx[r][c] > 0 && Sx[r][c] == Sy[r][c])
-            ++ans;
-```
-
-**Time complexity:** O(N*M) for filling prefix sums and then O(N*M) for checking — efficient.
+### Complexity
+- Each submatrix processed in **O(k^2 log k^2)** due to set insertion and sorting (practically acceptable since max k=30).
+- Total complexity: O(m\*n\*k^2 log k).
 
 ---
 
@@ -81,102 +48,85 @@ for (int r = 0; r < N; ++r)
 
 ```cpp
 #include <vector>
-#include <string>
+#include <set>
+#include <climits>
 using namespace std;
 
 class Solution {
 public:
-    int countEqualFrequencySubmatrices(vector<vector<char>>& grid) {
-        int n = grid.size();
-        int m = grid[0].size();
-
-        vector<vector<int>> sx(n, vector<int>(m, 0));
-        vector<vector<int>> sy(n, vector<int>(m, 0));
+    vector<vector<int>> minAbsDifference(vector<vector<int>>& grid, int k) {
+        int m = grid.size(), n = grid[0].size();
+        vector<vector<int>> ans(m - k + 1, vector<int>(n - k + 1, 0));
         
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < m; ++j) {
-                int addx = (grid[i][j] == 'X' ? 1 : 0);
-                int addy = (grid[i][j] == 'Y' ? 1 : 0);
-                sx[i][j] = addx;
-                sy[i][j] = addy;
-                if (i > 0) {
-                    sx[i][j] += sx[i-1][j];
-                    sy[i][j] += sy[i-1][j];
+        for (int i = 0; i <= m - k; ++i) {
+            for (int j = 0; j <= n - k; ++j) {
+                set<int> vals;
+                // Collect all elements in k x k window starting at (i, j)
+                for (int x = i; x < i + k; ++x) {
+                    for (int y = j; y < j + k; ++y) {
+                        vals.insert(grid[x][y]);
+                    }
                 }
-                if (j > 0) {
-                    sx[i][j] += sx[i][j-1];
-                    sy[i][j] += sy[i][j-1];
-                }
-                if (i > 0 && j > 0) {
-                    sx[i][j] -= sx[i-1][j-1];
-                    sy[i][j] -= sy[i-1][j-1];
+                if (vals.size() == 1) {
+                    ans[i][j] = 0;
+                } else {
+                    int prev = -1e6, mn = INT_MAX;
+                    for (int val : vals) {
+                        if (prev != -1e6) {
+                            mn = min(mn, abs(val - prev));
+                        }
+                        prev = val;
+                    }
+                    ans[i][j] = mn;
                 }
             }
         }
-        
-        int count = 0;
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < m; ++j) {
-                if (sx[i][j] > 0 && sx[i][j] == sy[i][j])
-                    count++;
-            }
-        }
-        return count;
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-Take **Example 1:**
+Let's use **Example 3**:
 
+**Input:**  
+`grid = [[1,-2,3],[2,3,5]], k = 2`
+
+### Submatrices:
+* (0,0):  
 ```
-grid = [
-    ['X','Y','.'],
-    ['Y','.','.']
-]
+[1, -2]
+[2, 3]
 ```
+- Unique values: `{-2,1,2,3}` (sorted: -2,1,2,3)
+    - |1 - -2| = 3, |2 - 1| = 1, |3 - 2| = 1
+    - minimum = **1**
 
-- Prefix sums up to each (i,j):
-    - (0,0): 'X' → Sx=1, Sy=0 (not equal, skip)
-    - (0,1): 'X','Y' → Sx=1, Sy=1 (**valid**, has 'X')
-    - (0,2): 'X','Y','.' → Sx=1, Sy=1 (**valid**)
-    - (1,0): ['X','Y','Y']: Sx=1, Sy=2 (not equal)
-    - (1,1): ['X','Y','Y','.']: Sx=1, Sy=2 (not equal)
-    - (1,2): entire grid; has ['X', 'Y', '.', 'Y', '.', '.'] → Sx=1, Sy=2 (not equal)
+* (0,1):  
+```
+[-2, 3]
+[3, 5]
+```
+- Unique values: `{-2,3,5}` (sorted: -2,3,5)
+    - |3 - -2| = 5, |5 - 3| = 2
+    - minimum = **2**
 
-But actually let's check:
-- (0,0)-(0,1): ['X','Y'] → Xs=1, Ys=1 (**counted**)
-- (0,0)-(0,2): ['X','Y','.'] → Xs=1, Ys=1 (**counted**)
-- (0,0)-(1,1): ['X','Y','Y','.'] → Xs=1, Ys=2 (not counted)
-- (0,0)-(1,2): ['X','Y','.','Y','.','.'] → Xs=1, Ys=2 (not counted)
-- (1,0)-(1,0): 'Y' (doesn't contain (0,0), not allowed)
-- (1,1)-(1,1): '.' (doesn't contain (0,0), not allowed)
-- Etc.
-
-So, **Total: 3 submatrices:**
-- (0,0)-(0,1)
-- (0,0)-(0,2)
-- (0,0)-(1,0): ['X','Y'], but that's not really a submatrix starting at (0,0), unless defined as such.
-- In reality, only rectangles with top-left (0,0) and bottom-right anywhere that have equal 'X'/'Y', at least one 'X'.
-
-**So the code above will count all correct submatrices as expected.**
+**Output:** `[[1, 2]]`
 
 ---
 
 ## **Summary Table**
 
-| Rectangle (top-left, bottom-right) | Elements        | #X | #Y | Valid?      |
-|------------------------------------|-----------------|----|----|-------------|
-| (0,0)-(0,0)                        | ['X']           | 1  | 0  | NO          |
-| (0,0)-(0,1)                        | ['X','Y']       | 1  | 1  | YES         |
-| (0,0)-(0,2)                        | ['X','Y','.']   | 1  | 1  | YES         |
-| (0,0)-(1,0)                        | ['X','Y']       | 1  | 1  | YES         |
-| (0,0)-(1,1)                        | ['X','Y','Y','.']|1 |2  | NO           |
-| (0,0)-(1,2)                        | ['X','Y','.','Y','.','.']|1|2 | NO      |
+| Submatrix Top-Left | Values             | Sorted    | Min Diff |
+|--------------------|--------------------|-----------|----------|
+|      (0, 0)        | 1, -2, 2, 3        | -2 1 2 3  |    1     |
+|      (0, 1)        | -2, 3, 3, 5        | -2 3 5    |    2     |
 
-**So the answer is 3.**
+So, output is `[[1, 2]]`.
 
 ---
+
+**This approach is direct and leverages C++ STL set for unique, sorted elements. With small constraints, it is both concise and efficient.**
