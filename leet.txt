@@ -1,111 +1,99 @@
-Certainly! Let's address your requirements in order:
+Let's tackle the LeetCode daily challenge **"Determine Whether Matrix Can Be Obtained By Rotation"** step by step!
 
 ---
 
 ## 1. **Short Summary**
 
-Given a matrix **grid**, and three integers **x**, **y**, and **k**, flip the k×k square submatrix (whose top-left corner is at (x, y)) **vertically** (i.e., reverse the order of the k rows in that square), and return the resulting matrix.
+Given two n x n binary matrices, `mat` and `target`, determine if you can **rotate** `mat` (0°, 90°, 180°, or 270° clockwise) to make it equal to `target`. Return `true` if possible, else `false`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - Grid size up to 50×50.
-  - 1 ≤ k ≤ min(m-x, n-y): The submatrix is fully contained within the grid.
-  - 0 ≤ x < m, 0 ≤ y < n: Valid starting point for submatrix.
-  - All numbers in the grid are positive and ≥1.
+**Constraints:**
+- `1 <= n <= 10` (small; brute force is fine)
+- Square matrices (`mat.length == mat[0].length == n`)
+- Only 0s and 1s
 
-- **Edge Cases:**
-  - Flipping a 1×1 submatrix (no visible change).
-  - The submatrix is at the edge or in a corner.
-  - The submatrix covers the whole matrix (x=0, y=0, k=min(m, n)).
-  - Repeated numbers do not affect the flipping logic.
-
+**Edge Cases:**
+- n == 1: always match by rotation (trivial)
+- `mat` equals `target` initially (no rotation needed)
+- Completely different matrices (can't match)
+- Multiple possible rotations produce `target` (should return true)
+- Matrices are symmetric (rotations may give the same matrix)
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Idea:**  
-Reverse the order of the k rows in the affected k×k square, **only within that square**.  
-For each column j in y..y+k-1 and each offset i (0..k-1), swap grid[x+i][j] with grid[x+k-1-i][j] for i < k/2.
+Since n is small, try **all four possible rotations** of `mat` (0°, 90°, 180°, and 270°):
 
-**Implementation Steps:**
-1. For l = 0 to (k/2) - 1:
-    - For each column c in y..y+k-1:
-        - Swap grid[x + l][c] and grid[x + k - 1 - l][c]
-2. Return the modified grid.
+1. **Check if `mat` equals `target`.**
+2. If not, **rotate `mat` 90° clockwise**, check again.
+3. Repeat for a total of 4 attempts (0°, 90°, 180°, 270°).
+4. If at any point `mat == target`, return `true`. If none match, return `false`.
 
-**Time Complexity:** O(k²)  
-**Space Complexity:** O(1), in-place swap.
+**Rotation Implementation:**
+- To rotate 90° clockwise: newMat[i][j] = oldMat[n-j-1][i]
+- (Or do in-place rotation with O(n^2) swaps, but with small n, extra allocation is fine.)
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-using namespace std;
-
 class Solution {
 public:
-    vector<vector<int>> flipSubmatrix(vector<vector<int>>& grid, int x, int y, int k) {
-        for (int l = 0; l < k / 2; ++l) {
-            for (int c = y; c < y + k; ++c) {
-                swap(grid[x + l][c], grid[x + k - 1 - l][c]);
+    // Rotates mat 90 degrees clockwise
+    void rotate90(vector<vector<int>>& mat) {
+        int n = mat.size();
+        vector<vector<int>> newMat(n, vector<int>(n));
+        for(int i=0; i<n; ++i) {
+            for(int j=0; j<n; ++j) {
+                newMat[j][n-1-i] = mat[i][j];
             }
         }
-        return grid;
+        mat = newMat;
+    }
+    
+    bool findRotation(vector<vector<int>>& mat, vector<vector<int>>& target) {
+        for(int k=0; k<4; ++k) {
+            if(mat == target) return true;
+            rotate90(mat);
+        }
+        return false;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explanation**
 
 Let's use **Example 1**:
 
 **Input:**
 ```
-grid = [
-  [1, 2, 3, 4],
-  [5, 6, 7, 8],
-  [9,10,11,12],
-  [13,14,15,16]
-]
-x = 1, y = 0, k = 3
+mat =    [[0,1],
+          [1,0]]
+
+target = [[1,0],
+          [0,1]]
 ```
 
-**Affected submatrix (rows 1..3, cols 0..2):**
-```
-[5, 6, 7]
-[9,10,11]
-[13,14,15]
-```
-After vertical flip (rows order reversed):
-```
-[13,14,15]
-[9,10,11]
-[5, 6, 7]
-```
-Integrate back:
-```
-[1, 2, 3, 4]
-[13,14,15, 8]   // updated from [5,6,7,8]
-[9,10,11,12]
-[5, 6, 7,16]    // updated from [13,14,15,16]
-```
+- **0°**: mat = [[0,1],[1,0]] ≠ target
+- **Rotate 90°:**
+    ```
+    newMat[0][1] = mat[0][0] = 0  -> newMat[0][1] = 0
+    newMat[1][1] = mat[0][1] = 1  -> newMat[1][1] = 1
+    newMat[0][0] = mat[1][0] = 1  -> newMat[0][0] = 1
+    newMat[1][0] = mat[1][1] = 0  -> newMat[1][0] = 0
+    ==>
+    After rotation: [[1,0],[0,1]] == target!
+    ```
 
-**Output:**
-```markdown
-[[1,2,3,4],
- [13,14,15,8],
- [9,10,11,12],
- [5,6,7,16]]
-```
+So, after 1 rotation (90°), `mat` == `target`. Return **true**.
 
 ---
 
-**In summary:**  
-Iteratively swap rows inside the k×k square to reverse their order vertically. Easy, fast, and in-place!
+**Summary**:  
+Try all 4 rotations. If any make `mat` equal `target`, return true; else, false. The code efficiently reflects this.
