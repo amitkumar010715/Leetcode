@@ -1,40 +1,54 @@
-Let's tackle the LeetCode daily challenge **"Determine Whether Matrix Can Be Obtained By Rotation"** step by step!
+Let's break down the solution as required:
 
 ---
 
 ## 1. **Short Summary**
 
-Given two n x n binary matrices, `mat` and `target`, determine if you can **rotate** `mat` (0°, 90°, 180°, or 270° clockwise) to make it equal to `target`. Return `true` if possible, else `false`.
+Given a grid of integers, you can move only **right** or **down** from the top-left to the bottom-right. At each step, you accumulate the product of the values you traverse. Return the **maximum non-negative product** modulo `10^9+7` of any such path, or `-1` if all products along all possible paths are negative.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 **Constraints:**
-- `1 <= n <= 10` (small; brute force is fine)
-- Square matrices (`mat.length == mat[0].length == n`)
-- Only 0s and 1s
+- Grid size: **1 &le; m, n &le; 15**
+- Each cell: **-4 &le; grid[i][j] &le; 4**
+
+**Implications:**
+- Brute force all paths is impractical (as paths can be exponential in m+n).
+- DP approaches are OK, since O(mn) state fits.
+- Negative numbers can flip the sign of the product.
 
 **Edge Cases:**
-- n == 1: always match by rotation (trivial)
-- `mat` equals `target` initially (no rotation needed)
-- Completely different matrices (can't match)
-- Multiple possible rotations produce `target` (should return true)
-- Matrices are symmetric (rotations may give the same matrix)
+- **Zeros** in the path: 0 product can be optimal (since it's non-negative).
+- **All negatives**: maximum product always negative; return -1.
+- **Single cell**: Just that value.
+
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm (DP on State with min/max Tracking)**
 
-Since n is small, try **all four possible rotations** of `mat` (0°, 90°, 180°, and 270°):
+**Key Insight:**  
+Because multiplying negatives can flip product's sign, **at each cell, we must remember BOTH the maximal and minimal product achievable up to that cell**.
 
-1. **Check if `mat` equals `target`.**
-2. If not, **rotate `mat` 90° clockwise**, check again.
-3. Repeat for a total of 4 attempts (0°, 90°, 180°, 270°).
-4. If at any point `mat == target`, return `true`. If none match, return `false`.
+Define two DP tables:
+- `max_dp[i][j]`: The largest product (could be negative) achievable up to (i,j)
+- `min_dp[i][j]`: The smallest product achievable up to (i,j)
 
-**Rotation Implementation:**
-- To rotate 90° clockwise: newMat[i][j] = oldMat[n-j-1][i]
-- (Or do in-place rotation with O(n^2) swaps, but with small n, extra allocation is fine.)
+At each cell (i,j):
+- Get products from top (i-1,j) and left (i,j-1)
+- For current grid value `v`:
+    - Possible products: `v * max`, `v * min` from both directions
+    - max_dp = max of those; min_dp = min of those
+
+Initialization:
+- At (0,0), both max_dp and min_dp are grid[0][0]
+
+Answer:
+- At (m-1, n-1), if `max_dp` is >= 0, return it modulo 1e9+7, otherwise return -1.
+
+**Time Complexity:**  
+O(m*n)
 
 ---
 
@@ -43,24 +57,39 @@ Since n is small, try **all four possible rotations** of `mat` (0°, 90°, 180°
 ```cpp
 class Solution {
 public:
-    // Rotates mat 90 degrees clockwise
-    void rotate90(vector<vector<int>>& mat) {
-        int n = mat.size();
-        vector<vector<int>> newMat(n, vector<int>(n));
-        for(int i=0; i<n; ++i) {
-            for(int j=0; j<n; ++j) {
-                newMat[j][n-1-i] = mat[i][j];
+    int maxProductPath(vector<vector<int>>& grid) {
+        const int MOD = 1e9 + 7;
+        int m = grid.size(), n = grid[0].size();
+        vector<vector<long long>> max_dp(m, vector<long long>(n));
+        vector<vector<long long>> min_dp(m, vector<long long>(n));
+        
+        max_dp[0][0] = min_dp[0][0] = grid[0][0];
+        
+        // Fill first row
+        for (int j = 1; j < n; ++j) {
+            max_dp[0][j] = min_dp[0][j] = max_dp[0][j-1] * grid[0][j];
+        }
+        // Fill first column
+        for (int i = 1; i < m; ++i) {
+            max_dp[i][0] = min_dp[i][0] = max_dp[i-1][0] * grid[i][0];
+        }
+        
+        for (int i = 1; i < m; ++i) {
+            for (int j = 1; j < n; ++j) {
+                long long a = max_dp[i-1][j] * grid[i][j];
+                long long b = min_dp[i-1][j] * grid[i][j];
+                long long c = max_dp[i][j-1] * grid[i][j];
+                long long d = min_dp[i][j-1] * grid[i][j];
+                max_dp[i][j] = max({a, b, c, d});
+                min_dp[i][j] = min({a, b, c, d});
             }
         }
-        mat = newMat;
-    }
-    
-    bool findRotation(vector<vector<int>>& mat, vector<vector<int>>& target) {
-        for(int k=0; k<4; ++k) {
-            if(mat == target) return true;
-            rotate90(mat);
-        }
-        return false;
+        
+        long long ans = max_dp[m-1][n-1];
+        if (ans < 0)
+            return -1;
+        else
+            return ans % MOD;
     }
 };
 ```
@@ -69,31 +98,42 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's use **Example 1**:
+Let's run through **Example 2** step-by-step:
 
-**Input:**
+Grid:
 ```
-mat =    [[0,1],
-          [1,0]]
-
-target = [[1,0],
-          [0,1]]
+[1, -2, 1]
+[1, -2, 1]
+[3, -4, 1]
 ```
 
-- **0°**: mat = [[0,1],[1,0]] ≠ target
-- **Rotate 90°:**
-    ```
-    newMat[0][1] = mat[0][0] = 0  -> newMat[0][1] = 0
-    newMat[1][1] = mat[0][1] = 1  -> newMat[1][1] = 1
-    newMat[0][0] = mat[1][0] = 1  -> newMat[0][0] = 1
-    newMat[1][0] = mat[1][1] = 0  -> newMat[1][0] = 0
-    ==>
-    After rotation: [[1,0],[0,1]] == target!
-    ```
+Paths that maximize non-negative product:
 
-So, after 1 rotation (90°), `mat` == `target`. Return **true**.
+- Path: **(0,0) → (1,0) → (2,0) → (2,1) → (2,2)**
+- Actual values: **1 → 1 → 3 → -4 → 1**
+- Product: 1 * 1 * 3 * (-4) * 1 = **-12** (negative, not usable)
+
+- Path: **(0,0) → (0,1) → (1,1) → (2,1) → (2,2)**
+- Actual values: **1 → -2 → -2 → -4 → 1**
+- Product: 1 * -2 * -2 * -4 * 1 = **8**
+
+So **8** is maximum non-negative product.  
+Final answer: **8**
 
 ---
 
-**Summary**:  
-Try all 4 rotations. If any make `mat` equal `target`, return true; else, false. The code efficiently reflects this.
+### **Summary Table for Example (DP tables)**
+
+Suppose you fill `max_dp` and `min_dp`:
+
+|      |  0        | 1      | 2      |
+|------|-----------|--------|--------|
+| 0    | 1         | -2     | -2     |
+| 1    | 1         | 4      | 4      |
+| 2    | 3         | 16     | 16     |
+
+Reviewing `max_dp[2][2] = 8` (from path above).
+
+---
+
+**This approach efficiently computes the answer using DP, handling the sign flips due to negatives.**
