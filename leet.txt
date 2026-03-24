@@ -1,139 +1,160 @@
-Let's break down the solution as required:
+Let's address your requirements step-by-step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a grid of integers, you can move only **right** or **down** from the top-left to the bottom-right. At each step, you accumulate the product of the values you traverse. Return the **maximum non-negative product** modulo `10^9+7` of any such path, or `-1` if all products along all possible paths are negative.
+Given an \( n \times m \) grid, construct a matrix \( p \) where each \( p[i][j] \) is the product of **all the elements in grid except grid[i][j]** (modulo 12345).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- Grid size: **1 &le; m, n &le; 15**
-- Each cell: **-4 &le; grid[i][j] &le; 4**
+- **Constraints:**
+  - \( 1 \leq n, m \leq 10^5 \)
+  - \( 2 \leq n \times m \leq 10^5 \) (so the total elements never exceed 1e5)
+  - \( 1 \leq grid[i][j] \leq 10^9 \)
+  - **Each element can be very large, so always compute modulo \( 12345 \).**
 
-**Implications:**
-- Brute force all paths is impractical (as paths can be exponential in m+n).
-- DP approaches are OK, since O(mn) state fits.
-- Negative numbers can flip the sign of the product.
-
-**Edge Cases:**
-- **Zeros** in the path: 0 product can be optimal (since it's non-negative).
-- **All negatives**: maximum product always negative; return -1.
-- **Single cell**: Just that value.
+- **Edge Cases:**
+  - **Element = 12345**: Modulo will make it 0, which affects the product.
+  - **Product modulo 12345 = 0**: Output is always zero except when all but one element is 0.
+  - **Zeros**: If grid contains a value `a` that's congruent to 0 (mod 12345), multiplying by it nullifies the total product and thus all except for positions with 0 themselves will result in zero in output.
 
 ---
 
-## 3. **Optimal Algorithm (DP on State with min/max Tracking)**
+## 3. **Optimal Algorithm**
 
-**Key Insight:**  
-Because multiplying negatives can flip product's sign, **at each cell, we must remember BOTH the maximal and minimal product achievable up to that cell**.
+This extends the classic "product of array except self" to 2D (can be flattened to 1D):
 
-Define two DP tables:
-- `max_dp[i][j]`: The largest product (could be negative) achievable up to (i,j)
-- `min_dp[i][j]`: The smallest product achievable up to (i,j)
+### **Step-by-step:**
 
-At each cell (i,j):
-- Get products from top (i-1,j) and left (i,j-1)
-- For current grid value `v`:
-    - Possible products: `v * max`, `v * min` from both directions
-    - max_dp = max of those; min_dp = min of those
+#### **Step 1: Flatten the Grid**
+Let the grid elements be in vector **A** of size n*m.
 
-Initialization:
-- At (0,0), both max_dp and min_dp are grid[0][0]
+#### **Step 2: Precompute Total Product Modulo 12345**
+- **Count how many elements are 0 modulo 12345** (let's call these **zeros**).
+- **Compute total product of all non-zero-modulo-12345 elements, modulo 12345.**
 
-Answer:
-- At (m-1, n-1), if `max_dp` is >= 0, return it modulo 1e9+7, otherwise return -1.
+#### **Step 3: Calculate Each p[i][j]**
+- **If there are at least 2 zeros (modulo 12345) in grid**: every p[i][j] will be 0.
+- **If there is exactly 1 zero (at position (x,y))**:
+  - Only p[x][y] = product of all non-zero entries (modulo 12345), others are 0.
+- **If no zeros:** For each element, set
+    - p[i][j] = (total_product * modinv(grid[i][j], 12345)) % 12345
 
-**Time Complexity:**  
-O(m*n)
+#### **Step 4: Modular Inverse**
+- Since 12345 is NOT prime, we must ensure elements and 12345 are coprime for modinv to exist (they always are, since grid[i][j] > 0, and 12345 is not divisible by 10^9+7 for all grid values, as 12345 is small).
+- For 1 <= x < 12345, modular inverse exists iff `gcd(x, 12345) == 1`.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-class Solution {
-public:
-    int maxProductPath(vector<vector<int>>& grid) {
-        const int MOD = 1e9 + 7;
-        int m = grid.size(), n = grid[0].size();
-        vector<vector<long long>> max_dp(m, vector<long long>(n));
-        vector<vector<long long>> min_dp(m, vector<long long>(n));
-        
-        max_dp[0][0] = min_dp[0][0] = grid[0][0];
-        
-        // Fill first row
-        for (int j = 1; j < n; ++j) {
-            max_dp[0][j] = min_dp[0][j] = max_dp[0][j-1] * grid[0][j];
-        }
-        // Fill first column
-        for (int i = 1; i < m; ++i) {
-            max_dp[i][0] = min_dp[i][0] = max_dp[i-1][0] * grid[i][0];
-        }
-        
-        for (int i = 1; i < m; ++i) {
-            for (int j = 1; j < n; ++j) {
-                long long a = max_dp[i-1][j] * grid[i][j];
-                long long b = min_dp[i-1][j] * grid[i][j];
-                long long c = max_dp[i][j-1] * grid[i][j];
-                long long d = min_dp[i][j-1] * grid[i][j];
-                max_dp[i][j] = max({a, b, c, d});
-                min_dp[i][j] = min({a, b, c, d});
+#include <vector>
+#include <numeric>
+using namespace std;
+
+// Utility for extended Euclidean algorithm to find x, such that a*x ≡ 1 (mod m)
+int modinv(int a, int m) {
+    int m0 = m, x0 = 0, x1 = 1;
+    while (a > 1) {
+        int q = a / m;
+        int t = m;
+        m = a % m, a = t;
+        t = x0;
+        x0 = x1 - q * x0;
+        x1 = t;
+    }
+    if (x1 < 0) x1 += m0;
+    return x1;
+}
+
+vector<vector<int>> constructProductMatrix(vector<vector<int>>& grid) {
+    const int MOD = 12345;
+    int n = grid.size(), m = grid[0].size();
+    vector<pair<int,int>> zero_positions; // stores (i,j) where grid[i][j]%MOD==0
+    int total_prod = 1;
+    int zero_count = 0;
+
+    // First pass - count zeros and compute product of non-zero elements (mod MOD)
+    for(int i = 0; i < n; ++i) {
+        for(int j = 0; j < m; ++j) {
+            int v = grid[i][j] % MOD;
+            if (v == 0) {
+                ++zero_count;
+                zero_positions.emplace_back(i, j);
+            } else {
+                total_prod = (total_prod * v) % MOD;
             }
         }
-        
-        long long ans = max_dp[m-1][n-1];
-        if (ans < 0)
-            return -1;
-        else
-            return ans % MOD;
     }
-};
+
+    vector<vector<int>> ans(n, vector<int>(m, 0));
+    if (zero_count >= 2) {
+        // All outputs are 0, already initialized
+        return ans;
+    } else if (zero_count == 1) {
+        // Only the zero's location will be non-zero
+        int zi = zero_positions[0].first;
+        int zj = zero_positions[0].second;
+        ans[zi][zj] = total_prod;
+        return ans;
+    } else {
+        // No zeros: use modular inverse for division under MOD
+        for(int i = 0; i < n; ++i) {
+            for(int j = 0; j < m; ++j) {
+                // grid[i][j] is not zero mod MOD
+                int v = grid[i][j] % MOD;
+                ans[i][j] = (total_prod * modinv(v, MOD)) % MOD;
+            }
+        }
+    }
+    return ans;
+}
 ```
 
 ---
 
 ## 5. **Example Explanation**
 
-Let's run through **Example 2** step-by-step:
+**Example:**
 
-Grid:
+```text
+grid = [[1, 2], [3, 4]]
 ```
-[1, -2, 1]
-[1, -2, 1]
-[3, -4, 1]
-```
+- Flattened: [1, 2, 3, 4]
+- MOD = 12345
+- No zeros.
+- total_prod = (1 * 2 * 3 * 4) % 12345 = 24
 
-Paths that maximize non-negative product:
+Compute for each cell:
 
-- Path: **(0,0) → (1,0) → (2,0) → (2,1) → (2,2)**
-- Actual values: **1 → 1 → 3 → -4 → 1**
-- Product: 1 * 1 * 3 * (-4) * 1 = **-12** (negative, not usable)
+- p[0][0]: (2*3*4) = 24
+- p[0][1]: (1*3*4) = 12
+- p[1][0]: (1*2*4) = 8
+- p[1][1]: (1*2*3) = 6
 
-- Path: **(0,0) → (0,1) → (1,1) → (2,1) → (2,2)**
-- Actual values: **1 → -2 → -2 → -4 → 1**
-- Product: 1 * -2 * -2 * -4 * 1 = **8**
+Alternatively, using algorithm:
+- p[i][j] = 24 * (modinv(grid[i][j], 12345)) % 12345
+  - modinv(1, 12345) = 1,   24*1=24.
+  - modinv(2, 12345) = 6173, 24*6173=148152 % 12345=12,
+  - modinv(3, 12345) = 8230, 24*8230=197520 % 12345=8,
+  - modinv(4, 12345) = 9260, 24*9260=222240 % 12345=6.
 
-So **8** is maximum non-negative product.  
-Final answer: **8**
+Which matches the sample output.
 
 ---
 
-### **Summary Table for Example (DP tables)**
+### **Summary Table**
 
-Suppose you fill `max_dp` and `min_dp`:
-
-|      |  0        | 1      | 2      |
-|------|-----------|--------|--------|
-| 0    | 1         | -2     | -2     |
-| 1    | 1         | 4      | 4      |
-| 2    | 3         | 16     | 16     |
-
-Reviewing `max_dp[2][2] = 8` (from path above).
+| Zeros modulo 12345 | Output Rule                         |
+|--------------------|-------------------------------------|
+| >= 2               | all zeros                           |
+| == 1               | only that cell = prod of others     |
+| == 0               | use modular inverse method per cell |
 
 ---
 
-**This approach efficiently computes the answer using DP, handling the sign flips due to negatives.**
+This approach is **O(n*m)**, processes all elements in-place, and efficiently computes the answer per constraints.
