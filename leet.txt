@@ -1,51 +1,53 @@
-Let's address your requirements step-by-step:
+Let's break down the problem and provide all requirements:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an \( n \times m \) grid, construct a matrix \( p \) where each \( p[i][j] \) is the product of **all the elements in grid except grid[i][j]** (modulo 12345).
+Given a grid of positive integers, determine if you can make **one horizontal or one vertical cut** such that both sides are non-empty and the sum of both resulting sections is equal.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - \( 1 \leq n, m \leq 10^5 \)
-  - \( 2 \leq n \times m \leq 10^5 \) (so the total elements never exceed 1e5)
-  - \( 1 \leq grid[i][j] \leq 10^9 \)
-  - **Each element can be very large, so always compute modulo \( 12345 \).**
-
-- **Edge Cases:**
-  - **Element = 12345**: Modulo will make it 0, which affects the product.
-  - **Product modulo 12345 = 0**: Output is always zero except when all but one element is 0.
-  - **Zeros**: If grid contains a value `a` that's congruent to 0 (mod 12345), multiplying by it nullifies the total product and thus all except for positions with 0 themselves will result in zero in output.
+- **1 ≤ m ≤ 10⁵**, **1 ≤ n ≤ 10⁵**, **2 ≤ m * n ≤ 10⁵**<br>
+  (So grid can be large, but total elements **≤ 100,000**)
+- **Each section post-cut must be non-empty.**
+- **Values in grid: 1..10⁵**.
+- **Single row or column**: not allowed (`m`, `n` ≥ 2).
+- **Edge:** The cut cannot leave an empty section.  
+- **Edge:** The sum must be split perfectly **in half**.  
+- **Edge:** Sum must be even.
+- **Edge:** Large test cases require **O(m+n)** or better.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This extends the classic "product of array except self" to 2D (can be flattened to 1D):
+### Intuition
 
-### **Step-by-step:**
+- For **horizontal cuts**, after row i, the top is rows [0..i], bottom is [(i+1)..(m-1)].
+- For **vertical cuts**, after column j, the left is cols [0..j], right is [(j+1)..(n-1)].
+- For every possible cut (between row/col), check if the sum of cells on each side matches.
 
-#### **Step 1: Flatten the Grid**
-Let the grid elements be in vector **A** of size n*m.
+### Steps
 
-#### **Step 2: Precompute Total Product Modulo 12345**
-- **Count how many elements are 0 modulo 12345** (let's call these **zeros**).
-- **Compute total product of all non-zero-modulo-12345 elements, modulo 12345.**
+#### **Step 1:**  
+Calculate the **total sum S** of the grid.
 
-#### **Step 3: Calculate Each p[i][j]**
-- **If there are at least 2 zeros (modulo 12345) in grid**: every p[i][j] will be 0.
-- **If there is exactly 1 zero (at position (x,y))**:
-  - Only p[x][y] = product of all non-zero entries (modulo 12345), others are 0.
-- **If no zeros:** For each element, set
-    - p[i][j] = (total_product * modinv(grid[i][j], 12345)) % 12345
+#### **Step 2:**  
+If S is **odd**, no possible split. Return false.
 
-#### **Step 4: Modular Inverse**
-- Since 12345 is NOT prime, we must ensure elements and 12345 are coprime for modinv to exist (they always are, since grid[i][j] > 0, and 12345 is not divisible by 10^9+7 for all grid values, as 12345 is small).
-- For 1 <= x < 12345, modular inverse exists iff `gcd(x, 12345) == 1`.
+#### **Step 3:**
+- For **horizontal**: Compute **prefix sum** of each row, accumulate top-half sum, for each possible cut (after row k), check if prefix sum == S/2.
+- For **vertical**: Sum each column, compute prefix sum across columns, check for each vertical cut.
+
+#### **Step 4:**
+Return true if any cut is found, else false.
+
+**Complexity:**  
+- **O(mn)** to sum rows/columns (since m*n ≤ 100,000).
+- **O(m+n)** for prefix sums and checking.
 
 ---
 
@@ -53,108 +55,69 @@ Let the grid elements be in vector **A** of size n*m.
 
 ```cpp
 #include <vector>
-#include <numeric>
 using namespace std;
 
-// Utility for extended Euclidean algorithm to find x, such that a*x ≡ 1 (mod m)
-int modinv(int a, int m) {
-    int m0 = m, x0 = 0, x1 = 1;
-    while (a > 1) {
-        int q = a / m;
-        int t = m;
-        m = a % m, a = t;
-        t = x0;
-        x0 = x1 - q * x0;
-        x1 = t;
-    }
-    if (x1 < 0) x1 += m0;
-    return x1;
-}
-
-vector<vector<int>> constructProductMatrix(vector<vector<int>>& grid) {
-    const int MOD = 12345;
-    int n = grid.size(), m = grid[0].size();
-    vector<pair<int,int>> zero_positions; // stores (i,j) where grid[i][j]%MOD==0
-    int total_prod = 1;
-    int zero_count = 0;
-
-    // First pass - count zeros and compute product of non-zero elements (mod MOD)
-    for(int i = 0; i < n; ++i) {
-        for(int j = 0; j < m; ++j) {
-            int v = grid[i][j] % MOD;
-            if (v == 0) {
-                ++zero_count;
-                zero_positions.emplace_back(i, j);
-            } else {
-                total_prod = (total_prod * v) % MOD;
+class Solution {
+public:
+    bool isPossibleToCutGrid(vector<vector<int>>& grid) {
+        int m = grid.size(), n = grid[0].size();
+        // Find total sum
+        long long total = 0;
+        vector<long long> rowSum(m, 0), colSum(n, 0);
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                total += grid[i][j];
+                rowSum[i] += grid[i][j];
+                colSum[j] += grid[i][j];
             }
         }
-    }
+        if (total % 2 != 0) return false;
+        long long half = total / 2;
 
-    vector<vector<int>> ans(n, vector<int>(m, 0));
-    if (zero_count >= 2) {
-        // All outputs are 0, already initialized
-        return ans;
-    } else if (zero_count == 1) {
-        // Only the zero's location will be non-zero
-        int zi = zero_positions[0].first;
-        int zj = zero_positions[0].second;
-        ans[zi][zj] = total_prod;
-        return ans;
-    } else {
-        // No zeros: use modular inverse for division under MOD
-        for(int i = 0; i < n; ++i) {
-            for(int j = 0; j < m; ++j) {
-                // grid[i][j] is not zero mod MOD
-                int v = grid[i][j] % MOD;
-                ans[i][j] = (total_prod * modinv(v, MOD)) % MOD;
-            }
+        // Check horizontal cuts (between row i and i+1, so i=0..m-2)
+        long long prefix = 0;
+        for (int i = 0; i < m-1; ++i) {
+            prefix += rowSum[i];
+            if (prefix == half) return true;
         }
+
+        // Check vertical cuts (between col j and j+1, so j=0..n-2)
+        prefix = 0;
+        for (int j = 0; j < n-1; ++j) {
+            prefix += colSum[j];
+            if (prefix == half) return true;
+        }
+
+        return false;
     }
-    return ans;
-}
+};
 ```
 
 ---
 
 ## 5. **Example Explanation**
 
-**Example:**
+### Example 1
 
-```text
-grid = [[1, 2], [3, 4]]
-```
-- Flattened: [1, 2, 3, 4]
-- MOD = 12345
-- No zeros.
-- total_prod = (1 * 2 * 3 * 4) % 12345 = 24
+**Input:** `grid = [[1,4],[2,3]]`
 
-Compute for each cell:
-
-- p[0][0]: (2*3*4) = 24
-- p[0][1]: (1*3*4) = 12
-- p[1][0]: (1*2*4) = 8
-- p[1][1]: (1*2*3) = 6
-
-Alternatively, using algorithm:
-- p[i][j] = 24 * (modinv(grid[i][j], 12345)) % 12345
-  - modinv(1, 12345) = 1,   24*1=24.
-  - modinv(2, 12345) = 6173, 24*6173=148152 % 12345=12,
-  - modinv(3, 12345) = 8230, 24*8230=197520 % 12345=8,
-  - modinv(4, 12345) = 9260, 24*9260=222240 % 12345=6.
-
-Which matches the sample output.
+- `m=2, n=2`
+- `total = 1+4+2+3 = 10`, so half = 5
+- `rowSum = [5,5]`
+- `colSum = [3,7]`
+- Horizontal cut **after row 0** (prefix sum: 5) gives top=[1,4]=5 and bottom=[2,3]=5. **Match!**
+- So, **output: true**.
 
 ---
 
-### **Summary Table**
-
-| Zeros modulo 12345 | Output Rule                         |
-|--------------------|-------------------------------------|
-| >= 2               | all zeros                           |
-| == 1               | only that cell = prod of others     |
-| == 0               | use modular inverse method per cell |
+### **Summary Table:**  
+| Step    | Action                         | Output   |
+|---------|--------------------------------|----------|
+| 1       | Compute total/grid sums         | 10 / [5,5], [3,7] |
+| 2       | Check horizontal between 0 & 1  | 5 == 5, match     |
+| 3       | (Vertical, not needed)          | -        |
+| 4       | Return result                   | true      |
 
 ---
 
-This approach is **O(n*m)**, processes all elements in-place, and efficiently computes the answer per constraints.
+Let me know if you want the code with more comments or further clarifications!
