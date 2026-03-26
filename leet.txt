@@ -1,53 +1,85 @@
-Let's break down the problem and provide all requirements:
+Let's break down and solve the **Equal Sum Grid Partition II** challenge step by step.
 
 ---
-
 ## 1. **Short Summary**
 
-Given a grid of positive integers, determine if you can make **one horizontal or one vertical cut** such that both sides are non-empty and the sum of both resulting sections is equal.
+Given an `m x n` grid of positive integers, **is it possible to split it with one horizontal or vertical cut** (leaving two non-empty sections) so the sums of the two sections are either:
+
+- **Equal**
+- **Or can be made equal by removing at most one single cell from either section,**
+- **Such that the section after removal stays connected (removal cannot split the section)**
+
+Return `true` if possible, `false` otherwise.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **1 ≤ m ≤ 10⁵**, **1 ≤ n ≤ 10⁵**, **2 ≤ m * n ≤ 10⁵**<br>
-  (So grid can be large, but total elements **≤ 100,000**)
-- **Each section post-cut must be non-empty.**
-- **Values in grid: 1..10⁵**.
-- **Single row or column**: not allowed (`m`, `n` ≥ 2).
-- **Edge:** The cut cannot leave an empty section.  
-- **Edge:** The sum must be split perfectly **in half**.  
-- **Edge:** Sum must be even.
-- **Edge:** Large test cases require **O(m+n)** or better.
+- `1 <= m, n <= 1e5`, but `m*n <= 1e5`. So, grid is up to 1e5 cells, but can be very "tall" or "wide".
+- All entries are positive (`1 <= grid[i][j] <= 1e5`).
+- **Each section after the cut must be non-empty.**
+- **Sections (after any cell removal) must remain connected** (removal of a cell cannot split into multiple pieces).
+- **Only 1 cell may be discounted (removed), and only from ONE section.**
+
+**Edge Cases:**
+- Smallest and largest possible grid shapes.
+- Multiple ways to cut; either row or column cuts are allowed.
+- Removal at the edge must not split the section.
+- On removal, must check that the section is still connected; cells at the "edge" of the section are safe to discount.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Intuition
+Observations:
 
-- For **horizontal cuts**, after row i, the top is rows [0..i], bottom is [(i+1)..(m-1)].
-- For **vertical cuts**, after column j, the left is cols [0..j], right is [(j+1)..(n-1)].
-- For every possible cut (between row/col), check if the sum of cells on each side matches.
+- **For a cut between rows `r` and `r+1`:**
+    - Top section: rows `0..r`
+    - Bottom section: rows `r+1..m-1`
+    - Both sections are rectangles.
+    - If you remove at most one cell from either, the section must stay connected—**in a rectangle, only removals from the edge row/col are allowed**.
+    - **So for a row-cut: only discounting a cell from the top/bottom row of a section is allowed.**
+- **Analogous observations for a column cut.**
 
-### Steps
+**Steps:**
 
-#### **Step 1:**  
-Calculate the **total sum S** of the grid.
+### Step 1. Precompute row and column sums, and 2D prefix sum if needed.
+- For each row, compute row sum.
+- For each column, compute col sum.
+- Total grid sum = sum of all cell values.
 
-#### **Step 2:**  
-If S is **odd**, no possible split. Return false.
+### Step 2. Try all possible horizontal cuts (after row r: r from 0 to m-2)
+- Section 1: rows 0..r (inclusive)
+- Section 2: rows r+1..m-1
 
-#### **Step 3:**
-- For **horizontal**: Compute **prefix sum** of each row, accumulate top-half sum, for each possible cut (after row k), check if prefix sum == S/2.
-- For **vertical**: Sum each column, compute prefix sum across columns, check for each vertical cut.
+Compute:
+- `sum1`: sum of Section 1 rows.
+- `sum2`: sum of Section 2 rows.
+- If `sum1 == sum2`: return `true`
+- Try to discount up to one cell:
+    - If `sum1 > sum2`: Try removing a cell from Section 1 of value `sum1-sum2`
+        - Only cells in edge row (row r, since discounting in any other row would split the rectangle) can be removed.
+        - If there exists a cell in row r with value `sum1-sum2`, return `true`.
+    - If `sum2 > sum1`: Try removing a cell from Section 2 of value `sum2-sum1`
+        - Only cells in row r+1 can be discounted.
+        - If exists a cell in row r+1 with value `sum2-sum1`, return `true`.
 
-#### **Step 4:**
-Return true if any cut is found, else false.
+### Step 3. Similarly, try all possible vertical cuts (after col c: c from 0 to n-2)
+- Section 1: columns 0..c
+- Section 2: columns c+1..n-1
 
-**Complexity:**  
-- **O(mn)** to sum rows/columns (since m*n ≤ 100,000).
-- **O(m+n)** for prefix sums and checking.
+For each cut:
+- Calculate sums for both sections.
+- If sums equal, return true.
+- To discount:
+    - Can only remove a cell from edge col (`c` or `c+1`), i.e., any cell in those cols.
+    - If matching cell exists in the respective section, return true.
+
+### Step 4. Return false if no cut works.
+
+**Complexity:**
+- O(m + n) (since m + n ≤ 2*1e5) for row and column cumulative sums.
+- For each cut, only need to look up the values in a single row (for horizontal) or a single column (for vertical).
 
 ---
 
@@ -55,39 +87,68 @@ Return true if any cut is found, else false.
 
 ```cpp
 #include <vector>
+#include <unordered_set>
 using namespace std;
 
 class Solution {
 public:
-    bool isPossibleToCutGrid(vector<vector<int>>& grid) {
+    bool isPossibleToPartition(vector<vector<int>>& grid) {
         int m = grid.size(), n = grid[0].size();
-        // Find total sum
+        vector<long long> rowSum(m), colSum(n);
         long long total = 0;
-        vector<long long> rowSum(m, 0), colSum(n, 0);
+        // Precompute row and col sums
         for (int i = 0; i < m; ++i) {
+            long long sum = 0;
             for (int j = 0; j < n; ++j) {
-                total += grid[i][j];
-                rowSum[i] += grid[i][j];
+                sum += grid[i][j];
                 colSum[j] += grid[i][j];
             }
+            rowSum[i] = sum;
+            total += sum;
         }
-        if (total % 2 != 0) return false;
-        long long half = total / 2;
+        // Prefix sums for row and col
+        vector<long long> rowPS(m+1, 0), colPS(n+1, 0);
+        for (int i = 0; i < m; ++i) rowPS[i+1] = rowPS[i] + rowSum[i];
+        for (int j = 0; j < n; ++j) colPS[j+1] = colPS[j] + colSum[j];
+        
+        // Check horizontal cuts
+        for (int r = 0; r < m - 1; ++r) {
+            long long top = rowPS[r+1];
+            long long bot = total - top;
+            if (top == bot) return true;
 
-        // Check horizontal cuts (between row i and i+1, so i=0..m-2)
-        long long prefix = 0;
-        for (int i = 0; i < m-1; ++i) {
-            prefix += rowSum[i];
-            if (prefix == half) return true;
+            if (top > bot) {
+                long long need = top - bot;
+                // Can only discount from the edge row
+                for (int j = 0; j < n; ++j)
+                    if (grid[r][j] == need)
+                        return true;
+            }
+            if (bot > top) {
+                long long need = bot - top;
+                for (int j = 0; j < n; ++j)
+                    if (grid[r+1][j] == need)
+                        return true;
+            }
         }
-
-        // Check vertical cuts (between col j and j+1, so j=0..n-2)
-        prefix = 0;
-        for (int j = 0; j < n-1; ++j) {
-            prefix += colSum[j];
-            if (prefix == half) return true;
+        // Check vertical cuts
+        for (int c = 0; c < n - 1; ++c) {
+            long long left = colPS[c+1];
+            long long right = total - left;
+            if (left == right) return true;
+            if (left > right) {
+                long long need = left - right;
+                for (int i = 0; i < m; ++i)
+                    if (grid[i][c] == need)
+                        return true;
+            }
+            if (right > left) {
+                long long need = right - left;
+                for (int i = 0; i < m; ++i)
+                    if (grid[i][c+1] == need)
+                        return true;
+            }
         }
-
         return false;
     }
 };
@@ -95,29 +156,41 @@ public:
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Explain Example 2**
 
-### Example 1
+### `grid = [[1, 2], [3, 4]]`
 
-**Input:** `grid = [[1,4],[2,3]]`
+Let's analyze vertical cut after column 0:
 
-- `m=2, n=2`
-- `total = 1+4+2+3 = 10`, so half = 5
-- `rowSum = [5,5]`
-- `colSum = [3,7]`
-- Horizontal cut **after row 0** (prefix sum: 5) gives top=[1,4]=5 and bottom=[2,3]=5. **Match!**
-- So, **output: true**.
+- Left section: `[[1],[3]]` sum = 1+3 = 4  
+  Right section: `[[2],[4]]` sum = 2+4 = 6
 
----
+- Sums unequal; difference is 2.
 
-### **Summary Table:**  
-| Step    | Action                         | Output   |
-|---------|--------------------------------|----------|
-| 1       | Compute total/grid sums         | 10 / [5,5], [3,7] |
-| 2       | Check horizontal between 0 & 1  | 5 == 5, match     |
-| 3       | (Vertical, not needed)          | -        |
-| 4       | Return result                   | true      |
+- Try removing `2` from the right section (can only remove from column 1).  
+  Yes, cell (0,1) = 2. If we discount this, right section sum = 4.
+
+- After removing (0,1), right section is `[[4]]`, which is connected.
+
+- The rest of the left/right rectangles are intact and connected.
+
+- **So, return `true`.**
 
 ---
 
-Let me know if you want the code with more comments or further clarifications!
+### **Summary Table**
+
+| Step                  | What to Check    | Section(s)      | Needed condition      | Allowed Discount         |
+|-----------------------|------------------|-----------------|----------------------|-------------------------|
+| After row cut (r)     | Sums equal?      | Top/bottom      | top == bot?          | If not, discount from last/top row |
+| After column cut (c)  | Sums equal?      | Left/right      | left == right?       | If not, discount from last/first col |
+
+---
+
+### **In summary**
+
+- We try every possible horizontal and vertical cut.
+- For each, we check for:  
+    - immediate balance  
+    - or, after removing a cell from the edge row/col of one half, balance **and still remain connected**.
+- For m, n, grid sizes, this is always feasible as rows + cols ≤ 2e5, and per cut we only traverse one row or column.
