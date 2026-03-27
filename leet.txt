@@ -1,196 +1,92 @@
-Let's break down and solve the **Equal Sum Grid Partition II** challenge step by step.
-
----
-## 1. **Short Summary**
-
-Given an `m x n` grid of positive integers, **is it possible to split it with one horizontal or vertical cut** (leaving two non-empty sections) so the sums of the two sections are either:
-
-- **Equal**
-- **Or can be made equal by removing at most one single cell from either section,**
-- **Such that the section after removal stays connected (removal cannot split the section)**
-
-Return `true` if possible, `false` otherwise.
+Let's address your requirements step by step.
 
 ---
 
-## 2. **Constraints & Edge Cases**
+### 1. **Short Summary**
 
-- `1 <= m, n <= 1e5`, but `m*n <= 1e5`. So, grid is up to 1e5 cells, but can be very "tall" or "wide".
-- All entries are positive (`1 <= grid[i][j] <= 1e5`).
-- **Each section after the cut must be non-empty.**
-- **Sections (after any cell removal) must remain connected** (removal of a cell cannot split into multiple pieces).
-- **Only 1 cell may be discounted (removed), and only from ONE section.**
-
-**Edge Cases:**
-- Smallest and largest possible grid shapes.
-- Multiple ways to cut; either row or column cuts are allowed.
-- Removal at the edge must not split the section.
-- On removal, must check that the section is still connected; cells at the "edge" of the section are safe to discount.
+Given a matrix, cyclically shift **even-indexed rows to the left** and **odd-indexed rows to the right** `k` times. Return `true` if the final matrix equals the original matrix; else, `false`.
 
 ---
 
-## 3. **Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-Observations:
+- **Matrix Size:** 1 ≤ rows, cols ≤ 25
+- **k:** 1 ≤ k ≤ 50
+- All entries: 1 ≤ value ≤ 25
 
-- **For a cut between rows `r` and `r+1`:**
-    - Top section: rows `0..r`
-    - Bottom section: rows `r+1..m-1`
-    - Both sections are rectangles.
-    - If you remove at most one cell from either, the section must stay connected—**in a rectangle, only removals from the edge row/col are allowed**.
-    - **So for a row-cut: only discounting a cell from the top/bottom row of a section is allowed.**
-- **Analogous observations for a column cut.**
-
-**Steps:**
-
-### Step 1. Precompute row and column sums, and 2D prefix sum if needed.
-- For each row, compute row sum.
-- For each column, compute col sum.
-- Total grid sum = sum of all cell values.
-
-### Step 2. Try all possible horizontal cuts (after row r: r from 0 to m-2)
-- Section 1: rows 0..r (inclusive)
-- Section 2: rows r+1..m-1
-
-Compute:
-- `sum1`: sum of Section 1 rows.
-- `sum2`: sum of Section 2 rows.
-- If `sum1 == sum2`: return `true`
-- Try to discount up to one cell:
-    - If `sum1 > sum2`: Try removing a cell from Section 1 of value `sum1-sum2`
-        - Only cells in edge row (row r, since discounting in any other row would split the rectangle) can be removed.
-        - If there exists a cell in row r with value `sum1-sum2`, return `true`.
-    - If `sum2 > sum1`: Try removing a cell from Section 2 of value `sum2-sum1`
-        - Only cells in row r+1 can be discounted.
-        - If exists a cell in row r+1 with value `sum2-sum1`, return `true`.
-
-### Step 3. Similarly, try all possible vertical cuts (after col c: c from 0 to n-2)
-- Section 1: columns 0..c
-- Section 2: columns c+1..n-1
-
-For each cut:
-- Calculate sums for both sections.
-- If sums equal, return true.
-- To discount:
-    - Can only remove a cell from edge col (`c` or `c+1`), i.e., any cell in those cols.
-    - If matching cell exists in the respective section, return true.
-
-### Step 4. Return false if no cut works.
-
-**Complexity:**
-- O(m + n) (since m + n ≤ 2*1e5) for row and column cumulative sums.
-- For each cut, only need to look up the values in a single row (for horizontal) or a single column (for vertical).
+#### Edge Cases:
+- **All values equal**: Matrix will remain unchanged after any cyclic shift.
+- **k ≥ cols**: Only the remainder of k % cols shifts actually affect position (since a full rotation returns to the start).
+- **Row length = 1**: A single element row never changes.
+- **Empty matrix**: Not possible by constraints.
 
 ---
 
-## 4. **C++ Solution**
+### 3. **Optimal Algorithm**
+
+1. For each row:
+   - **Even index**: Left shift by (k % n), where n is the number of columns.
+   - **Odd index**: Right shift by (k % n), same n.
+2. After all shifts, compare the final matrix row by row to the original.
+3. If any row doesn't match, return `false`.
+4. Return `true` if all rows match.
+
+**Time Complexity:** O(m * n), where m = number of rows, n = number of columns.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <unordered_set>
 using namespace std;
 
 class Solution {
 public:
-    bool isPossibleToPartition(vector<vector<int>>& grid) {
-        int m = grid.size(), n = grid[0].size();
-        vector<long long> rowSum(m), colSum(n);
-        long long total = 0;
-        // Precompute row and col sums
+    bool areSimilar(vector<vector<int>>& mat, int k) {
+        int m = mat.size(), n = mat[0].size();
+        // For each row, create the shifted version and compare
         for (int i = 0; i < m; ++i) {
-            long long sum = 0;
+            vector<int> shifted(n);
+            int actual_shift = k % n;
+            if (actual_shift == 0) continue; // No change
+            if (i % 2 == 0) {
+                // Even: left shift
+                for (int j = 0; j < n; ++j)
+                    shifted[j] = mat[i][(j + actual_shift) % n];
+            } else {
+                // Odd: right shift
+                for (int j = 0; j < n; ++j)
+                    shifted[(j + actual_shift) % n] = mat[i][j];
+            }
+            // Compare shifted with original
             for (int j = 0; j < n; ++j) {
-                sum += grid[i][j];
-                colSum[j] += grid[i][j];
-            }
-            rowSum[i] = sum;
-            total += sum;
-        }
-        // Prefix sums for row and col
-        vector<long long> rowPS(m+1, 0), colPS(n+1, 0);
-        for (int i = 0; i < m; ++i) rowPS[i+1] = rowPS[i] + rowSum[i];
-        for (int j = 0; j < n; ++j) colPS[j+1] = colPS[j] + colSum[j];
-        
-        // Check horizontal cuts
-        for (int r = 0; r < m - 1; ++r) {
-            long long top = rowPS[r+1];
-            long long bot = total - top;
-            if (top == bot) return true;
-
-            if (top > bot) {
-                long long need = top - bot;
-                // Can only discount from the edge row
-                for (int j = 0; j < n; ++j)
-                    if (grid[r][j] == need)
-                        return true;
-            }
-            if (bot > top) {
-                long long need = bot - top;
-                for (int j = 0; j < n; ++j)
-                    if (grid[r+1][j] == need)
-                        return true;
+                if (shifted[j] != mat[i][j])
+                    return false;
             }
         }
-        // Check vertical cuts
-        for (int c = 0; c < n - 1; ++c) {
-            long long left = colPS[c+1];
-            long long right = total - left;
-            if (left == right) return true;
-            if (left > right) {
-                long long need = left - right;
-                for (int i = 0; i < m; ++i)
-                    if (grid[i][c] == need)
-                        return true;
-            }
-            if (right > left) {
-                long long need = right - left;
-                for (int i = 0; i < m; ++i)
-                    if (grid[i][c+1] == need)
-                        return true;
-            }
-        }
-        return false;
+        return true;
     }
 };
 ```
 
 ---
 
-## 5. **Explain Example 2**
+### 5. **Explain Example**
 
-### `grid = [[1, 2], [3, 4]]`
+#### Example 2
+**Input:**  
+mat = [[1,2,1,2],  
+     [5,5,5,5],  
+     [6,3,6,3]]  
+k = 2
 
-Let's analyze vertical cut after column 0:
+- Row 0 (even), left shift by 2: [1,2,1,2] → [1,2,1,2] (no change)
+- Row 1 (odd), right shift by 2: [5,5,5,5] → [5,5,5,5] (all same, so no visible change)
+- Row 2 (even), left shift by 2: [6,3,6,3] → [6,3,6,3] (no change)
 
-- Left section: `[[1],[3]]` sum = 1+3 = 4  
-  Right section: `[[2],[4]]` sum = 2+4 = 6
-
-- Sums unequal; difference is 2.
-
-- Try removing `2` from the right section (can only remove from column 1).  
-  Yes, cell (0,1) = 2. If we discount this, right section sum = 4.
-
-- After removing (0,1), right section is `[[4]]`, which is connected.
-
-- The rest of the left/right rectangles are intact and connected.
-
-- **So, return `true`.**
+**Result:** The shifted matrix is identical to the original; thus, we return **true**.
 
 ---
 
-### **Summary Table**
-
-| Step                  | What to Check    | Section(s)      | Needed condition      | Allowed Discount         |
-|-----------------------|------------------|-----------------|----------------------|-------------------------|
-| After row cut (r)     | Sums equal?      | Top/bottom      | top == bot?          | If not, discount from last/top row |
-| After column cut (c)  | Sums equal?      | Left/right      | left == right?       | If not, discount from last/first col |
-
----
-
-### **In summary**
-
-- We try every possible horizontal and vertical cut.
-- For each, we check for:  
-    - immediate balance  
-    - or, after removing a cell from the edge row/col of one half, balance **and still remain connected**.
-- For m, n, grid sizes, this is always feasible as rows + cols ≤ 2e5, and per cut we only traverse one row or column.
+If you need further clarification or a step-by-step example, let me know!
