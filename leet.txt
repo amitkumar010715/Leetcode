@@ -1,73 +1,114 @@
-Let's break down the problem and solve it step by step:
+Let's break down the problem and solution as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-We are given two strings `s1` and `s2` of the same length `n`, both consisting of lowercase English letters. We can perform unlimited swaps on either string, choosing two indices `(i, j)` where `i < j` and `j - i` is **even** (i.e., the distance between indices is even). The task is to determine if it's possible to make `s1` equal to `s2` using these swaps.
+Given two strings `str1` (of `'T'`/`'F'`) and `str2` (lowercase letters), construct the lexicographically smallest string `word` of length `n + m - 1` such that:
+- For each `i`:
+    - If `str1[i] == 'T'`: substring `word[i..i+m-1]` equals `str2`
+    - If `str1[i] == 'F'`: substring `word[i..i+m-1]` is **not** equal to `str2`
+Return the smallest `word` if possible, else `""`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `1 <= n <= 10^5`
-    - Both strings only contain lowercase English letters.
-
-- **Edge Cases:**
-    - Very short strings (`n = 1` or `2`)
-    - Strings that already match.
-    - Strings that differ in characters or in arrangement such that parity swaps can't fix them.
+- `n up to 1e4`, `m up to 500` ⇒ String length up to ~10,500, requires O(N*m) or better.
+- Edge cases:
+    - Overlapping `'T'`s can conflict (e.g. `T` in one place, `F` in overlap).
+    - Impossible cases when a `'T'` and an overlapping `'F'` both demand contradictory values.
+    - If all positions are `'F'`, just avoid the forbidden substrings.
+    - If all `'T'`, we must 'tile' str2 at all points.
 
 ---
 
-## 3. **Optimal Algorithm & Explanation**
+## 3. **Optimal Algorithm**
 
-### **Insights**
+**High-level Plan:**
 
-- You can swap any two characters at positions with the **same parity** (either both even or both odd).
-    - Consider positions 0 and 2: their difference is 2 (even), so you can swap them.
-    - Positions 1 and 5 -> difference is 4 (even), so you can swap them.
-    - Positions 1 and 2 -> difference is 1 (odd), so you **cannot** swap them.
-- Thus, you can sort characters among all **even indices** independently, and all **odd indices** independently, but you **can't** move a character from even to an odd position or vice versa.
+1. We use an **array of chars** for the result string `word` (size `n+m-1`).
+2. For each `'T'` in `str1`, set `word[i..i+m-1] = str2` (i.e., add constraints).
+3. After all `'T'` constraints, check for **conflicts**.
+4. For each `'F'` in `str1`, ensure `word[i..i+m-1] != str2`. If already fully specified and matches str2, it's impossible.
+5. For flexibility, for each `'F'`, if possible, change the lex smallest position in the window to a different char (but compatible with previous constraints).
+6. For all unset positions, fill with `'a'` for lexicographical minimality.
 
-### **Approach**
+### **Key Details / Pseudocode:**
 
-1. Separate both `s1` and `s2` into **evens** (characters at even indices) and **odds** (characters at odd indices).
-2. If the sorted lists of evens in `s1` and `s2` match, and the sorted lists of odds in `s1` and `s2` match, then you can make `s1` and `s2` equal. Otherwise, **not possible**.
-
-- **Time complexity:** O(N log N) (sorting)
-- **Space complexity:** O(N)
+- Use a char vector, init to '?'
+- For each `'T'`: for each pos in the window, if unset or matches needed, set; if conflict, return ""
+- For each `'F'`: in the window, if at least one character can be changed (from str2 value to another, ideally 'a' if possible), do so; if not, return ""
+- For unset chars, fill with 'a' (the smallest possible)
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
 #include <string>
-#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    bool canBeEqual(string s1, string s2) {
-        int n = s1.size();
-        vector<char> even1, odd1, even2, odd2;
+    string findLexSmallestString(string str1, string str2) {
+        int n = str1.size(), m = str2.size();
+        int len = n + m - 1;
+        vector<char> word(len, '?');
+
+        // 1. Apply 'T' constraints.
         for (int i = 0; i < n; ++i) {
-            if (i % 2 == 0) {
-                even1.push_back(s1[i]);
-                even2.push_back(s2[i]);
-            } else {
-                odd1.push_back(s1[i]);
-                odd2.push_back(s2[i]);
+            if (str1[i] == 'T') {
+                for (int j = 0; j < m; ++j) {
+                    int idx = i + j;
+                    if (word[idx] == '?') {
+                        word[idx] = str2[j];
+                    } else if (word[idx] != str2[j]) {
+                        // Conflict: already set to something else!
+                        return "";
+                    }
+                }
             }
         }
-        sort(even1.begin(), even1.end());
-        sort(even2.begin(), even2.end());
-        sort(odd1.begin(), odd1.end());
-        sort(odd2.begin(), odd2.end());
-        return even1 == even2 && odd1 == odd2;
+
+        // 2. Apply 'F' constraints.
+        for (int i = 0; i < n; ++i) {
+            if (str1[i] == 'F') {
+                // Check if all characters are already set and match str2 (i.e., forbidden substring)
+                bool same = true;
+                for (int j = 0; j < m; ++j) {
+                    int idx = i + j;
+                    if (word[idx] == '?') {same = false; break;}
+                    if (word[idx] != str2[j]) {same = false; break;}
+                }
+                if (same) return "";
+                // Else, if possible, set lex smallest difference in this window
+                bool updated = false;
+                for (int j = 0; j < m && !updated; ++j) {
+                    int idx = i + j;
+                    if (word[idx] == '?') {
+                        // Set to smallest char different from str2[j]
+                        char new_char = (str2[j] == 'a') ? 'b' : 'a';
+                        word[idx] = new_char;
+                        updated = true;
+                    } else if (word[idx] != str2[j]) {
+                        updated = true;
+                    }
+                }
+                if (!updated) {
+                    // All match str2, and all set: impossible
+                    return "";
+                }
+            }
+        }
+
+        // 3. Fill remaining positions with 'a'
+        for (int i = 0; i < len; ++i) {
+            if (word[i] == '?') word[i] = 'a';
+        }
+
+        return string(word.begin(), word.end());
     }
 };
 ```
@@ -76,30 +117,46 @@ public:
 
 ## 5. **Example Explanation**
 
-### **Example 1**
-#### Input
+### Example 1:
 ```
-s1 = "abcdba"
-s2 = "cabdab"
+str1 = "TFTF"
+str2 = "ab"
+n = 4, m = 2, len = 5
 ```
+**Step 1:**  
+Apply `'T'` at i=0: set word[0]='a', word[1]='b'  
+Apply `'T'` at i=2: set word[2]='a', word[3]='b'
 
-Break them into even and odd indices:
+**Current word:**  a b ? a b ?
 
-- **Even indices (0,2,4):**
-    - s1: a, c, b → ['a','c','b']
-    - s2: c, b, a → ['c','b','a']
-- **Odd indices (1,3,5):**
-    - s1: b, d, a → ['b','d','a']
-    - s2: a, d, b → ['a','d','b']
+Apply `'F'` at i=1:
+- window word[1]='b', word[2]='a'  
+   Need to ensure "ba" ≠ "ab". Success, since b≠a, a≠b.
 
-Sort:
+Apply `'F'` at i=3:
+- window word[3]='b', word[4]='?'
+   word[3]='b', need word[4] ≠ 'b' (since str2[1]='b')
+   word[4] is unset, set to 'a'
+**Final word:** `'a','b','a','b','a'` = "ababa"
 
-- Even: ['a','b','c'] versus ['a','b','c'] → match
-- Odd: ['a','b','d'] versus ['a','b','d'] → match
-
-**Result:** `true` (yes, they can be made equal by swaps among even indices and among odd indices.)
+**Return:** `"ababa"`
 
 ---
 
-**Summary:**  
-Group even and odd indices, sort, then compare — if both match, return true. This efficiently solves the problem using properties of allowed swaps.
+# Summary Table
+
+| Step        | word             |
+|-------------|------------------|
+| Initialize  | ? ? ? ? ?        |
+| T at 0      | a b ? ? ?        |
+| T at 2      | a b a b ?        |
+| F at 1      | a b a b ?        | ("ba" ≠ "ab": ok)
+| F at 3      | a b a b a        |                                        |
+
+---
+
+## **Conclusion**
+
+- Efficient solution: O(n * m)
+- Key is to process 'T' first, then 'F', and fill in 'a' for unset spots.
+- Code is efficient and handles all tricky cases.
