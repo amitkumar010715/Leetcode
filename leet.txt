@@ -1,150 +1,237 @@
-Let's break down and solve the LeetCode problem **"Maximum Amount of Money Robot Can Earn"**.
+Let's break down and solve the problem step-by-step as requested.
 
 ---
 
 ## 1. **Summary**
 
-- You are given an `m x n` grid with integer values (can be negative or positive).
-- The robot starts at `(0,0)` and wants to reach `(m-1,n-1)`. It can only move **right** or **down**.
-- At most 2 times on the path, the robot can use a **neutralization ability** to avoid the loss in a negative cell (robber).
-- Find the **maximum profit** possible along a path, using optimal neutralizations.
+Given the positions and shot ranges for several robots, and the positions of several walls on a line, determine the **maximum number of unique walls** that can be destroyed. Each robot can shoot a bullet either left or right up to its max distance, but bullets immediately stop if they hit another robot. Robots can’t be destroyed or shot "through".
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### Constraints
-- `1 <= m, n <= 500` (very large input; O(m*n) is okay, O(m*n*neutralizations) is fine as 2 is small)
-- `-1000 <= coins[i][j] <= 1000`
-- Robot may end with negative coins; maximization can still result in negative total.
-
-### Edge Cases
-- All cells non-negative: just sum path values.
-- All cells negative: neutralize largest negatives along path.
-- Neutralize *up to* 2 cells — can neutralize fewer if needed.
-- Start and end positions could be negative; must handle neutralizations on start/end.
+- Up to **1e5 robots** and **1e5 walls**.
+- Positions are up to **1e9**, so we can't use direct arrays to represent positions.
+- Both robots and walls have **unique** positions.
+- For each robot, the bullet can go in only one direction: left or right (per robot, per solution), optimally chosen.
+- **Edge Cases**:
+  - A wall at the *exact* position of a robot can be destroyed by that robot.
+  - A robot might not be able to shoot any wall if its bullet hits another robot before reaching a wall.
+  - Some walls may be unreachable by all robots.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This is a **Dynamic Programming (DP) with State** problem.
+This problem is about **assigning each robot's single shot direction (left or right) for max total walls destroyed**.
 
-### **State Definition**
-Let:
-- `dp[i][j][k]` = max profit at cell `(i,j)` having used `k` neutralizations (`k` in `0..2`).
+### *High-level approach*:
 
-### **Transitions**
-- From `(i-1, j, k)` or `(i, j-1, k)` — previous state, not neutralizing current cell.
-  - If `coins[i][j] >= 0`, always take `coins[i][j]`.
-  - If `coins[i][j] < 0`:
-    - Option 1: **Don't neutralize:** add `coins[i][j]` (which reduces sum).
-    - Option 2: **Neutralize (if k > 0):** act as if cell had `0` value (i.e., don't subtract), pay 1 neutralization.
-- For k=0, can't neutralize.
-- For k=1 or 2, can choose to neutralize, but at most 2 per path.
+1. **Preprocess**:
+    - Sort `robots` and `walls` for ordered access.
+    - Build a set for fast robot position lookups.
 
-**Initialization**: At `(0,0)`:
-- If positive or 0: `dp[0][0][0] = coins[0][0]`
-- If negative: 
-    - `dp[0][0][0] = coins[0][0]`,
-    - `dp[0][0][1] = 0` (used 1 neutralization here).
+2. **For each robot, in both directions, determine the "interval" it can shoot**:
+    - To the left: `[robot - distance, robot)` (stop if another robot in between).
+    - To the right: `(robot, robot + distance]` (stop at first robot found).
 
-**DP Iteration**:
-For each cell, for each `k` in `{0,1,2}`:
-  - Possibly transition **without neutralization** (+coins[i][j]), 
-  - and **with neutralizing** (if `k>0` and coins[i][j]<0: +0).
+3. **For all robots, find for each direction the exact *segment* (interval) of space that will be covered, considering robot obstacles.**
+   - For left shots: Go backward robot-by-robot, keep track of which space is truly "open" to shoot left before hitting another robot.
+   - For right shots: Go forward similarly.
+   - For each robot, figure out the maximal interval left and right for its possible shot.
 
-### **Complexity**
-- O(m * n * 3) = 3*250,000 = 750,000 states, very acceptable.
+4. **For each wall, determine which robot(s) could shoot it (in either direction), and construct a bipartite matching**:
+    - For every wall, keep all robot-directions that can destroy it.
+    - Since a robot can shoot in only *one* direction, but could destroy several walls, assign each robot its best set in a way that overall total is maximized.
+
+### *Optimal Greedy Approach* (Interval coverage):
+
+Given constraints, an optimal solution is:
+- For each **robot**, compute the maximal segment covered for left and for right shots, considering the nearest obstacle (robot) in that direction (using sorted arrays).
+- For all robots, record "interval of wall positions that would be destroyed if this robot shoots left/right".
+- For each wall, for both sides, determine which robot(s) can destroy it.
+- **For each robot, select the direction (left or right) which covers more walls (unique, not double-counted walls)**.
+
+We can use a "sweep line" or interval approach, or two pointers, to efficiently compute coverage counts.
+
+#### **Algorithm Steps**
+
+- **Sort** `robots`, `walls`.
+- For each robot, use **binary search** on robot positions to determine the interval the bullet can travel in left and right directions (before hitting next robot).
+- For each robot+direction, record the interval.
+- For each wall, assign it to all robot/direction intervals covering it. But since *each robot can only choose one direction*, we model "interval coverage" problem:
+    - For each robot, compute: how many unique walls would be destroyed if it shoots left, and if it shoots right.
+- For each robot, select the direction covering more walls.
+- For each wall, if it is covered by at least one selected robot+direction, it will be destroyed.
+
+### **Implementation details (How to do this efficiently in C++)**:
+
+- For every robot, compute left and right reachable bounds, using sorted robot list and binary search (lower_bound/upper_bound).
+- For walls, for each interval, efficiently count (e.g., with lower_bound/upper_bound on sorted wall list) how many walls are inside each robot's left/right "shot interval".
+- For each robot, choose max between left and right.
+- For each covered wall, use a `set` or boolean array to make sure walls are counted only once.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
 #include <algorithm>
+#include <unordered_set>
 using namespace std;
 
 class Solution {
 public:
-    int maximumCoins(vector<vector<int>>& coins) {
-        int m = coins.size(), n = coins[0].size();
-        // dp[i][j][k]: max coins at (i,j), with k neutralizations used
-        vector<vector<vector<int>>> dp(m, vector<vector<int>>(n, vector<int>(3, INT_MIN)));
+    int maxDestroyedWalls(vector<int>& robots, vector<int>& distance, vector<int>& walls) {
+        int n = robots.size();
+        int m = walls.size();
 
-        // Initialization at (0,0)
-        if (coins[0][0] >= 0) {
-            dp[0][0][0] = coins[0][0];
-        } else {
-            dp[0][0][0] = coins[0][0];
-            dp[0][0][1] = 0; // use 1 neutralization at start
-        }
+        // Sort for binary search
+        vector<int> robots_pos = robots;
+        sort(robots_pos.begin(), robots_pos.end());
+        vector<int> walls_pos = walls;
+        sort(walls_pos.begin(), walls_pos.end());
 
-        // Fill DP table
-        for (int i = 0; i < m; ++i) {
-            for (int j = 0; j < n; ++j) {
-                for (int k = 0; k <= 2; ++k) {
-                    // Skip start cell; already initialized
-                    if (i == 0 && j == 0) continue;
-                    int best = INT_MIN;
+        // Map robot position to its index for distance lookup
+        vector<pair<int, int>> robot_idx_pairs(n);
+        for (int i = 0; i < n; ++i) robot_idx_pairs[i] = {robots[i], i};
+        sort(robot_idx_pairs.begin(), robot_idx_pairs.end());
 
-                    // From top
-                    if (i > 0) {
-                        // Don't neutralize here
-                        if (dp[i-1][j][k] != INT_MIN)
-                            best = max(best, dp[i-1][j][k] + coins[i][j]);
-                        // Neutralize here (if possible)
-                        if (coins[i][j] < 0 && k > 0 && dp[i-1][j][k-1] != INT_MIN)
-                            best = max(best, dp[i-1][j][k-1]);
-                    }
-                    // From left
-                    if (j > 0) {
-                        // Don't neutralize here
-                        if (dp[i][j-1][k] != INT_MIN)
-                            best = max(best, dp[i][j-1][k] + coins[i][j]);
-                        // Neutralize here (if possible)
-                        if (coins[i][j] < 0 && k > 0 && dp[i][j-1][k-1] != INT_MIN)
-                            best = max(best, dp[i][j-1][k-1]);
-                    }
-                    dp[i][j][k] = best;
+        // For O(1) wall lookup
+        unordered_set<int> wall_set(walls.begin(), walls.end());
+
+        // For each robot, compute left and right intervals (within no other robot in path)
+        vector<pair<int, int>> left_interval(n), right_interval(n);
+
+        // Build for binary search of robots
+        for (int i = 0; i < n; ++i) {
+            int pos = robots[i], dist = distance[i];
+
+            // Left interval: [L, pos], L = max(pos - dist, after nearest robot on left)
+            // Find the nearest robot on the left (strictly less than current)
+            auto it = lower_bound(robots_pos.begin(), robots_pos.end(), pos);
+            int L = pos - dist;
+            if (it != robots_pos.begin()) {
+                --it;
+                int left_neighbor = *it;
+                if (left_neighbor >= L) {
+                    L = left_neighbor + 1;
                 }
             }
+            left_interval[i] = {L, pos}; // closed interval
+
+            // Right interval: [pos, R], R = min(pos + dist, before nearest robot on right)
+            it = upper_bound(robots_pos.begin(), robots_pos.end(), pos);
+            int R = pos + dist;
+            if (it != robots_pos.end()) {
+                int right_neighbor = *it;
+                if (right_neighbor <= R) {
+                    R = right_neighbor - 1;
+                }
+            }
+            right_interval[i] = {pos, R}; // closed interval
         }
-        // Max over all possible neutralizations used at the end
-        return max({dp[m-1][n-1][0], dp[m-1][n-1][1], dp[m-1][n-1][2]});
+
+        // For each robot, count number of walls in its left and right intervals
+        vector<int> left_count(n, 0), right_count(n, 0);
+
+        // To record which walls are covered by which robot+direction
+        vector<vector<int>> left_walls(n), right_walls(n);
+
+        // For walls, for each robot, use lower_bound/upper_bound to get count in interval
+        for (int i = 0; i < n; ++i) {
+            // Get walls in [L, R] interval for left and right
+            // left interval
+            int l1 = left_interval[i].first;
+            int r1 = left_interval[i].second;
+            auto lb1 = lower_bound(walls_pos.begin(), walls_pos.end(), l1);
+            auto ub1 = upper_bound(walls_pos.begin(), walls_pos.end(), r1);
+            for (auto it = lb1; it != ub1; ++it) left_walls[i].push_back(*it);
+            left_count[i] = left_walls[i].size();
+
+            // right interval
+            int l2 = right_interval[i].first;
+            int r2 = right_interval[i].second;
+            auto lb2 = lower_bound(walls_pos.begin(), walls_pos.end(), l2);
+            auto ub2 = upper_bound(walls_pos.begin(), walls_pos.end(), r2);
+            for (auto it = lb2; it != ub2; ++it) right_walls[i].push_back(*it);
+            right_count[i] = right_walls[i].size();
+        }
+
+        // For each robot, select the direction that covers more unique walls
+        // Mark those walls as destroyed (via set to avoid counting duplicates)
+        unordered_set<int> destroyed;
+        for (int i = 0; i < n; ++i) {
+            if (right_count[i] > left_count[i]) {
+                for (int w : right_walls[i]) destroyed.insert(w);
+            } else {
+                for (int w : left_walls[i]) destroyed.insert(w);
+            }
+        }
+        return destroyed.size();
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explained (Sample 2)**
 
-**coins = [[0,1,-1], [1,-2,3], [2,-3,4]]**
+### **Input**
+```
+robots = [10,2], distance = [5,1], walls = [5,2,7]
+```
 
-Let's follow an optimal route:
-- **(0,0):** `0`
-- **(0,1):** `1` (now total = 1)
-- **(1,1):** `-2` (*use neutralization* so no loss, total still = 1, neutralized = 1)
-- **(1,2):** `3` (total = 1+3=4)
-- **(2,2):** `4` (total = 4+4=8)
+- **Robots:** at **2** (range 1), **10** (range 5)
+- **Walls:** at **2, 5, 7**
 
-Thus, total coins collected = **8**.
+#### **Step by step:**
 
-DP tracks all possible usages of neutralizations at every cell and picks the optimal choice globally.
+- **Robot at 2:** Range = 1  
+  - Left: `[1,2]`, but no wall at 1, wall at 2 is in range. No robot on left.
+  - Right: `[2,3]`, but wall at 2 only.
+
+- **Robot at 10:** Range = 5
+  - Left: `[5,10]`, no robot blocking, so walls at 5 and 7 are both in range.
+  - Right: `[10,15]`, no wall in range.
+
+- For each robot, best is:
+  - Robot 2: left (covers wall 2)
+  - Robot 10: left (covers walls 5, 7)
+
+- **All 3 walls destroyed:** Output is `3`.
 
 ---
 
-### **Summary Table**
+## **Summary Table**
 
-| Cell         | Value | Option 1: Don't Neutralize | Option 2: Neutralize (if rob) |
-|--------------|-------|---------------------------|-------------------------------|
-| Any positive |  x    | path sum + x              | (unneeded)                    |
-| Robber (<0)  | -y    | path sum - y              | path sum   (if ≤2/time left)  |
+| Robot (#) | Left Interval     | Walls hit left | Right Interval     | Walls hit right | Pick Direction |
+|-----------|------------------|---------------|-------------------|-----------------|---------------|
+| 2         | [1,2]            | {2}           | [2,3]             | {2}             | left          |
+| 10        | [5,10]           | {5,7}         | [10,15]           | {}              | left          |
 
-Final answer: **max over all [m-1][n-1][k]**.
+**Unique walls destroyed:** 2, 5, 7 → **3**
 
 ---
 
-Let me know if you want a **Python** implementation, or walk-through for another example!
+### **Time Complexity**
+- O(n log n + m log m) for sorting.
+- O(n log m) for each robot's interval to walls lookup.
+- O(n) for rest; all acceptable for n, m up to \(10^5\).
+
+---
+
+# **Summary Table**
+
+| Step                | Main Operation        | Complexity                          |
+|---------------------|----------------------|-------------------------------------|
+| Sort positions      | robots + walls       | O(n log n + m log m)                |
+| Per robot interval  | binary search walls  | O(n log m)                          |
+| Collect results     | insert walls in set  | O(total walls covered) <= O(m)      |
+
+---
+
+## **In Short**
+
+By careful interval-checking and set-based aggregation, we maximize unique destroyed walls with efficient C++ code.
