@@ -1,83 +1,129 @@
-Sure! Here is a detailed explanation and clean solution for the problem **Robot Return to Origin**:
+Let's walk step by step through your requirements:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a string of moves for a 2D robot (`'U'`, `'D'`, `'L'`, `'R'`), you need to check if the robot returns to the origin `(0, 0)` after executing all moves. Each character in the string represents a unit movement in the direction specified.
+A robot starts at `(0,0)` on an infinite grid and is given movement commands (`-1` right, `-2` left, `1-9` = move forward by k). Some squares contain obstacles which block movement. We must simulate all commands and return the **maximum squared Euclidean distance** from the origin that the robot ever achieves.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= moves.length <= 2 * 10^4`
-  - `moves` only contains `'U'`, `'D'`, `'L'`, `'R'`
-- **Edge Cases:**
-  - The string has only one character: The robot cannot return to origin (`"U"`, `"D"`, `"L"`, `"R"` → returns `false`).
-  - The moves cancel each other out: e.g. `"UDLR"` (each move is canceled).
-  - All moves in one direction only: e.g. `"LLLL"` or `"UUU"`.
-  - The string is balanced but in a "mixed" order: e.g. `"LURD"`.
+- **Commands Length:** Up to 10,000 steps.
+- **Obstacles:** Up to 10,000 obstacles; grid coordinates from -30,000 to +30,000.
+- **Obstacles at (0,0):** The robot starts on an obstacle but ignores it at first; cannot *return* to (0,0).
+- **Directions:** North (+y), East (+x), South (-y), West (-x).
+- **Performance:** Must check for obstacle collisions efficiently (ideally O(1) per step), ruling out naive list checking.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- **High-level idea:**  
-  Keep track of the robot's location using two variables (`x` and `y`) starting from `(0, 0)`.
-  - `'U'` increases `y` by 1 (up).
-  - `'D'` decreases `y` by 1 (down).
-  - `'L'` decreases `x` by 1 (left).
-  - `'R'` increases `x` by 1 (right).
-- After all moves, if and only if `(x, y) == (0, 0)`, return `true`, else return `false`.
-- **Time complexity:** O(n), where n = length of `moves`.
+### Steps:
+
+1. **Preprocess** obstacles into a **hash set** for O(1) lookup.
+2. **Set up direction arrays:** Since only four compass points are possible, use an integer `dir` (0=North, 1=East, 2=South, 3=West) and two arrays to index x/y deltas.
+3. **Process each command:**
+    - If **turn**, update `dir`.
+    - If **move forward**, attempt stepwise movement up to `k` units, checking for obstacles at each destination. Stop on collision.
+    - After each successful movement step, update max distance squared.
+4. **Return** the maximum squared distance reached.
+
+### Time Complexity
+
+- Each move step/obstacle check is **O(1)** (using hash set), total moves ≤ 10^4 × 9 = 9e4. Efficient.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+#include <unordered_set>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    bool judgeCircle(string moves) {
-        int x = 0, y = 0;
-        for (char move : moves) {
-            if (move == 'U') y++;
-            else if (move == 'D') y--;
-            else if (move == 'L') x--;
-            else if (move == 'R') x++;
+    int robotSim(vector<int>& commands, vector<vector<int>>& obstacles) {
+        // Encode obstacles as "x*60001 + y" (since -3e4 to 3e4, 60001 covers range)
+        unordered_set<long long> obsSet;
+        for (auto& obs : obstacles) {
+            long long code = (static_cast<long long>(obs[0]) + 30000) * 60001LL 
+                             + (static_cast<long long>(obs[1]) + 30000);
+            obsSet.insert(code);
         }
-        return x == 0 && y == 0;
+        
+        // Directions:          N      E     S     W
+        int dx[4] =           { 0,    1,    0,   -1 };
+        int dy[4] =           { 1,    0,   -1,    0 };
+        int dir = 0; // North
+        
+        int x = 0, y = 0;
+        int maxDist = 0;
+        
+        for (int cmd : commands) {
+            if (cmd == -2)        // turn left
+                dir = (dir + 3) % 4;
+            else if (cmd == -1)   // turn right
+                dir = (dir + 1) % 4;
+            else {
+                for (int i = 0; i < cmd; ++i) {
+                    int nx = x + dx[dir];
+                    int ny = y + dy[dir];
+                    long long code = (static_cast<long long>(nx) + 30000) * 60001LL 
+                                   + (static_cast<long long>(ny) + 30000);
+                    if (obsSet.count(code))
+                        break; // Blocked by obstacle
+                    x = nx;
+                    y = ny;
+                    maxDist = max(maxDist, x*x + y*y);
+                }
+            }
+        }
+        return maxDist;
     }
 };
 ```
 
----
-
-## 5. **Example Explanation**
-
-**Example:**  
-`moves = "UD"`
-
-- Start at `(0, 0)`.
-- `'U'` → move up: `(0, 1)`
-- `'D'` → move down: `(0, 0)` (back to origin)
-
-**Result:**  
-Since the robot is back at the origin, the answer is `true`.
+**Note:** We map coordinates `(x, y)` to a unique integer for `unordered_set` by offsetting both coordinates to be non-negative; use a width (`60001`) larger than allowed grid range.
 
 ---
 
-### ✨ **Summary Table**
+## 5. **Example Explained**
 
-| Input   | is_at_origin | Output |
-|---------|--------------|--------|
-| "UD"    | Yes          | true   |
-| "LL"    | No           | false  |
-| "LURD"  | Yes          | true   |
-| "UUUDDDLLRR" | Yes      | true   |
-| "U"     | No           | false  |
+Let's take **Example 2** step-by-step:
+
+**Input:**  
+`commands = [4,-1,4,-2,4], obstacles = [[2,4]]`
+
+**Step-by-step:**
+
+1. **Start at (0,0), facing North.**
+2. `4` → move north to `(0,4)`
+3. `-1` → turn right (to East)
+4. `4`:
+   - `(1,4)` → OK.
+   - `(2,4)` → Obstacle! Stop; now at `(1,4)`.
+5. `-2` → turn left (to North)
+6. `4`:
+   - `(1,5)` → OK
+   - `(1,6)` → OK
+   - `(1,7)` → OK
+   - `(1,8)` → OK
+   - End at `(1,8)`
+
+Calculate squared distance at each point:
+- `(0,4)` → 16
+- `(1,4)` → 17
+- `(1,5)` → 26
+- `(1,6)` → 37
+- `(1,7)` → 50
+- `(1,8)` → 65 ← **maximum**
+
+**Return:** `65`
 
 ---
 
-Let me know if you'd like any further explanation!
+Let me know if you need further breakdowns or Python/Java solutions!
