@@ -1,119 +1,185 @@
-Let's break down the solution step by step.
+Let's walk through the **XOR After Range Multiplication Queries II** problem step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Problem Summary**
 
-Given an array `nums` and several queries, each query `[l, r, k, v]` means:
-- For indices `i` starting from `l` to `r` and stepping by `k`, set  
-  `nums[i] = (nums[i] * v) % (10^9 + 7)`.
-
-After all queries, return the **bitwise XOR of all elements** in `nums`.
+Given an integer array `nums` and a list of queries of the form `[l, r, k, v]`, for each query, multiply every element at indices `i`, where `i = l + t*k` (for t ≥ 0 and `i <= r`), by `v`. After all queries, return the XOR of all resulting elements in `nums`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 **Constraints:**
-- `n = nums.length ≤ 1000`
-- `q = queries.length ≤ 1000`
-- Each `nums[i]` up to `1e9`, each `v ≤ 1e5`
-- For each query: `0 ≤ l ≤ r < n`, `1 ≤ k ≤ n`, `1 ≤ v ≤ 1e5`
-
-**Implications:**  
-- Both `n` and `q` are small → an $O(n \cdot q)$ solution is acceptable.
-- Each query may affect up to n/k elements, but for these sizes brute force is fine.
+- n, q ≤ 1e5 (cannot process each query naively in O(nq) time; need O(n + q log n) or similar).
+- All array values and multipliers up to 1e9, 1e5.
+- k can be 1 (affects all in range), up to n.
+- l, r well within array bounds.
 
 **Edge Cases:**
-- Multiple queries overlap on the same indices.
-- `k == 1` — all indices in range.
-- `k > 1` — non-contiguous indices.
-- Only one query or only one element.
+- k = 1: acts as a simple range multiplication
+- k = n: only affects a single position
+- Overlapping queries must multiply the result, in *query order*
+- Some queries may overlap on the same indices several times.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Though some problems with large `n`, `k` can benefit from range updates using difference arrays, here **brute force** is both acceptable and straightforward:
+### 💡 **Key Insight:**
 
-**Algorithm:**
-1. For each query `[l, r, k, v]`:
-    - Iterate for `i = l; i <= r; i += k`:
-        - `nums[i] = (nums[i] * v) % mod` (mod is $10^9+7$)
-2. Compute XOR across all elements in `nums`.
-3. Return that XOR.
+- For each query `[l, r, k, v]`, you multiply every position `idx = l, l + k, l + 2k, ... ≤ r` by `v`.
+- For all queries, after all multiplications, just XOR all nums’ values.
 
-This is $O(q \cdot n / 2)$ at worst (if $k=1$ for all queries), but that's just $10^6$ operations.
+### **Naive:** For every query, loop (O(nq)). **Too slow.**
+
+---
+### **Observation: Fast Simulation with Modulo Buckets**
+
+We need to efficiently apply a multiplication to:
+- all positions in `[l, r]` with fixed step `k` (i.e., positions in a particular arithmetic progression).
+
+#### **Trick:**
+For each fixed k, splitting all indices `i` into `k` different "residues" (`i % k`).  
+For **each k**, you can precompute the effect of all queries with this k on each **residue (`i % k`)** using a difference array per residue.
+
+However, with k going up to n, we can't process for every possible k for every query.
+But most queries will have `k` not too small. For small k, per-residue bucketing is fast (since there are only k possible residues).
+
+#### **Efficient Split:**
+- For small k (say, k ≤ √n), per-residue difference arrays work efficiently (for each k, O(k) per query to record, O(n) total to apply).
+- For large k (k > √n), only a few positions per query (at most n/k), and for all queries with large k, total updates over all q is O(n√n) < 1e7, fast enough.
+
+---
+
+### **Step-by-Step Algorithm:**
+
+**Let B = sqrt(n) ~ 300.**
+
+**1. Create a multiplication effect array for each value of small k (k ≤ B):**
+- For each k = 1..B, create `mul[k][residue][n/k+2]` difference arrays (size up to n).
+
+For each query with k ≤ B:
+   - For residue r = l % k, at index l, multiply start by v; at index r+1, leave untouched or multiply by inverse to finish the effect.
+
+**2. For large k (k > B):**
+- For these, each query only affects up to ⌈(r-l)/k⌉ ≤ n/k ≤ B positions, so we can just manually run through and multiply.
+
+**3. Apply all difference arrays/bucketed multiplications:**
+- For each i from 0 to n-1, apply relevant multipliers (from bucketed residue arrays) for all k=1..B where i % k matches.
+
+---
+
+### **Final Steps:**
+- After all multipliers applied, compute the final XOR and return it.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
+#include <bits/stdc++.h>
 using namespace std;
+typedef long long ll;
+const int MOD = 1e9+7;
 
-class Solution {
-public:
-    int xorAfterQueries(vector<int>& nums, vector<vector<int>>& queries) {
-        const int MOD = 1'000'000'007;
-        int n = nums.size();
+int modmul(int a, int b) {
+    return (ll(a) * b) % MOD;
+}
 
-        // Process each query
-        for (const auto& q : queries) {
-            int l = q[0], r = q[1], k = q[2], v = q[3];
+// Fast exponent for calculating modular inverse
+int modpow(int a, int b) {
+    int res = 1;
+    while(b) {
+        if(b&1) res = modmul(res, a);
+        a = modmul(a, a);
+        b >>= 1;
+    }
+    return res;
+}
+
+int xorAfterQueries(vector<int>& nums, vector<vector<int>>& queries) {
+    int n = nums.size();
+    int q = queries.size();
+    int B = int(sqrt(n)) + 1;
+    // 1. Buckets for all small k
+    vector<vector<vector<ll>>> mul(B+1, vector<vector<ll>>(B+1)); // mul[k][rem][size_n/k]
+    for (int k = 1; k <= B; ++k) {
+        for (int rem = 0; rem < k; ++rem) {
+            mul[k][rem].resize(n/k+3, 1); // Difference array for each residue
+        }
+    }
+    // 2. Queries: Separate small and large k
+    for (auto& qv : queries) {
+        int l = qv[0], r = qv[1], k = qv[2], v = qv[3];
+        if (k <= B) {
+            int idx = l % k;
+            int start = l / k, end = r / k;
+            mul[k][idx][start] = modmul(mul[k][idx][start], v);
+            if (end+1 < mul[k][idx].size())
+                mul[k][idx][end+1] = modmul(mul[k][idx][end+1], modpow(v, MOD-2));
+        } else {
             for (int i = l; i <= r; i += k) {
-                // Use int64_t to avoid overflow
-                nums[i] = int((1LL * nums[i] * v) % MOD);
+                nums[i] = modmul(nums[i], v);
             }
         }
-
-        // Compute xor of all elements in nums
-        int res = 0;
-        for (int x : nums)
-            res ^= x;
-
-        return res;
     }
-};
+    // 3. Apply small k residue-based multipliers
+    for (int k = 1; k <= B; ++k) {
+        for (int rem = 0; rem < k; ++rem) {
+            ll prod = 1;
+            int tidx = 0;
+            for (int i = rem, j = 0; i < n; i += k, ++j) {
+                prod = modmul(prod, mul[k][rem][j]);
+                nums[i] = modmul(nums[i], prod);
+            }
+        }
+    }
+    // 4. Find result xor
+    int ans = 0;
+    for (int i = 0; i < n; ++i) {
+        ans ^= nums[i];
+    }
+    return ans;
+}
 ```
 
 ---
 
 ## 5. **Example Explanation**
 
-**Test case:**  
-`nums = [2,3,1,5,4]`  
-`queries = [[1,4,2,3],[0,2,1,2]]`
+#### **Example 2:**
+```
+nums = [2,3,1,5,4]
+queries = [[1,4,2,3],[0,2,1,2]]
+```
 
-**Step 1 (query [1,4,2,3]):**
-- For indices: 1, 3
-    - nums[1] = 3 * 3 = 9
-    - nums[3] = 5 * 3 = 15
-- Now nums: `[2, 9, 1, 15, 4]`
+- **Query 1: [1,4,2,3]**
+    - k=2, v=3. Affects indices 1 and 3 (1, 1+2=3, next would be 5>4). Multiply nums[1] and nums[3] by 3:
+      - nums = [2, **3×3=9**, 1, **5×3=15**, 4]
 
-**Step 2 (query [0,2,1,2]):**
-- For indices: 0, 1, 2
-    - nums[0] = 2 * 2 = 4
-    - nums[1] = 9 * 2 = 18
-    - nums[2] = 1 * 2 = 2
-- Now nums: `[4, 18, 2, 15, 4]`
+- **Query 2: [0,2,1,2]**
+    - k=1, v=2. Affects indices 0,1,2:
+      - nums[0]*=2 = 4
+      - nums[1]*=2 = 18
+      - nums[2]*=2 = 2
+      - Result: [4,18,2,15,4]
 
-**Final XOR:**  
-`4 ^ 18 = 22`  
-`22 ^ 2 = 20`  
-`20 ^ 15 = 27`  
-`27 ^ 4 = 31`
-
-**Return value:** `31`
+- **Final XOR:** 4 ^ 18 ^ 2 ^ 15 ^ 4 = **31**.
 
 ---
 
-### ✅ **Summary**
+### **Summary Table for Processing**
 
-- Accept brute force due to small constraints.
-- For each query, directly multiply target indices.
-- Use modulo and xor as specified.
-- All edge cases handled naturally by the structure.
+| Query        | Indices affected            | Result after       |
+|--------------|----------------------------|---------------------|
+| [1,4,2,3]    | 1, 3                       | [2,9,1,15,4]   |
+| [0,2,1,2]    | 0,1,2                      | [4,18,2,15,4]  |
 
-Let me know if you'd like code for more complex constraints!
+Final XOR = **31**
+
+---
+
+## ✅ **This approach is efficient (~O((B q) + n B)) and handles all edge cases as discussed.**
+
+Let me know if you'd like **Python** code or more clarifications!
