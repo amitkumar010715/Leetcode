@@ -1,127 +1,148 @@
-Let's break down the problem into all the requirements.
+Let's break down and solve the problem step by step:
 
 ---
 
-## 1. **Short Summary**
+### 1. **Summary**
 
-We are given an array `nums`. Find the **minimum possible distance** of a "good" tuple `(i, j, k)` where **all three indices are distinct and `nums[i] == nums[j] == nums[k]`**. The distance of such a tuple is `abs(i-j) + abs(j-k) + abs(k-i)`. Return `-1` if no such tuple exists.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints:**
-  - `1 <= n == nums.length <= 10^5`
-  - `1 <= nums[i] <= n`
-- **Edge Cases:**
-  - No value appears at least three times → **answer is `-1`**.
-  - There may be multiple triplets for the same value; choose the *minimal* distance.
-  - Large inputs: **solution must be optimal** (avoid brute-force triple loops).
-  - The positions must be **distinct**.
+Given a keyboard in 6x5 grid like a phone pad, and a string `word`, you need to find the **minimum total distance** travelled by two fingers to type all the letters in order. At each step, either finger can press the next letter, and you seek the minimal total movement. The initial placements don't cost anything.
 
 ---
 
-## 3. **Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-### **Key Observations**
-
-- For any value, collect all its indices into a list.
-- For each list size `m >= 3`, consider *each consecutive window of 3 indices*; this gives the *minimal* possible distance for that value.
-- For three indices `(a, b, c)` (sorted), the distance is:
-  
-  ```
-  abs(a-b) + abs(b-c) + abs(c-a) =
-    (b-a) + (c-b) + (c-a) = 2*(c-a)
-  ```
-  Because the indices are sorted: `a < b < c`.
-
-- So, for each window of 3 positions, the minimal distance is `2*(pos[window_end] - pos[window_start])` where `window_end = i+2`, `window_start = i`.
-
-### **Algorithm Steps**
-
-1. Use a hash map: `unordered_map<int, vector<int>>` to collect indices.
-2. For each value with `m >= 3`:
-    - Sort the positions (they are already sorted if you collect during a forward scan).
-    - Loop over `i` for all windows of 3 (`i, i+1, i+2`):
-        - Compute `2 * (pos[i+2] - pos[i])`.
-        - Keep track of the minimal value.
-3. Return `-1` if no such triplet exists.
-
-**Time Complexity:**  
-O(n) to collect indices + O(n) to process all positions (as total number of positions across all values is n).  
-**Space Complexity:** O(n)
+- `word.length` is up to 300, so O(N³) would be too slow.
+- All letters are uppercase and mapped to fixed grid positions.
+- Either finger can start on any letter for free; you don’t have to use the first two letters as starting points.
+- Edge cases:
+  - Word is only 2 letters: trivial (0 movement, just use both fingers).
+  - Letters can repeat (distance between same key is 0).
+  - Optimal to sometimes leave a finger where it is for multiple letters.
 
 ---
 
-## 4. **Clean C++ Solution**
+### 3. **Optimal Algorithm**
+
+#### **Model as DP**
+
+Let’s let `dp(i, f1, f2)` represent the *minimal total distance to type from `i`-th character to end, with finger1 at position `f1` and finger2 at position `f2`*.
+
+To make DP states compact:
+- Instead of actual (x,y) positions, use index 0-25 for 'A'-'Z', or -1 for "hasn’t been placed yet".
+
+#### **State transitions:**
+
+At each letter `i` (typing `c`), you can:
+- Move finger 1 to `c`: cost is `dist(f1, c)`; state becomes `dp(i+1, c, f2)`
+- Move finger 2 to `c`: cost is `dist(f2, c)`; state becomes `dp(i+1, f1, c)`
+
+Take minimum of the two choices.
+
+#### **Base Case:**
+- When `i == word.size()`: return 0.
+
+#### **Distance Function:**
+
+Map 'A'-'Z' to (row, col) as per image:
+
+For `i=0..25`,  
+- row = i / 6
+- col = i % 6
+
+#### **Optimization & Storage:**
+
+All possible combinations:
+- `i` in [0, word.size()]
+- `f1` and `f2` in [-1, 0..25] (fingers can be "not yet placed" at -1)
+
+So up to `300*27*27` = ≈ 219k states – fast enough.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <unordered_map>
+#include <string>
 #include <algorithm>
-#include <climits>
+#include <cstring>
 using namespace std;
 
 class Solution {
 public:
-    int minimumDistance(vector<int>& nums) {
-        unordered_map<int, vector<int>> posMap;
-        int n = nums.size();
-
-        // Collect indices for each value
-        for (int i = 0; i < n; ++i) {
-            posMap[nums[i]].push_back(i);
+    int minDistance(string word) {
+        int n = word.size();
+        vector<pair<int,int>> pos(26);
+        for (int i = 0; i < 26; ++i) {
+            pos[i] = {i/6, i%6};
         }
-
-        int res = INT_MAX;
-        // For each group with >=3 occurrences
-        for (auto& [num, pos] : posMap) {
-            int m = pos.size();
-            if (m < 3) continue;
-            // Slide window of 3 positions
-            for (int i = 0; i + 2 < m; ++i) {
-                int dist = 2 * (pos[i+2] - pos[i]);
-                res = min(res, dist);
-            }
-        }
-
-        return res == INT_MAX ? -1 : res;
+        
+        // Use -1 for "not yet placed"
+        int dp[301][27][27];
+        memset(dp, -1, sizeof dp);
+        
+        // returns min cost to type from index i on, fingers at f1 and f2
+        // f1, f2: -1=>not yet placed, or 0..25 for letter positions
+        function<int(int,int,int)> dfs = [&](int i, int f1, int f2) -> int {
+            if (i == n) return 0;
+            int &res = dp[i][f1+1][f2+1];
+            if (res != -1) return res;
+            int cur = word[i]-'A';
+            // First finger types
+            int cost1 = (f1 == -1 ? 0 : 
+                        abs(pos[f1].first-pos[cur].first)+abs(pos[f1].second-pos[cur].second));
+            int cost2 = (f2 == -1 ? 0 : 
+                        abs(pos[f2].first-pos[cur].first)+abs(pos[f2].second-pos[cur].second));
+            res = min(
+                dfs(i+1, cur, f2) + cost1,
+                dfs(i+1, f1, cur) + cost2
+            );
+            return res;
+        };
+        
+        return dfs(0, -1, -1);
     }
 };
 ```
 
 ---
 
-## 5. **Explain with Example**
+### 5. **Example Explanation**
 
-**Let's use `nums = [1,2,1,1,3]`.**
+**Input:** `"CAKE"`
 
-- Build `posMap`:
-    - 1: [0, 2, 3]
-    - 2: [1]
-    - 3: [4]
+Letters: `"C", "A", "K", "E"`
 
-Only `1` has >=3 positions: [0, 2, 3].  
-There is only *one* triplet of consecutive indices: (0, 2, 3).
+Map:
+- 'C'=(0,2)
+- 'A'=(0,0)
+- 'K'=(1,4)
+- 'E'=(0,4)
 
-Compute distance for (0,2,3):
+Let’s see an optimal step by step:
 
-`distance = abs(0-2) + abs(2-3) + abs(3-0) = 2 + 1 + 3 = 6`
+- Finger1: 'C' → 'A'
+  - 'C' to 'A': |0-0| + |2-0| = 2
+- Finger2: 'K' → 'E'
+  - 'K' to 'E': |1-0| + |4-4| = 1
+- Start positions are free: no cost for first placements
 
-So we return `6`.
+So, one path is:
+- Finger1 types 'C' (no move)
+- Finger1 types 'A' (move: 2)
+- Finger2 types 'K' (no move)
+- Finger2 types 'E' (move: 1)
 
----
-
-### **Summary Table**
-
-| Value | Positions      | Triplets         | Minimal Distance |
-|-------|---------------|------------------|-----------------|
-| 1     | [0,2,3]       | (0,2,3)          | 6               |
-| 2     | [1]           | —                | —               |
-| 3     | [4]           | —                | —               |
-
-**Final Answer:** `6`
+Total = **2 + 1 = 3**
 
 ---
 
-If you need more clarification or code with comments, let me know!
+## **Summary Table**
+
+| Example   | dp Transitions                                       | Total Cost |
+|-----------|------------------------------------------------------|------------|
+| "CAKE"    | F1: C→A (2), F2: K→E (1), initial placements (0)     |      3     |
+| "HAPPY"   | Try permutations (see example)                        |      6     |
+
+---
+
+This DP efficiently finds the minimal movement sum considering all valid finger alternations, stays fast by memoizing overlapping states, and works well even for large input lengths.
