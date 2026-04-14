@@ -1,39 +1,46 @@
-Let's solve the problem step by step as you requested!
+Let's proceed step by step as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums`, a `target` value, and a starting index `start`, find the minimum distance (in absolute difference) from `start` to any index `i` where `nums[i] == target`. Return this minimum distance. The target value is guaranteed to exist in the array.
+Given robots on the X-axis, and factories with limited capacities at certain positions, assign all robots to factories so that each factory takes at most its limit, and the **total distance all robots move to reach their assigned factories is minimized**. Output this minimum total distance.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `1 <= nums.length <= 1000` (the array is small, so brute-force is fine)
-    - `1 <= nums[i] <= 10^4` (`nums` contains positive integers)
-    - `0 <= start < nums.length` (`start` is always a valid index)
-    - `target` **exists** in `nums` (no need to check for it missing)
-- **Edge Cases:**
-    - Only one element in `nums`.
-    - Multiple occurrences of `target`; need to pick the one closest to `start`.
-    - `start` might already point to a `target`.
+- `1 <= robot.length, factory.length <= 100` (So DP solutions are feasible.)
+- `-1e9 <= robot[i], position_j <= 1e9` (High value, but as only differences matter, after sorting, safe.)
+- `0 <= limit_j <= robot.length` (A factory can have 0 capacity.)
+- All positions (for robots and factories) are *unique*.
+- It is always possible to repair all robots (limits add up sufficiently).
+- Edge Cases:
+  - All robots on the same side of all factories.
+  - A factory with zero capacity.
+  - Robots at the exact position of a factory.
+  - Only one robot or one factory.
+  - Some factories may not be used (if out of the way or have zero limit).
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm (with Explanation)**
 
-Since the array size is small, a simple linear scan suffices.
+### **Approach: DP Assignment**
 
-- Initialize `minDist` to a large number (e.g., `nums.size()`).
-- Scan each index `i` in `nums`:
-    - If `nums[i] == target`, compute `abs(i - start)`.
-    - Update `minDist` if this distance is smaller.
-- Return `minDist`.
+- **Sort robots and factories by positions**: This makes matching left-to-right logical.
+- Define `dp[r][f]` = minimal cost to repair robots `r..end` with factories `f..end`.
+  - **For each (r, f):**
+    - **Option 1:** Skip factory `f` (use `f+1` for robot `r`): `dp[r][f+1]`
+    - **Option 2:** Use factory `f` to fix `k` robots (from `r` up to `r+k-1`, for `k=1..limit_f`), and add the cost of sending these robots to `factory_pos_f`.
+      - For each possible `k`:
+         - Cost = `sum_{i=r}^{r+k-1} |robot[i] - factory[f][0]|`
+         - Next state: `dp[r+k][f+1]`
+         - Keep the minimum over all possible `k`
+    - Memoize to avoid recomputation.
 
-Time complexity: `O(n)`  
-Space complexity: `O(1)`
+#### **Time complexity:**
+- O(R * F * L), for R robots, F factories, L up to 100 robots per factory, so it's O(100*100*100) = 1,000,000, which is fast enough.
 
 ---
 
@@ -41,42 +48,75 @@ Space complexity: `O(1)`
 
 ```cpp
 #include <vector>
-#include <cstdlib>
+#include <algorithm>
+#include <climits>
 using namespace std;
 
 class Solution {
 public:
-    int getMinDistance(vector<int>& nums, int target, int start) {
-        int minDist = nums.size();
-        for (int i = 0; i < nums.size(); ++i) {
-            if (nums[i] == target) {
-                int dist = abs(i - start);
-                if (dist < minDist) minDist = dist;
-            }
+    long long dp[105][105]; // Memoization array
+
+    long long solve(int ri, int fi, const vector<int>& robots, const vector<pair<int, int>>& factories) {
+        int R = robots.size(), F = factories.size();
+        if (ri == R) return 0;       // All robots assigned
+        if (fi == F) return LLONG_MAX / 2; // Out of factories (not possible, but for safety)
+        if (dp[ri][fi] != -1) return dp[ri][fi];
+
+        long long ans = solve(ri, fi+1, robots, factories);  // Option 1: skip factory fi
+
+        // Option 2: Assign k robots (k in [1, limit]) to factory fi
+        long long cost = 0;
+        int limit = factories[fi].second;
+        for (int k = 1; k <= limit && ri + k - 1 < R; k++) {
+            cost += abs(robots[ri + k - 1] - factories[fi].first);
+            long long next = solve(ri + k, fi + 1, robots, factories);
+            ans = min(ans, cost + next);
         }
-        return minDist;
+        return dp[ri][fi] = ans;
+    }
+
+    long long minimumTotalDistance(vector<int>& robot, vector<vector<int>>& factory) {
+        sort(robot.begin(), robot.end());
+        vector<pair<int, int>> fact;
+        for (auto& f : factory)
+            fact.emplace_back(f[0], f[1]);
+        sort(fact.begin(), fact.end());
+
+        // Initialize DP table
+        memset(dp, -1, sizeof(dp));
+        return solve(0, 0, robot, fact);
     }
 };
 ```
 
 ---
 
-## 5. **Explain One Example**
+## 5. **Example Explanation**
 
-Let's go through **Example 1** step by step:
+> **Example 1**  
+> `robot = [0,4,6], factory = [[2,2],[6,2]]`
 
-- **Input:** `nums = [1,2,3,4,5]`, `target = 5`, `start = 3`
-- Traverse `nums`:
-    - `i=0`: `nums[0]=1` (not `target`)
-    - `i=1`: `nums[1]=2` (not `target`)
-    - `i=2`: `nums[2]=3` (not `target`)
-    - `i=3`: `nums[3]=4` (not `target`)
-    - `i=4`: `nums[4]=5` **(is `target`!)**
-        - Distance = `abs(4-3)=1`
-        - `minDist` becomes `1`
-- No closer index exists.
-- **Output:** `1`
+- After sorting:  
+  robots: `[0,4,6]`  
+  factories: `[[2,2], [6,2]]`
+
+- DP explores:
+  - Robot 0 and robot 4 both go to factory at 2: costs = `|2-0| + |2-4| = 2 + 2 = 4`. Factory 2's limit is 2, so it can take 2 robots.
+  - Robot 6 goes to factory 6: `|6-6| = 0`.
+  - Total = `4 + 0 = 4`
+- This is optimal, as sending robot 4 to factory 6 would be higher cost: `|6-4| = 2`, but now robot 2 only takes one robot and factory 6 two.
+- Algorithm checks all such splits.
 
 ---
 
-If you need more explanation or Python/Java solutions, let me know!
+### **Summary of Optimal Algorithm Steps**
+
+1. **Sort** robots and factories by position.
+2. **DP:**  
+   For each robot and factory, consider all possible numbers of robots to assign (up to factory limit), compute cost, recurse.
+3. **Base case:** All robots assigned.
+4. **Return minimal total distance.**
+
+---
+
+**Let me know if you want a step-by-step DP trace/visualization or test case explanations!**
