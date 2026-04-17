@@ -1,106 +1,93 @@
-Let's break it down step by step:
+Let's break down the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a **circular** array `nums`, and an array `queries`. For each query index `i`, find the minimum "distance" (clockwise or counterclockwise) to **another index** holding the same value as `nums[queries[i]]`. If no other such index exists, return `-1`.
+Given an array of integers `nums`, a "mirror pair" is two indices `(i, j)` with `i < j` such that reversing the digits of `nums[i]` gives `nums[j]`. The task is to find the smallest possible `abs(i-j)` among all mirror pairs, or return `-1` if none exist.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= queries.length <= nums.length <= 1e5`
-- `1 <= nums[i] <= 1e6`
-- `0 <= queries[i] < nums.length`
-- **Edge cases:**
-  - All elements in `nums` are unique → output will be all `-1`.
-  - All elements are the same → for each index, nearest repeated index is always `1`, due to circularity.
-  - Multiple occurrences of some value scattered in the array.
-  - Queries may include duplicate indices or cover all indices.
+**Constraints:**
+- `1 <= nums.length <= 100,000` (i.e., up to 1e5 elements)
+- `1 <= nums[i] <= 1,000,000,000` (all are positive, up to 1e9)
+
+**Edge Cases:**
+- No mirror pairs exist: return `-1`.
+- Multiple mirror pairs: pick the pair with the smallest index distance.
+- Duplicates in input: possible and allowed.
+- Palindrome numbers: `reverse(nums[i]) == nums[i]` (so possible to pair with itself if such value exists later in the array).
+- Each mirror pair is `(i, j)` with `i < j`, so cannot pair an index with itself.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Let's analyze:
+**High-Level Idea:**
+- For each index `j` as we traverse, check if `nums[j]` is the reverse of any earlier `nums[i]` (`i < j`).
+- For all i < j, we need `reverse(nums[i]) == nums[j]`, i.e., for each `j` check if there was a prior `i` with `reverse(nums[i]) == nums[j]`.
+- BUT, if we start at i and for each i store its *reverse*, then for each j, we can check if *its value* matches any prior reverse.
 
-**Brute-force**: For every query, scan all indices and check value equality = **O(NQ)** → **TLE** for `N, Q ≤ 1e5`.
+**Efficient Approach:**
+- Traverse the array left to right.
+- Use a **hash map** to store for each value `v`, the latest index `i` seen such that `reverse(nums[i]) == v`.
+- For each index `j`, compute `reverse(nums[j])` and check if `nums[j]` is in the map. If so, record `abs(j - i)` for every such i < j. Since we traverse left to right, we only store the *earliest* (or latest) index for each reverse value.
+- Actually, for minimum distance, keeping the *latest* index with value `reverse(nums[j])` is enough, since we're going forward.
 
-#### **Efficient Approach**
+**Steps:**
 
-1. **Index Grouping:**  
-   - For every value in `nums`, store a **sorted list** of all indices where that value appears.
+1. Initialize a hash map (`val_to_index`), mapping possible "value" → **last index**.
+2. For each `j` (from 0 to n-1):
+   - Compute `rev = reverse(nums[j])`
+   - If `nums[j]` is in `val_to_index`, compute `abs(j - val_to_index[nums[j]])`
+   - Update current minimum distance if better.
+   - Set `val_to_index[rev] = j` (i.e., remember that at position `j`, we saw `rev` as a possible reverse).
 
-2. **For each query index:**  
-   - For value `v = nums[q]`, get the sorted list `pos` of indices where `nums[i] == v`.
-   - **Only consider indices `≠ q` (exclude itself)!**
-   - For **sorted binary search** in `pos`, for index `q`:
-        - Find the position in `pos` where `q` would fit via `lower_bound`.
-        - The closest neighbor (other than self) is **either the previous or next index** in the sorted list, due to circular nature.
-        - Compute distance to neighbors **in both directions**, taking circularity into account:  
-            - `dist = min(abs(q - j), n - abs(q - j))`
-        - If the value only occurs once, return `-1`.
-
-**Asymptotic:**
-- Preprocessing: O(N)
-- For each query: O(log K), where K is the count of a value (max K=N).  
-  So, **total**: O(N + Q log N)
+**Time Complexity:** O(n), need O(1) per element (except the reverse computation, but that's only a few digits each time).
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
 #include <unordered_map>
+#include <limits>
+#include <algorithm>
+
 using namespace std;
 
 class Solution {
 public:
-    vector<int> closestEqualElements(vector<int>& nums, vector<int>& queries) {
+    int reverseInt(int x) {
+        int rev = 0;
+        while (x) {
+            rev = rev * 10 + x % 10;
+            x /= 10;
+        }
+        return rev;
+    }
+    
+    int minimumDistance(vector<int>& nums) {
+        unordered_map<int, int> val_to_index;
+        int min_dist = std::numeric_limits<int>::max();
         int n = nums.size();
-        unordered_map<int, vector<int>> posMap;
-        // Collect positions for each value
-        for (int i = 0; i < n; ++i) {
-            posMap[nums[i]].push_back(i);
+        
+        for (int j = 0; j < n; ++j) {
+            int v = nums[j];
+            // If we've seen any prior i such that reverse(nums[i]) == nums[j]
+            if (val_to_index.find(v) != val_to_index.end()) {
+                int i = val_to_index[v];
+                min_dist = min(min_dist, j - i);
+            }
+            // Record the index of current reverse (to match future nums[j])
+            int rev = reverseInt(v);
+            val_to_index[rev] = j;
         }
-        vector<int> res;
-        for (int q : queries) {
-            int val = nums[q];
-            const vector<int>& pos = posMap[val];
-            if (pos.size() == 1) {
-                res.push_back(-1);
-                continue;
-            }
-            // Binary search in sorted pos vector
-            auto it = lower_bound(pos.begin(), pos.end(), q);
-            int idx = it - pos.begin();
-            int ans = n;
-            // Check neighbor before (circular)
-            int prevIdx = (idx == 0) ? pos.size() - 1 : idx - 1;
-            int nextIdx = (idx == pos.size() - 1) ? 0 : idx + 1;
-            int prev = pos[prevIdx];
-            int next = pos[(idx == pos.size()) ? 0 : idx];
-            if (prev != q) {
-                int d = abs(q - prev);
-                ans = min(ans, min(d, n - d));
-            }
-            // For next, be careful: if lower_bound points to first greater-or-equal-to
-            if (it != pos.end() && *it != q) {
-                int d = abs(q - *it);
-                ans = min(ans, min(d, n - d));
-            } else if (it != pos.end() && *it == q) {
-                // look at the next index
-                int nextIdx = (idx + 1) % pos.size();
-                int nxt = pos[nextIdx];
-                int d = abs(q - nxt);
-                ans = min(ans, min(d, n - d));
-            }
-            res.push_back(ans);
-        }
-        return res;
+        
+        return (min_dist == std::numeric_limits<int>::max()) ? -1 : min_dist;
     }
 };
 ```
@@ -109,53 +96,55 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's use **Example 1**:
+**Example:** `nums = [12, 21, 45, 33, 54]`
 
-**Input:**  
-`nums = [1,3,1,4,1,3,2]`, `queries = [0,3,5]`
+Processing step by step:
 
-After preprocessing:
+- At j=0 (`nums[0]=12`):  
+  - `reverse(12) = 21`  
+  - val_to_index: {} (empty).  
+  - Insert `21:0`
+- At j=1 (`nums[1]=21`):  
+  - `reverse(21) = 12`  
+  - Does val_to_index have 21? Yes (`21:0`).  
+  - So, i=0, form pair `(0,1)`, distance `1` → min_dist=1  
+  - Insert `12:1`
+- At j=2 (`nums[2]=45`):  
+  - `reverse(45) = 54`  
+  - val_to_index has 45? No.  
+  - Insert `54:2`
+- At j=3 (`nums[3]=33`):  
+  - `reverse(33) = 33`  
+  - val_to_index has 33? No.  
+  - Insert `33:3`
+- At j=4 (`nums[4]=54`):  
+  - `reverse(54) = 45`  
+  - val_to_index has 54? Yes (`54:2`).  
+  - So, i=2, pair `(2,4)`, distance `2` (min_dist stays 1)  
+  - Insert `45:4`
 
-- For value `1`, positions: `[0,2,4]`
-- For value `3`, positions: `[1,5]`
-- For value `4`, positions: `[3]`
-- For value `2`, positions: `[6]`
-
-**Query 0** (`q=0`, value=1):
-
-- Positions = `[0,2,4]`
-- Index in pos = 0
-- Previous index: 2 (which is `4`)
-- Next index: 1 (which is `2`)
-- Distance to 2: `abs(0-2) = 2` or `7-2=5` → min is 2
-- Distance to 4: `abs(0-4)=4` or `7-4=3` → min is 3
-- Minimal distance: **2**
-
-**Query 3** (`q=3`, value=4):
-
-- Only one occurrence (at index 3), so answer: **-1**
-
-**Query 5** (`q=5`, value=3):
-
-- Positions = `[1,5]`
-- Index in pos: 1
-- Previous: idx 0 → pos[0]=1
-- Distance: `abs(5-1)=4`, `7-4=3` → min is 3
-- No next (as only two indices)
-- Minimal distance: **3**
-
-So output: **[2,-1,3]**
+**Returns:** `1` (from the pair `(0,1)`)
 
 ---
 
-## **Summary Table**
+### **Summary Table**
 
-| Query | Value at index | Occurrences           | Closest index | Distance      | Answer |
-|-------|---------------|-----------------------|---------------|--------------|--------|
-| 0     | 1             | [0, 2, 4]             | 2 (pos 1)     | 2            | 2      |
-| 3     | 4             | [3]                   | -             | -            | -1     |
-| 5     | 3             | [1, 5]                | 1 (pos 0)     | min(4, 3)=3  | 3      |
+| j | nums[j] | reverse(nums[j]) | val_to_index        | min_dist update? | Added to map  |
+|---|---------|------------------|--------------------|------------------|---------------|
+| 0 |   12    |       21         | {}                 |       No         | 21:0          |
+| 1 |   21    |       12         | {21:0}             |      1 (0,1)     | 12:1          |
+| 2 |   45    |       54         | {21:0,12:1}        |       No         | 54:2          |
+| 3 |   33    |       33         | ...                |       No         | 33:3          |
+| 4 |   54    |       45         | ...                |   2 (2,4); keep 1| 45:4          |
 
 ---
 
-If you need the code in a self-contained main function for LeetCode, just wrap the class accordingly!
+## **Conclusion**
+
+The optimal solution is single-pass with a hash map and digit reversal.  
+**Time Complexity:** O(n); **Space Complexity:** O(n)  
+This works for all edge cases.
+
+---
+
+Let me know if you need follow-ups or a Python solution!
