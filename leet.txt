@@ -1,90 +1,95 @@
-Let's solve **Mirror Distance of an Integer**.
+Sure! Let's go through each requirement step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. Short Summary
 
-Given an integer `n`, compute its *mirror distance*:  
-- Reverse its digits to get `reverse(n)`
-- Return `abs(n - reverse(n))`
+Given two non-increasing arrays, **nums1** and **nums2**, find the maximum distance \( j - i \) such that \( i \leq j \), and \( nums1[i] \leq nums2[j] \). If no such pair exists, return 0.
 
 ---
 
-## 2. **Constraints & Edge Cases**
+## 2. Constraints & Edge Cases
 
-- **Constraints:**
-    - `1 <= n <= 10^9`
-    - O(1) or O(log n) solution required due to input size
+**Constraints:**
+- Both arrays can be up to \( 10^5 \) in length (large inputs demand O(n) or O(n log n) solutions).
+- All elements are positive integers.
+- Both arrays are non-increasing.
 
-- **Edge Cases:**
-    - `n` is a single digit, e.g., `7`
-    - `n` ends with zero, e.g., `10 → reverse(10)=1`
-    - `n` is a palindrome, e.g., `121`, so distance is 0
-
----
-
-## 3. **Optimal Algorithm**
-
-- **Reverse the number:**  
-  Use math, not string conversion, for efficiency.
-    1. Initialize `rev=0`
-    2. While `n>0`, pop last digit and append to `rev`
-
-- **Calculate the answer:**  
-  - `reverse_n = reverse(n)`
-  - Return `abs(n - reverse_n)`
-
-**Time complexity:** O(log n)  
-**Space complexity:** O(1)
+**Edge Cases:**
+- Arrays of length 1.
+- No valid pairs exist at all (in which case, return 0).
+- Multiple pairs with same maximum distance.
+- All elements equal.
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+### Approach: Two Pointers
+
+Because both arrays are non-increasing, we can use the two-pointer technique:
+
+- Use pointer **i** for nums1 and pointer **j** for nums2.
+- For each **i** (starting from 0), move **j** forward (never back!), as long as \( j < \text{len(nums2)} \) and \( nums2[j] \geq nums1[i] \).
+- For each **i**, the **largest j** you can reach (where \( j \geq i \)) gives the max possible distance for this **i**.
+- For efficiency, we do NOT need to reset **j** to **i** for each **i**; since both arrays are non-increasing, if **nums2[j-1]** failed for \( i-1 \), it will also fail for \( i \).
+- Time Complexity: \( O(n + m) \), as **j** only moves forward and never resets.
+
+#### Steps:
+1. Initialize **maxDist = 0**, **j = 0**.
+2. For every **i**:
+   1. Set **j** to at least **i**.
+   2. While \( j < n \) and \( nums2[j] \geq nums1[i] \), move **j** forward.
+   3. Update **maxDist** as \( j-1-i \) if \( j > i \).
+3. Return **maxDist**.
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 class Solution {
 public:
-    int mirrorReflection(int n) {
-        int original = n;
-        int rev = 0;
-
-        while (n > 0) {
-            rev = rev * 10 + (n % 10);
-            n /= 10;
+    int maxDistance(vector<int>& nums1, vector<int>& nums2) {
+        int n1 = nums1.size(), n2 = nums2.size();
+        int maxDist = 0;
+        int j = 0;
+        for (int i = 0; i < n1; ++i) {
+            // Move j at least to i, since i <= j is required
+            j = max(j, i);
+            // While nums2[j] >= nums1[i], move j forward
+            while (j < n2 && nums2[j] >= nums1[i]) {
+                ++j;
+            }
+            // j-1 is the largest index where nums2[j-1] >= nums1[i]
+            if (j-1 >= i) {
+                maxDist = max(maxDist, j-1 - i);
+            }
         }
-
-        return abs(original - rev);
+        return maxDist;
     }
 };
 ```
 
-(If LeetCode function signature is `int findMirrorDistance(int n);`, adjust accordingly.)
+---
 
---- 
+## 5. Example Walkthrough
 
-## 5. **Example Explained**
+### Example 1
 
-**Input:** `n = 25`
+**Input:**  
+nums1 = [55,30,5,4,2]  
+nums2 = [100,20,10,10,5]  
 
-- Reverse 25:  
-  25 % 10 = 5 ⟶ rev = 5  
-  25/10 = 2  
-  2 % 10 = 2 ⟶ rev = 5*10 + 2 = 52  
-  2/10 = 0  
+**Valid pairs:**  
+- For i=2 (nums1[2]=5):
+    - j=2 (nums2[2]=10) : 5 ≤ 10 ✔  
+    - j=3 (nums2[3]=10) : 5 ≤ 10 ✔  
+    - j=4 (nums2[4]=5)  : 5 ≤ 5 ✔  
+So, max j for i=2 is 4 ⇒ distance = 4-2=2 (which is max).
 
-- Mirror distance: |25 - 52| = 27
-
-**Output:** `27`
+**Output:** 2
 
 ---
 
-### **Summary Table**
-
-| Input | Reversed | |n - reversed(n)| | Output |
-|-------|----------|-----------------|--------|
-|  25   |   52     |       27        |   27   |
-|  10   |   1      |       9         |   9    |
-|   7   |   7      |       0         |   0    |
----
-
-Let me know if you want a version using string conversion or have further questions!
+If you have more questions about the code or test cases, feel free to ask!
