@@ -1,95 +1,88 @@
-Sure! Let's go through each requirement step by step:
+Let's tackle the problem step by step:
 
 ---
 
 ## 1. Short Summary
 
-Given two non-increasing arrays, **nums1** and **nums2**, find the maximum distance \( j - i \) such that \( i \leq j \), and \( nums1[i] \leq nums2[j] \). If no such pair exists, return 0.
+Given a row of houses with various colors (represented as an array), **find the maximum distance between two houses with different colors**. The distance is the absolute difference of their indices.
 
 ---
 
-## 2. Constraints & Edge Cases
+## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- Both arrays can be up to \( 10^5 \) in length (large inputs demand O(n) or O(n log n) solutions).
-- All elements are positive integers.
-- Both arrays are non-increasing.
-
-**Edge Cases:**
-- Arrays of length 1.
-- No valid pairs exist at all (in which case, return 0).
-- Multiple pairs with same maximum distance.
-- All elements equal.
+- **2 ≤ n ≤ 100**: Array is small, solutions up to O(n²) are feasible, but we can do better.
+- **0 ≤ colors[i] ≤ 100**: Color codes are non-negative integers.
+- **At least two houses have different colors.**
+- Edge cases:
+  - Array length is just 2 (e.g., `[1,2]`): Return 1.
+  - All colors except two at ends are the same (e.g., `[1,1,1,2]`): The furthest different is at the ends.
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-### Approach: Two Pointers
+Key idea:  
+The furthest possible distance between two different-colored houses must **involve at least one of the endpoints** (`colors[0]` or `colors[n-1]`).  
+So, for maximum efficiency:
 
-Because both arrays are non-increasing, we can use the two-pointer technique:
+1. **Check** all positions from left to right:
+   - Find the *furthest* position from the **left** (`i`) where `colors[i] != colors[0]`. The distance: `abs(i - 0)`.
+2. **Check** all positions from right to left:
+   - Find the *furthest* position from the **right** (`i`) where `colors[i] != colors[n-1]`. The distance: `abs(i - (n-1))`.
+3. The **maximum** of these two is the answer.
 
-- Use pointer **i** for nums1 and pointer **j** for nums2.
-- For each **i** (starting from 0), move **j** forward (never back!), as long as \( j < \text{len(nums2)} \) and \( nums2[j] \geq nums1[i] \).
-- For each **i**, the **largest j** you can reach (where \( j \geq i \)) gives the max possible distance for this **i**.
-- For efficiency, we do NOT need to reset **j** to **i** for each **i**; since both arrays are non-increasing, if **nums2[j-1]** failed for \( i-1 \), it will also fail for \( i \).
-- Time Complexity: \( O(n + m) \), as **j** only moves forward and never resets.
-
-#### Steps:
-1. Initialize **maxDist = 0**, **j = 0**.
-2. For every **i**:
-   1. Set **j** to at least **i**.
-   2. While \( j < n \) and \( nums2[j] \geq nums1[i] \), move **j** forward.
-   3. Update **maxDist** as \( j-1-i \) if \( j > i \).
-3. Return **maxDist**.
+**Time Complexity:** O(n)
 
 ---
 
-## 4. Clean C++ Solution
+## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    int maxDistance(vector<int>& nums1, vector<int>& nums2) {
-        int n1 = nums1.size(), n2 = nums2.size();
-        int maxDist = 0;
-        int j = 0;
-        for (int i = 0; i < n1; ++i) {
-            // Move j at least to i, since i <= j is required
-            j = max(j, i);
-            // While nums2[j] >= nums1[i], move j forward
-            while (j < n2 && nums2[j] >= nums1[i]) {
-                ++j;
-            }
-            // j-1 is the largest index where nums2[j-1] >= nums1[i]
-            if (j-1 >= i) {
-                maxDist = max(maxDist, j-1 - i);
+    int maxDistance(vector<int>& colors) {
+        int n = colors.size();
+        int dist1 = 0, dist2 = 0;
+
+        // Furthest from left end with a different color
+        for (int i = n-1; i >= 0; --i) {
+            if (colors[i] != colors[0]) {
+                dist1 = i - 0;
+                break;
             }
         }
-        return maxDist;
+        // Furthest from right end with a different color
+        for (int i = 0; i < n; ++i) {
+            if (colors[i] != colors[n-1]) {
+                dist2 = n-1 - i;
+                break;
+            }
+        }
+
+        return max(dist1, dist2);
     }
 };
 ```
 
 ---
 
-## 5. Example Walkthrough
+## 5. **Example Explanation**
 
-### Example 1
+**Example:**  
+`colors = [1, 1, 1, 6, 1, 1, 1]`
 
-**Input:**  
-nums1 = [55,30,5,4,2]  
-nums2 = [100,20,10,10,5]  
+- From the left end (`colors[0]=1`):
+  - Scan from right: first color different from 1 is at index 3 (`6`), so distance = 3 - 0 = **3**.
+- From the right end (`colors[6]=1`):
+  - Scan from left: first different color is at index 3 (`6`). Distance = 6 - 3 = **3**.
 
-**Valid pairs:**  
-- For i=2 (nums1[2]=5):
-    - j=2 (nums2[2]=10) : 5 ≤ 10 ✔  
-    - j=3 (nums2[3]=10) : 5 ≤ 10 ✔  
-    - j=4 (nums2[4]=5)  : 5 ≤ 5 ✔  
-So, max j for i=2 is 4 ⇒ distance = 4-2=2 (which is max).
-
-**Output:** 2
+So, the answer is `max(3, 3) = **3**`.
 
 ---
 
-If you have more questions about the code or test cases, feel free to ask!
+**In summary:**  
+Always check the furthest houses from both ends with a color different from their respective end. The maximum of these two is the required distance.
