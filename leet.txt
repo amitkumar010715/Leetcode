@@ -1,37 +1,42 @@
-Let's tackle the problem step by step:
+Let's address the LeetCode problem **"Minimize Hamming Distance After Swap Operations"** step by step:
 
 ---
 
-## 1. Short Summary
+## 1. **Summary**
 
-Given a row of houses with various colors (represented as an array), **find the maximum distance between two houses with different colors**. The distance is the absolute difference of their indices.
+Given two arrays `source` and `target` of equal length and a list of allowed index swaps, you can rearrange `source` by performing any number of these swaps. Your goal is to **minimize the Hamming distance** (number of mismatched entries) between the rearranged `source` and `target`.
+
+Key insight: For any group of indices that are interconnected by swaps, you can permute the elements at those indices however you like. To minimize distance, within each such group, try to match as many elements from `source` to `target` as possible.
 
 ---
 
-## 2. **Constraints & Edge Cases**
+## 2. **Constraints and Edge Cases**
 
-- **2 ≤ n ≤ 100**: Array is small, solutions up to O(n²) are feasible, but we can do better.
-- **0 ≤ colors[i] ≤ 100**: Color codes are non-negative integers.
-- **At least two houses have different colors.**
-- Edge cases:
-  - Array length is just 2 (e.g., `[1,2]`): Return 1.
-  - All colors except two at ends are the same (e.g., `[1,1,1,2]`): The furthest different is at the ends.
+- **Size**: n up to 100,000; up to 100,000 allowed swaps.
+- **Values**: All elements in `source` and `target` are in [1, 100,000].
+- **No allowedSwaps**: If empty, only original arrangement possible.
+- **Disconnected subgroups**: If swaps don't connect some indices, you can only permute within connected groups.
+- **Duplicates**: Both arrays may have duplicate elements.
+- **Edge**: allowedSwaps can include cycles and multi-component graphs.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Key idea:  
-The furthest possible distance between two different-colored houses must **involve at least one of the endpoints** (`colors[0]` or `colors[n-1]`).  
-So, for maximum efficiency:
+### a) **Observation**
+- The indices form groups (connected components) via swaps.
+- Within a group, all indices can have their values permuted arbitrarily.
 
-1. **Check** all positions from left to right:
-   - Find the *furthest* position from the **left** (`i`) where `colors[i] != colors[0]`. The distance: `abs(i - 0)`.
-2. **Check** all positions from right to left:
-   - Find the *furthest* position from the **right** (`i`) where `colors[i] != colors[n-1]`. The distance: `abs(i - (n-1))`.
-3. The **maximum** of these two is the answer.
+### b) **Steps**
+1. **Find all connected components** in the graph defined by allowedSwaps (Union-Find/DSU structure).
+2. **For each component:**
+    - Collect values from `source` and `target` for indices in this component.
+    - Try to maximize matches: for each value in `target`, match if possible with one in `source`, and count mismatches.
+3. **Accumulate mismatches** across all groups.
 
-**Time Complexity:** O(n)
+### c) **Implementation Details**
+- For efficiency, use a **Union-Find (Disjoint Set Union, DSU)** data structure.
+- Use **unordered_map (hash map)**/multiset to count occurrences efficiently within each component.
 
 ---
 
@@ -39,31 +44,61 @@ So, for maximum efficiency:
 
 ```cpp
 #include <vector>
-#include <algorithm>
+#include <unordered_map>
 using namespace std;
 
 class Solution {
 public:
-    int maxDistance(vector<int>& colors) {
-        int n = colors.size();
-        int dist1 = 0, dist2 = 0;
-
-        // Furthest from left end with a different color
-        for (int i = n-1; i >= 0; --i) {
-            if (colors[i] != colors[0]) {
-                dist1 = i - 0;
-                break;
-            }
+    // Union-Find data structure
+    struct DSU {
+        vector<int> parent;
+        DSU(int n): parent(n) {
+            for (int i = 0; i < n; ++i) parent[i] = i;
         }
-        // Furthest from right end with a different color
+        int find(int x) {
+            if (parent[x] != x) 
+                parent[x] = find(parent[x]); // Path compression
+            return parent[x];
+        }
+        void unite(int x, int y) {
+            parent[find(x)] = find(y);
+        }
+    };
+
+    int minimumHammingDistance(vector<int>& source, vector<int>& target, vector<vector<int>>& allowedSwaps) {
+        int n = source.size();
+        DSU dsu(n);
+
+        // Build union-find structure from allowedSwaps
+        for (const auto& sw : allowedSwaps) {
+            dsu.unite(sw[0], sw[1]);
+        }
+
+        // Map: root -> indices in component
+        unordered_map<int, vector<int>> groups;
         for (int i = 0; i < n; ++i) {
-            if (colors[i] != colors[n-1]) {
-                dist2 = n-1 - i;
-                break;
-            }
+            int root = dsu.find(i);
+            groups[root].push_back(i);
         }
 
-        return max(dist1, dist2);
+        int res = 0;
+        // For each group, match as much as possible
+        for (auto& [_, indices]: groups) {
+            unordered_map<int, int> countSource, countTarget;
+            for (int idx : indices) {
+                ++countSource[source[idx]];
+                ++countTarget[target[idx]];
+            }
+            for (auto& [num, cnt]: countTarget) {
+                int match = min(countSource[num], cnt);
+                cnt -= match; // Reduce unmatched elements only
+            }
+            // Add up remaining unmatched in target, which failed to be covered by source
+            for (auto& [num, cnt]: countTarget) {
+                res += cnt;
+            }
+        }
+        return res;
     }
 };
 ```
@@ -72,17 +107,24 @@ public:
 
 ## 5. **Example Explanation**
 
-**Example:**  
-`colors = [1, 1, 1, 6, 1, 1, 1]`
-
-- From the left end (`colors[0]=1`):
-  - Scan from right: first color different from 1 is at index 3 (`6`), so distance = 3 - 0 = **3**.
-- From the right end (`colors[6]=1`):
-  - Scan from left: first different color is at index 3 (`6`). Distance = 6 - 3 = **3**.
-
-So, the answer is `max(3, 3) = **3**`.
+**Example 1:**
+```
+source = [1,2,3,4]
+target = [2,1,4,5]
+allowedSwaps = [[0,1],[2,3]]
+```
+- Two groups: {0,1} and {2,3}.
+  - Group 1 (indices 0,1): source = [1,2], target = [2,1]. By swapping, can match both, 0 distance here.
+  - Group 2 (indices 2,3): source = [3,4], target = [4,5]. We can swap, so source = [4,3], still only match 4 in index 2. Leftover: 5 in target but only 3 in source, can't match, so **1 mismatch**.
+- **Output: 1**
 
 ---
 
-**In summary:**  
-Always check the furthest houses from both ends with a color different from their respective end. The maximum of these two is the required distance.
+### **Summary Table for Steps on Example 1**
+
+| Component | Source | Target | Max matches | Unmatched |
+|-----------|--------|--------|-------------|-----------|
+|   0,1     | [1,2]  | [2,1]  | 2           | 0         |
+|   2,3     | [3,4]  | [4,5]  | 1           | 1         |
+
+<!-- end of answer -->
