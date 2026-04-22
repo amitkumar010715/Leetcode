@@ -1,42 +1,43 @@
-Let's address the LeetCode problem **"Minimize Hamming Distance After Swap Operations"** step by step:
+Let's address each requirement for this problem step by step:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-Given two arrays `source` and `target` of equal length and a list of allowed index swaps, you can rearrange `source` by performing any number of these swaps. Your goal is to **minimize the Hamming distance** (number of mismatched entries) between the rearranged `source` and `target`.
-
-Key insight: For any group of indices that are interconnected by swaps, you can permute the elements at those indices however you like. To minimize distance, within each such group, try to match as many elements from `source` to `target` as possible.
+Given two string arrays, `queries` and `dictionary`, both containing words of the same length, **find all query words that can become equal to any dictionary word by changing at most 2 letters** (edits).
 
 ---
 
-## 2. **Constraints and Edge Cases**
+## 2. **Constraints & Edge Cases**
 
-- **Size**: n up to 100,000; up to 100,000 allowed swaps.
-- **Values**: All elements in `source` and `target` are in [1, 100,000].
-- **No allowedSwaps**: If empty, only original arrangement possible.
-- **Disconnected subgroups**: If swaps don't connect some indices, you can only permute within connected groups.
-- **Duplicates**: Both arrays may have duplicate elements.
-- **Edge**: allowedSwaps can include cycles and multi-component graphs.
+- **Constraints**
+    - `1 <= queries.length, dictionary.length <= 100`
+    - All words in both arrays have the same length (`1 <= n <= 100`)
+    - All characters are lowercase English letters.
+- **Edge Cases**
+    - All words are already equal: 0 edits for all.
+    - No words can match any dictionary word, even with 2 edits: output is empty.
+    - Words may match after 1 or 2 edits only.
+    - Large value of `n` (up to 100), but arrays are small.
+    - Words of length 1: only change that one character.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### a) **Observation**
-- The indices form groups (connected components) via swaps.
-- Within a group, all indices can have their values permuted arbitrarily.
+**Observation:**  
+- Number of words (`q`, `d`) is up to 100 each, and length (`n`) up to 100.
+- For each query, compare to every dictionary entry, counting differing characters.  
+- If ≤ 2 letters differ, can match with at most 2 edits.
 
-### b) **Steps**
-1. **Find all connected components** in the graph defined by allowedSwaps (Union-Find/DSU structure).
-2. **For each component:**
-    - Collect values from `source` and `target` for indices in this component.
-    - Try to maximize matches: for each value in `target`, match if possible with one in `source`, and count mismatches.
-3. **Accumulate mismatches** across all groups.
+**Algorithm Steps:**
+- For each word `q` in `queries`:
+    - For each word `w` in `dictionary`:
+        - Count positions `i` where `q[i] != w[i]`.
+        - If count ≤ 2, include `q` in result and go to the next query word.
 
-### c) **Implementation Details**
-- For efficiency, use a **Union-Find (Disjoint Set Union, DSU)** data structure.
-- Use **unordered_map (hash map)**/multiset to count occurrences efficiently within each component.
+- **Time Complexity:**  
+  O(Q * D * n), with Q, D ≤ 100 and n ≤ 100 → up to 1,000,000 operations, acceptable.
 
 ---
 
@@ -44,58 +45,28 @@ Key insight: For any group of indices that are interconnected by swaps, you can 
 
 ```cpp
 #include <vector>
-#include <unordered_map>
+#include <string>
+
 using namespace std;
 
 class Solution {
 public:
-    // Union-Find data structure
-    struct DSU {
-        vector<int> parent;
-        DSU(int n): parent(n) {
-            for (int i = 0; i < n; ++i) parent[i] = i;
-        }
-        int find(int x) {
-            if (parent[x] != x) 
-                parent[x] = find(parent[x]); // Path compression
-            return parent[x];
-        }
-        void unite(int x, int y) {
-            parent[find(x)] = find(y);
-        }
-    };
-
-    int minimumHammingDistance(vector<int>& source, vector<int>& target, vector<vector<int>>& allowedSwaps) {
-        int n = source.size();
-        DSU dsu(n);
-
-        // Build union-find structure from allowedSwaps
-        for (const auto& sw : allowedSwaps) {
-            dsu.unite(sw[0], sw[1]);
-        }
-
-        // Map: root -> indices in component
-        unordered_map<int, vector<int>> groups;
-        for (int i = 0; i < n; ++i) {
-            int root = dsu.find(i);
-            groups[root].push_back(i);
-        }
-
-        int res = 0;
-        // For each group, match as much as possible
-        for (auto& [_, indices]: groups) {
-            unordered_map<int, int> countSource, countTarget;
-            for (int idx : indices) {
-                ++countSource[source[idx]];
-                ++countTarget[target[idx]];
-            }
-            for (auto& [num, cnt]: countTarget) {
-                int match = min(countSource[num], cnt);
-                cnt -= match; // Reduce unmatched elements only
-            }
-            // Add up remaining unmatched in target, which failed to be covered by source
-            for (auto& [num, cnt]: countTarget) {
-                res += cnt;
+    vector<string> twoEditWords(vector<string>& queries, vector<string>& dictionary) {
+        vector<string> res;
+        int n = queries[0].size();
+        for (const string& q : queries) {
+            for (const string& w : dictionary) {
+                int diff = 0;
+                for (int i = 0; i < n; ++i) {
+                    if (q[i] != w[i]) {
+                        ++diff;
+                        if (diff > 2) break; // early exit for efficiency
+                    }
+                }
+                if (diff <= 2) {
+                    res.push_back(q);
+                    break; // move to next query
+                }
             }
         }
         return res;
@@ -108,23 +79,24 @@ public:
 ## 5. **Example Explanation**
 
 **Example 1:**
+
 ```
-source = [1,2,3,4]
-target = [2,1,4,5]
-allowedSwaps = [[0,1],[2,3]]
+queries = ["word","note","ants","wood"]
+dictionary = ["wood","joke","moat"]
 ```
-- Two groups: {0,1} and {2,3}.
-  - Group 1 (indices 0,1): source = [1,2], target = [2,1]. By swapping, can match both, 0 distance here.
-  - Group 2 (indices 2,3): source = [3,4], target = [4,5]. We can swap, so source = [4,3], still only match 4 in index 2. Leftover: 5 in target but only 3 in source, can't match, so **1 mismatch**.
-- **Output: 1**
+
+- **"word"**:  
+  - Compare to "wood": 'w'=='w', 'o'=='o', 'r'!='o', 'd'=='d' → 1 difference → valid.
+- **"note"**:  
+  - Compare to "joke": ('n','j'),('o','o'),('t','k'),('e','e') → 2 differences → valid.
+- **"ants"**:  
+  - Compare with every dict word: All require more than 2 changes → not valid.
+- **"wood"**:  
+  - Compare to "wood": identical (0 difference) → valid.
+
+**Returned:** `["word","note","wood"]`
 
 ---
 
-### **Summary Table for Steps on Example 1**
-
-| Component | Source | Target | Max matches | Unmatched |
-|-----------|--------|--------|-------------|-----------|
-|   0,1     | [1,2]  | [2,1]  | 2           | 0         |
-|   2,3     | [3,4]  | [4,5]  | 1           | 1         |
-
-<!-- end of answer -->
+**Summary:**  
+For each query word, compare it with each dictionary word, counting differing positions, and include the query in result if any dict word matches within 2 or fewer differences.
