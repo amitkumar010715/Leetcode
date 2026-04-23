@@ -1,72 +1,95 @@
-Let's address each requirement for this problem step by step:
+Let's address your requirements step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. Short Summary
 
-Given two string arrays, `queries` and `dictionary`, both containing words of the same length, **find all query words that can become equal to any dictionary word by changing at most 2 letters** (edits).
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints**
-    - `1 <= queries.length, dictionary.length <= 100`
-    - All words in both arrays have the same length (`1 <= n <= 100`)
-    - All characters are lowercase English letters.
-- **Edge Cases**
-    - All words are already equal: 0 edits for all.
-    - No words can match any dictionary word, even with 2 edits: output is empty.
-    - Words may match after 1 or 2 edits only.
-    - Large value of `n` (up to 100), but arrays are small.
-    - Words of length 1: only change that one character.
+Given an array `nums`, for each index `i`, compute the sum of absolute differences `|i-j|` for every other index `j` such that `nums[j]==nums[i]` and `j != i`. If there's no such other index, set the value to 0.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-**Observation:**  
-- Number of words (`q`, `d`) is up to 100 each, and length (`n`) up to 100.
-- For each query, compare to every dictionary entry, counting differing characters.  
-- If ≤ 2 letters differ, can match with at most 2 edits.
-
-**Algorithm Steps:**
-- For each word `q` in `queries`:
-    - For each word `w` in `dictionary`:
-        - Count positions `i` where `q[i] != w[i]`.
-        - If count ≤ 2, include `q` in result and go to the next query word.
-
-- **Time Complexity:**  
-  O(Q * D * n), with Q, D ≤ 100 and n ≤ 100 → up to 1,000,000 operations, acceptable.
+- **Constraints:**
+    - `1 <= nums.length <= 10^5`
+    - `0 <= nums[i] <= 10^9` (nums can be very large, not suited for direct mapping to array-size)
+- **Edge Cases:**
+    - All elements are distinct: output is all zeroes.
+    - All elements are equal: every position is involved with every other.
+    - Input length is 1: Output is `[0]`.
+    - Large groups of duplicates (test efficiency).
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+### **Key Observations:**
+
+- We need, *for each occurrence* of a value, the sum of absolute differences to all other indices with the same value.
+- Naively, for each i, scan all j: O(N^2) — not feasible.
+
+#### **Efficient Approach (O(N)):**
+
+- For each unique value, collect the list of indices where it appears.
+- For each group of indices:
+    - For each index, compute `sum(|i-j|)` for all j in the group (excluding i).
+- This can be done efficiently by:
+    - Sorting the list of indices (they're naturally sorted as we scan array).
+    - Using prefix sums to compute "sum of left indices" and "sum of right indices" for each index efficiently.
+
+#### **Algorithm Steps:**
+
+1. **Build index groups:** For each value, store the list of positions where it appears.
+2. **Process each group:**
+    - For each list of positions:
+        - Precompute prefix sums of indices.
+        - For each position `i` at index `k` in the group:
+            - Elements to the left: `k` items
+                - Total left sum: `positions_sum_left = prefix_sum[k-1]` (if k >= 1)
+            - Elements to the right: `len - k - 1` items
+                - Total right sum: `positions_sum_right = prefix_sum[n-1] - prefix_sum[k]`
+            - Result:
+                ```
+                arr[position[k]] = (k * positions[k] - positions_sum_left) + (positions_sum_right - (len-k-1) * positions[k])
+                ```
+        - This avoids O(N^2) by doing each value's positions in O(M) where M is count of that value.
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 #include <vector>
-#include <string>
-
+#include <unordered_map>
 using namespace std;
 
 class Solution {
 public:
-    vector<string> twoEditWords(vector<string>& queries, vector<string>& dictionary) {
-        vector<string> res;
-        int n = queries[0].size();
-        for (const string& q : queries) {
-            for (const string& w : dictionary) {
-                int diff = 0;
-                for (int i = 0; i < n; ++i) {
-                    if (q[i] != w[i]) {
-                        ++diff;
-                        if (diff > 2) break; // early exit for efficiency
-                    }
-                }
-                if (diff <= 2) {
-                    res.push_back(q);
-                    break; // move to next query
-                }
+    vector<long long> distance(vector<int>& nums) {
+        int n = nums.size();
+        vector<long long> res(n, 0);
+        unordered_map<int, vector<int>> val2indices;
+        // 1. Record the indices for each value
+        for (int i = 0; i < n; ++i)
+            val2indices[nums[i]].push_back(i);
+        
+        // 2. Process each group
+        for (const auto& kv : val2indices) {
+            const vector<int>& indices = kv.second;
+            int m = indices.size();
+            if (m == 1) continue;
+            // Prefix sums
+            vector<long long> prefix(m, 0);
+            prefix[0] = indices[0];
+            for (int i = 1; i < m; ++i)
+                prefix[i] = prefix[i-1] + indices[i];
+            long long total_sum = prefix[m-1];
+            
+            for (int k = 0; k < m; ++k) {
+                long long left = (k > 0) ? prefix[k-1] : 0;
+                long long right = total_sum - prefix[k];
+                int loc = indices[k];
+                res[loc] = 1LL * loc * k - left + right - 1LL * loc * (m - k - 1);
             }
         }
         return res;
@@ -76,27 +99,44 @@ public:
 
 ---
 
-## 5. **Example Explanation**
+## 5. Example Explanation
 
-**Example 1:**
+**Example:** `nums = [1, 3, 1, 1, 2]`
 
-```
-queries = ["word","note","ants","wood"]
-dictionary = ["wood","joke","moat"]
-```
+Positions for value `1`: `[0, 2, 3]`
 
-- **"word"**:  
-  - Compare to "wood": 'w'=='w', 'o'=='o', 'r'!='o', 'd'=='d' → 1 difference → valid.
-- **"note"**:  
-  - Compare to "joke": ('n','j'),('o','o'),('t','k'),('e','e') → 2 differences → valid.
-- **"ants"**:  
-  - Compare with every dict word: All require more than 2 changes → not valid.
-- **"wood"**:  
-  - Compare to "wood": identical (0 difference) → valid.
+- Prefix sum: `[0, 2, 5]`
+- For index at position 0 (k=0, loc=0):
+    - k = 0 (no left), left sum = 0
+    - right = 5 - 0 = 5
+    - Right count = 2 (`3 - 0 - 1`)
+    - So:
+      - `arr[0] = 0*0 - 0 + 5 - 0*2 = 5`
+- For index at position 2 (k=1, loc=2):
+    - left = 0
+    - right = 5 - 2 = 3
+    - arr[2] = 1*2 - 0 + 3 - 2*1 = 2 - 0 + 3 - 2 = 3
+- For index at position 3 (k=2, loc=3):
+    - left = 2
+    - right = 5 - 5 = 0
+    - arr[3] = 2*3 - 2 + 0 - 3*0 = 6 - 2 = 4
 
-**Returned:** `["word","note","wood"]`
+Thus, output is `[5,0,3,4,0]`
 
 ---
 
-**Summary:**  
-For each query word, compare it with each dictionary word, counting differing positions, and include the query in result if any dict word matches within 2 or fewer differences.
+## **Summary Table**
+
+| Step | Action                                                            | Complexity |
+|------|-------------------------------------------------------------------|------------|
+| 1    | Group indices by each unique value                                | O(N)       |
+| 2    | For each group, do prefix sums and compute answer indices in O(M) | O(N)       |
+| 3    | Total                                                            | O(N)       |
+
+---
+
+## **Conclusion**
+
+The algorithm efficiently handles the distance sums for identical elements using prefix sums, reducing complexity from O(N²) to O(N).
+
+Let me know if you'd like test cases or an expanded inline explanation in the code!
