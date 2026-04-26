@@ -1,134 +1,116 @@
-Let's break down the solution step-by-step:
+Let's break down the problem step by step:
 
 ---
 
-## **1. Summary**
+## 1. **Short Summary**
 
-Given points on the **boundary of a square**, select **k** points such that the **minimum** Manhattan distance between any pair is **maximized**. Return this maximum possible minimum Manhattan distance.
-
----
-
-## **2. Constraints & Edge Cases**
-
-- **side:** up to 1e9 (but positions in input are always among the given set)
-- **points.length:** up to 15,000 (all points on boundary, unique)
-- **k:** up to 25 (small)
-- **All points are unique and on the boundary.**
-- Why is this hard? Looking for a subset maximizing the min pairwise Manhattan distance, with up to 15k points (can't brute-force all k-subsets).
-
-**Edge Cases:**
-- All 4 corners: only 4 points, must pick all.
-- Many points "clustered" on the same side.
+Given an `m x n` 2D grid of lowercase letters, **detect if there's a cycle formed by moving only between adjacent (4 directions) grid cells of the same letter**, with the added restriction that you can't move immediately back to the cell you just came from. A cycle is a path of length at least 4 that starts and ends at the same cell.
 
 ---
 
-## **3. Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-### **Observation**
-- **Manhattan distance** on square boundary is _never larger than side * 2_.
-- Given unique, up to 15k boundary points—**k is very small**.
-
-### **Approach: Binary Search + Greedy Check**
-- **Key Trick:** The problem reduces to: *For a candidate answer `D`, is it possible to pick `k` points among the given points so that every pair has Manhattan distance at least `D`?*
-- This is a classic "**maximum minimum distance**" problem, solved with binary search.
-
-**Steps:**
-
-1. **Binary Search** on answer (distance D): D in [0, 2*side].
-2. For each candidate D, **Greedy Check**: Can we select k points from the list such that pairwise minimal Manhattan distance is at least D?
-
-**Implementation of Check Function:**
-- Since k is small (<=25), can use **greedy selection**:
-    - Sort points in any order (or try all as possible starting points, for more accuracy).
-    - For each new point, only add it to our current set if it has Manhattan distance at least D to all previously selected points.
-    - If you manage to select k points, then D is feasible.
-
-- **Optimization:** Pre-sort points for consistent behavior; though starting from any point is usually sufficient because of small k.
-
-**Time Complexity:**
-- Binary Search: O(log(maxD)) ~ 31
-- For each check: O(points.length * k * k)
-- Acceptable for points.length = 15k, k = 25, log(2e9)=31.
+- **1 ≤ m, n ≤ 500**, so up to 250,000 cells.
+- The grid only contains lowercase letters.
+- We must avoid TLE and excessive stack usage (`DFS` recursion depth up to 250,000).
+- Cycles must be at least length 4.
+- Diagonal moves are **_not_** allowed.
+- You can't "immediately reverse" your move (can’t just go back and forth).
+- Edge cases to consider:
+    - All cells are the same letter.
+    - Grids with tiny size (like 1x1, 1x2, 2x1); these can't have cycles.
+    - Grids with no two connected identical letters.
 
 ---
 
-## **4. C++ Solution**
+## 3. **Optimal Algorithm**
+
+- Traverse the grid.
+- For each **unvisited** cell, do a DFS search to look for a cycle of the same character:
+    - In each DFS call, keep track of the *parent cell* (the cell you just came from) to prevent simply walking back.
+    - If you revisit a previously visited cell (other than the parent), and the path length is at least 4, a cycle exists.
+- Use a `visited` matrix to avoid reprocessing.
+- **Time complexity:** `O(m * n)` since each cell is visited once (like DFS in a grid).
+- **Space:** The `visited` array and recursion stack (`O(m*n)`, but usually less due to path constraint).
+
+---
+
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-#include <cmath>
-using namespace std;
-
 class Solution {
 public:
-    int maxManhattanDistance(int side, vector<vector<int>>& points, int k) {
-        int n = points.size();
+    int m, n;
+    vector<vector<bool>> visited;
+    vector<vector<char>> grid;
+    const vector<pair<int,int>> dirs = {{0,1}, {1,0}, {0,-1}, {-1,0}};
 
-        // Check if for given distance d, we can pick at least k points
-        auto check = [&](int d) -> bool {
-            // Try every point as potential starting point? Not necessary, just one suffices for small k
-            // (but can be enhanced if needed)
-            // Let's try greedy select
-            vector<int> used;
-            for (int s = 0; s < n; ++s) {
-                vector<int> sel = {s};
-                for (int i = 0; i < n && sel.size() < k; ++i) {
-                    if (i == s) continue;
-                    bool ok = true;
-                    for (int idx : sel) {
-                        int dist = abs(points[i][0] - points[idx][0]) + abs(points[i][1] - points[idx][1]);
-                        if (dist < d) { ok = false; break; }
-                    }
-                    if (ok) sel.push_back(i);
-                }
-                if (sel.size() >= k)
-                    return true;
-            }
-            return false;
-        };
+    bool dfs(int x, int y, int from_x, int from_y, char ch, int length) {
+        // Already visited cell
+        if (visited[x][y]) 
+            return length >= 4;
 
-        int lo = 0, hi = 2*side+1; // search for maximum possible min distance
-        while (lo < hi) {
-            int mid = lo + (hi-lo)/2;
-            if (check(mid)) {
-                lo = mid+1;
-            } else {
-                hi = mid;
-            }
+        visited[x][y] = true;
+        for (const auto& [dx, dy] : dirs) {
+            int nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= m || ny >= n) continue;
+            if (nx == from_x && ny == from_y) continue;  // don't step directly back
+            if (grid[nx][ny] != ch) continue;
+            if (dfs(nx, ny, x, y, ch, length+1))
+                return true;
         }
-        return lo-1;
+        return false;
+    }
+
+    bool containsCycle(vector<vector<char>>& grid_) {
+        grid.swap(grid_);
+        m = grid.size();
+        n = grid[0].size();
+        visited.assign(m, vector<bool>(n, false));
+
+        for (int i = 0; i < m; ++i)
+            for (int j = 0; j < n; ++j)
+                if (!visited[i][j])
+                    if (dfs(i, j, -1, -1, grid[i][j], 1))
+                        return true;
+
+        return false;
     }
 };
 ```
+
 ---
 
-## **5. Example Explanation**
+## 5. **Explain with Example**
 
 ### Example 1:
-**Input:**  
-`side = 2`, `points = [[0,2],[2,0],[2,2],[0,0]]`, `k = 4`
 
-All 4 points are square corners.  
-**Max Manhattan distance** between any pair is either 2 (side) or 4 (across diagonal).
+**Input:**
+```
+grid =
+[["a","a","a","a"],
+ ["a","b","b","a"],
+ ["a","b","b","a"],
+ ["a","a","a","a"]]
+```
 
-- Pick all 4 points. The smallest pairwise Manhattan distance is exactly 2.
-- Can't do better, because if you exclude any point, the minimum distance increases, but you must pick all four.
-
-**Output:** `2`
-
-
----
-
-# **Summary Table**
-| Step         | Description                                                                                 |
-|--------------|--------------------------------------------------------------------------------------------|
-| Constraints  | k is small (<=25), up to 15k points, Manhattan distance, on square boundary                |
-| Approach     | Binary Search for max minimal distance, greedy select at each candidate distance           |
-| Key Trick    | For a distance D, try to select k points such that all pairs at least D apart; binary search|
-| Code         | See above                                                                                  |
-| Example      | For all corners of size 2, can only achieve minimum distance 2 between points              |
+- Start at any 'a' on the outside edge.
+- Doing DFS, you can walk around the edge (say, top row, right edge, bottom row, left edge).
+- You revisit the starting cell, and the path length is more than 4.
+- The function detects this cycle and returns **true**.
 
 ---
 
-Let me know if you want further optimizations or other languages!
+## **Summary Table**
+
+| Step                               | Action                                                                       |
+|-------------------------------------|------------------------------------------------------------------------------|
+| Traverse every cell                 | For each unvisited cell, start DFS                                           |
+| DFS (cycle detection)               | Visit neighbors with same char, skipping the direct parent                   |
+| Cycle check                        | If you re-enter an already visited cell, check path length ≥ 4 ⇒ cycle found |
+| Time Complexity                     | O(m*n)                                                                       |
+| Returns                            | true if cycle exists, otherwise false                                        |
+
+---
+
+If you need an **iterative BFS/DFS** for even greater stack safety, just ask!
