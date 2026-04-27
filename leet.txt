@@ -1,79 +1,95 @@
-Let's break down the problem step by step:
+Let's break this down step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an `m x n` 2D grid of lowercase letters, **detect if there's a cycle formed by moving only between adjacent (4 directions) grid cells of the same letter**, with the added restriction that you can't move immediately back to the cell you just came from. A cycle is a path of length at least 4 that starts and ends at the same cell.
+You're given a grid where each cell contains a number (1 to 6) representing a unique street connection among its four sides. Starting from the **top-left cell** (0,0), you must determine if it's possible to reach the **bottom-right cell** (m-1, n-1) by only following the "connected streets" (valid movements between neighboring cells as defined by the street types). You can't alter any streets.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **1 ≤ m, n ≤ 500**, so up to 250,000 cells.
-- The grid only contains lowercase letters.
-- We must avoid TLE and excessive stack usage (`DFS` recursion depth up to 250,000).
-- Cycles must be at least length 4.
-- Diagonal moves are **_not_** allowed.
-- You can't "immediately reverse" your move (can’t just go back and forth).
-- Edge cases to consider:
-    - All cells are the same letter.
-    - Grids with tiny size (like 1x1, 1x2, 2x1); these can't have cycles.
-    - Grids with no two connected identical letters.
+**Constraints:**
+- \( 1 \leq m, n \leq 300 \): Large grid — time and space complexity need to be nearly linear.
+- Street value: \( 1 \leq grid[i][j] \leq 6 \): Only 6 possible types.
+
+**Edge Cases:**
+- Smallest grid (1x1): Always true (start == end).
+- Streets that lead to nowhere (e.g., all 1's in a column).
+- Streets that form loops and don't reach the end.
+- Isolated cell at (0,0) (no matching connection).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- Traverse the grid.
-- For each **unvisited** cell, do a DFS search to look for a cycle of the same character:
-    - In each DFS call, keep track of the *parent cell* (the cell you just came from) to prevent simply walking back.
-    - If you revisit a previously visited cell (other than the parent), and the path length is at least 4, a cycle exists.
-- Use a `visited` matrix to avoid reprocessing.
-- **Time complexity:** `O(m * n)` since each cell is visited once (like DFS in a grid).
-- **Space:** The `visited` array and recursion stack (`O(m*n)`, but usually less due to path constraint).
+**Idea:**  
+Use either **BFS** or **DFS** to traverse from (0,0), only moving between neighboring cells if the streets are mutually connected (both allow passage between the two cells). Given the grid can be quite large, BFS is often preferable to avoid stack overflows and ensure you're traversing shortest or all possible routes efficiently.
+
+### Key Steps
+1. **Direction definition per street type**: For each cell value (1-6), define which directions you may *leave* from this cell.
+2. **Reverse connection**: When moving into a neighbor (say, to cell (nr, nc)), ensure its type connects **back** to your current cell.
+3. **BFS Traversal**: Mark visited cells; for each move, check both the current and neighbor types for valid passage.
+4. **Finish**: If you ever reach (m-1, n-1), return **true**.
+
+**Complexity:**  
+O(m*n) — Each cell is visited at most once.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+#include <queue>
+using namespace std;
+
 class Solution {
 public:
-    int m, n;
-    vector<vector<bool>> visited;
-    vector<vector<char>> grid;
-    const vector<pair<int,int>> dirs = {{0,1}, {1,0}, {0,-1}, {-1,0}};
+    // Directions: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
+    // Each type: possible movement directions.
+    const vector<vector<int>> dirs = {
+        {},
+        {3, 1},   // type 1: LEFT, RIGHT
+        {0, 2},   // type 2: UP, DOWN
+        {3, 2},   // type 3: LEFT, DOWN
+        {1, 2},   // type 4: RIGHT, DOWN
+        {3, 0},   // type 5: LEFT, UP
+        {1, 0}    // type 6: RIGHT, UP
+    };
+    // Direction offset: [UP, RIGHT, DOWN, LEFT]
+    const vector<int> dr = {-1, 0, 1, 0};
+    const vector<int> dc = {0, 1, 0, -1};
+    // For direction d, the opposite direction idx (i^2)
+    //      0 <-> 2,  1 <-> 3
+    int oppDir(int d) { return d ^ 2; }
 
-    bool dfs(int x, int y, int from_x, int from_y, char ch, int length) {
-        // Already visited cell
-        if (visited[x][y]) 
-            return length >= 4;
+    bool hasValidPath(vector<vector<int>>& grid) {
+        int m = grid.size(), n = grid[0].size();
+        vector<vector<bool>> vis(m, vector<bool>(n, false));
+        queue<pair<int,int>> q;
+        q.push({0,0});
+        vis[0][0] = true;
 
-        visited[x][y] = true;
-        for (const auto& [dx, dy] : dirs) {
-            int nx = x + dx, ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= m || ny >= n) continue;
-            if (nx == from_x && ny == from_y) continue;  // don't step directly back
-            if (grid[nx][ny] != ch) continue;
-            if (dfs(nx, ny, x, y, ch, length+1))
-                return true;
+        while (!q.empty()) {
+            int r = q.front().first, c = q.front().second; q.pop();
+            if (r == m-1 && c == n-1) return true;
+            int type = grid[r][c];
+            for (int d : dirs[type]) {
+                int nr = r + dr[d], nc = c + dc[d];
+                if (nr<0 || nr>=m || nc<0 || nc>=n || vis[nr][nc]) continue;
+                int ntype = grid[nr][nc];
+                // Check the neighbor cell connects back
+                for (int nd : dirs[ntype]) {
+                    if (nr + dr[nd] == r && nc + dc[nd] == c) {
+                        vis[nr][nc] = true;
+                        q.push({nr, nc});
+                        break; // No need to check other connections
+                    }
+                }
+            }
         }
-        return false;
-    }
-
-    bool containsCycle(vector<vector<char>>& grid_) {
-        grid.swap(grid_);
-        m = grid.size();
-        n = grid[0].size();
-        visited.assign(m, vector<bool>(n, false));
-
-        for (int i = 0; i < m; ++i)
-            for (int j = 0; j < n; ++j)
-                if (!visited[i][j])
-                    if (dfs(i, j, -1, -1, grid[i][j], 1))
-                        return true;
-
         return false;
     }
 };
@@ -81,36 +97,43 @@ public:
 
 ---
 
-## 5. **Explain with Example**
+## 5. **Explanation with Example**
 
-### Example 1:
-
-**Input:**
+**Example Input:**
 ```
-grid =
-[["a","a","a","a"],
- ["a","b","b","a"],
- ["a","b","b","a"],
- ["a","a","a","a"]]
+grid = [[2,4,3],
+        [6,5,2]]
 ```
 
-- Start at any 'a' on the outside edge.
-- Doing DFS, you can walk around the edge (say, top row, right edge, bottom row, left edge).
-- You revisit the starting cell, and the path length is more than 4.
-- The function detects this cycle and returns **true**.
+Visual layout (indices):
+
+```
+(0,0)=2  (0,1)=4  (0,2)=3
+(1,0)=6  (1,1)=5  (1,2)=2
+```
+
+**Path:**
+- Start at (0,0) [type 2, connects UP↕DOWN]: Its DOWN can connect to (1,0).
+- (1,0) [type 6, connects RIGHT→, UP↑]: It has UP, so connects back to (0,0) (valid).
+  - (1,0) can go RIGHT to (1,1) (type 5, LEFT←, UP↑).
+  - Both have RIGHT/LEFT: so move to (1,1).
+- From (1,1) [type 5], can go UP (to (0,1), type 4), or LEFT to ...
+- Continue like this; you'll reach (1,2), then via type 2 (DOWN from (0,2)).
+
+**At each move, both streets must be connected between the two cells as per rules.**
 
 ---
 
-## **Summary Table**
-
-| Step                               | Action                                                                       |
-|-------------------------------------|------------------------------------------------------------------------------|
-| Traverse every cell                 | For each unvisited cell, start DFS                                           |
-| DFS (cycle detection)               | Visit neighbors with same char, skipping the direct parent                   |
-| Cycle check                        | If you re-enter an already visited cell, check path length ≥ 4 ⇒ cycle found |
-| Time Complexity                     | O(m*n)                                                                       |
-| Returns                            | true if cycle exists, otherwise false                                        |
+**Summary Table for Street Types:**
+| Type | Connects to      | Directions [(dr, dc)] |
+|------|------------------|----------------------|
+| 1    | Left & Right     | (0,-1), (0,1)        |
+| 2    | Up & Down        | (-1,0), (1,0)        |
+| 3    | Left & Down      | (0,-1), (1,0)        |
+| 4    | Right & Down     | (0,1), (1,0)         |
+| 5    | Left & Up        | (0,-1), (-1,0)       |
+| 6    | Right & Up       | (0,1), (-1,0)        |
 
 ---
 
-If you need an **iterative BFS/DFS** for even greater stack safety, just ask!
+Let me know if you want a more detailed trace or help with another aspect!
