@@ -1,139 +1,99 @@
-Let's break this down step by step:
+Sure! Let's break down the problem step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-You're given a grid where each cell contains a number (1 to 6) representing a unique street connection among its four sides. Starting from the **top-left cell** (0,0), you must determine if it's possible to reach the **bottom-right cell** (m-1, n-1) by only following the "connected streets" (valid movements between neighboring cells as defined by the street types). You can't alter any streets.
+We have an `m x n` grid of integers, and in one operation, we can add or subtract a given number `x` from any grid cell. The goal is to make all grid cells have the same value (uni-value grid) with as few operations as possible. If it's not possible, return `-1`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- \( 1 \leq m, n \leq 300 \): Large grid — time and space complexity need to be nearly linear.
-- Street value: \( 1 \leq grid[i][j] \leq 6 \): Only 6 possible types.
-
-**Edge Cases:**
-- Smallest grid (1x1): Always true (start == end).
-- Streets that lead to nowhere (e.g., all 1's in a column).
-- Streets that form loops and don't reach the end.
-- Isolated cell at (0,0) (no matching connection).
+- **Grid size**: `1 ≤ m, n ≤ 1e5` (but total cells `m * n ≤ 1e5`, so grid is a 1D array conceptually).
+- **Cell value and x:** `1 ≤ x, grid[i][j] ≤ 1e4`
+- **Not possible**: If the difference between any pair of values isn't divisible by `x`, we can't make the grid uni-value.
+- **Edge Cases**:
+    - All elements are already equal ⇒ 0 operations.
+    - Impossible cases: Return -1.
+    - Large grid but total elements capped to `1e5`.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Idea:**  
-Use either **BFS** or **DFS** to traverse from (0,0), only moving between neighboring cells if the streets are mutually connected (both allow passage between the two cells). Given the grid can be quite large, BFS is often preferable to avoid stack overflows and ensure you're traversing shortest or all possible routes efficiently.
+**Step 1:**  
+Flatten the grid into a 1D array for easier processing.
 
-### Key Steps
-1. **Direction definition per street type**: For each cell value (1-6), define which directions you may *leave* from this cell.
-2. **Reverse connection**: When moving into a neighbor (say, to cell (nr, nc)), ensure its type connects **back** to your current cell.
-3. **BFS Traversal**: Mark visited cells; for each move, check both the current and neighbor types for valid passage.
-4. **Finish**: If you ever reach (m-1, n-1), return **true**.
+**Step 2:**  
+Check that for all elements, `(cell value - first cell value) % x == 0`. If not, return `-1`.
 
-**Complexity:**  
-O(m*n) — Each cell is visited at most once.
+**Step 3:**  
+Let’s define `b[i] = (cell value - base) / x` for all cells, where `base` is the value of the first cell.  
+Now, making all values equal is equivalent to making all `b[i]`s equal via increment/decrement by 1.
+
+- The minimum number of operations needed (for standard integer grid median minimization) is minimized by making all `b[i]` equal to their median value.
+
+**Step 4:**  
+Find the median of the `b[]` values.  
+Sum up `abs(b[i] - median)` for all i.  
+Total operations = this sum.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <queue>
+#include <algorithm>
+#include <cstdlib>
 using namespace std;
 
 class Solution {
 public:
-    // Directions: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
-    // Each type: possible movement directions.
-    const vector<vector<int>> dirs = {
-        {},
-        {3, 1},   // type 1: LEFT, RIGHT
-        {0, 2},   // type 2: UP, DOWN
-        {3, 2},   // type 3: LEFT, DOWN
-        {1, 2},   // type 4: RIGHT, DOWN
-        {3, 0},   // type 5: LEFT, UP
-        {1, 0}    // type 6: RIGHT, UP
-    };
-    // Direction offset: [UP, RIGHT, DOWN, LEFT]
-    const vector<int> dr = {-1, 0, 1, 0};
-    const vector<int> dc = {0, 1, 0, -1};
-    // For direction d, the opposite direction idx (i^2)
-    //      0 <-> 2,  1 <-> 3
-    int oppDir(int d) { return d ^ 2; }
-
-    bool hasValidPath(vector<vector<int>>& grid) {
+    int minOperations(vector<vector<int>>& grid, int x) {
+        vector<int> vals;
         int m = grid.size(), n = grid[0].size();
-        vector<vector<bool>> vis(m, vector<bool>(n, false));
-        queue<pair<int,int>> q;
-        q.push({0,0});
-        vis[0][0] = true;
-
-        while (!q.empty()) {
-            int r = q.front().first, c = q.front().second; q.pop();
-            if (r == m-1 && c == n-1) return true;
-            int type = grid[r][c];
-            for (int d : dirs[type]) {
-                int nr = r + dr[d], nc = c + dc[d];
-                if (nr<0 || nr>=m || nc<0 || nc>=n || vis[nr][nc]) continue;
-                int ntype = grid[nr][nc];
-                // Check the neighbor cell connects back
-                for (int nd : dirs[ntype]) {
-                    if (nr + dr[nd] == r && nc + dc[nd] == c) {
-                        vis[nr][nc] = true;
-                        q.push({nr, nc});
-                        break; // No need to check other connections
-                    }
-                }
+        int base = grid[0][0];
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                int diff = grid[i][j] - base;
+                if (diff % x != 0) return -1;
+                vals.push_back(diff / x);
             }
         }
-        return false;
+        sort(vals.begin(), vals.end());
+        int median = vals[vals.size() / 2];
+        int result = 0;
+        for (int b : vals) {
+            result += abs(b - median);
+        }
+        return result;
     }
 };
 ```
 
 ---
 
-## 5. **Explanation with Example**
+## 5. **Example Explanation**
 
-**Example Input:**
+### Example 1
 ```
-grid = [[2,4,3],
-        [6,5,2]]
+grid = [[2,4],[6,8]], x = 2
+Step 1: Flatten → [2, 4, 6, 8]
+base = 2
+Check: each (val - 2) % 2 == 0 ⇒ Yes
+
+b[] = [(2-2)/2, (4-2)/2, (6-2)/2, (8-2)/2] = [0, 1, 2, 3]
+Median of [0,1,2,3] = 1.5 → But since indexes, use index 2 → median = 2
+
+Sum abs(b[i] - 1): 
+|0-1| + |1-1| + |2-1| + |3-1| = 1 + 0 + 1 + 2 = 4
+
+Total operations = 4
 ```
-
-Visual layout (indices):
-
-```
-(0,0)=2  (0,1)=4  (0,2)=3
-(1,0)=6  (1,1)=5  (1,2)=2
-```
-
-**Path:**
-- Start at (0,0) [type 2, connects UP↕DOWN]: Its DOWN can connect to (1,0).
-- (1,0) [type 6, connects RIGHT→, UP↑]: It has UP, so connects back to (0,0) (valid).
-  - (1,0) can go RIGHT to (1,1) (type 5, LEFT←, UP↑).
-  - Both have RIGHT/LEFT: so move to (1,1).
-- From (1,1) [type 5], can go UP (to (0,1), type 4), or LEFT to ...
-- Continue like this; you'll reach (1,2), then via type 2 (DOWN from (0,2)).
-
-**At each move, both streets must be connected between the two cells as per rules.**
+So, the answer is **4**.
 
 ---
 
-**Summary Table for Street Types:**
-| Type | Connects to      | Directions [(dr, dc)] |
-|------|------------------|----------------------|
-| 1    | Left & Right     | (0,-1), (0,1)        |
-| 2    | Up & Down        | (-1,0), (1,0)        |
-| 3    | Left & Down      | (0,-1), (1,0)        |
-| 4    | Right & Down     | (0,1), (1,0)         |
-| 5    | Left & Up        | (0,-1), (-1,0)       |
-| 6    | Right & Up       | (0,1), (-1,0)        |
-
----
-
-Let me know if you want a more detailed trace or help with another aspect!
+If you have more questions, or want an explanation for other examples, let me know!
