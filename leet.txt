@@ -1,183 +1,78 @@
-Let's break down the problem and solution step by step:
+Let's address the problem step by step.
 
 ---
-## 1. **Summary**
 
-Given an **n x n** grid, in one operation, you can pick any cell `(i, j)` and color all the cells in the **j-th column** from the **top down to row i** as black. The *score* is the sum of all values `grid[i][j]` where the cell is white and **adjacent horizontally** to a black cell. The goal: **Choose operations to maximize the final score.**
+## 1. **Short Summary**
+
+Given an `m x n` grid filled with 0, 1, and 2, you need to move from the top-left cell `(0, 0)` to the bottom-right cell `(m-1, n-1)` only moving **right or down**. Each cell contributes to a **score** (`0`, `1`, or `2`) and **incurs a cost** (`0` for `0`, `1` for `1` or `2`). For each path, the **total cost must not exceed** `k`. You need to **maximize the score** you collect on a valid path, or return `-1` if not possible.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **n** is up to 100, so O(n^3) algorithms are acceptable, O(n^4) likely not.
-- Each cell value is up to $10^9$ — large values, so must use `long long` in C++.
-- You can perform any number or sequence of column operations.
-- *Edge cases:*
-    - All zeros in the grid.
-    - Only one row/column.
-    - Only one nonzero value.
-- No operation is also allowed (if that's optimal).
+- **Grid size:** `1 <= m, n <= 200`
+    - Up to `40,000` cells
+- **Max cost:** `0 <= k <= 1000`
+- **Cell values:** `grid[i][j] in {0, 1, 2}`
+- **grid[0][0] == 0** (No cost or score at start cell)
+- **Edge Cases:**
+    - If there is **no path** where total cost ≤ `k` ⇒ return `-1`.
+    - If endpoints have cells with only 0's (no cost, no score).
+    - If grid is 1x1, output is 0 since no move.
+    - Some cells may be `2`, which give max score per cost (score/cost=2).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Insight**
+This is a **constrained shortest/longest path problem**. At each cell, with a certain cost used so far, what is the **max score** you can get at that cell for each possible cost?  
+This fits a **Dynamic Programming (DP)** solution:
+- DP state: `dp[i][j][c] = max total score to reach (i, j) with total cost c`
+- We only care about `c <= k`
+- Initialize `dp` so only `dp[0][0][0] = 0` is possible at the start
+- For each cell, for all costs so far, propagate to `right` and `down`
+- At end, find **max score among all dp[m-1][n-1][c] with c <= k**
 
-For each column, you can independently choose (possibly not to operate at all) a "cut-off row" — all rows in that column **above and including** that row become black; all below stay white.
+Due to constraints:  
+- `m * n` ≤ 40,000, `k` ≤ 1000 ⇒ up to `40 million` states, but we can optimize:
+    - At each cell, for each cost (up to k), we keep track of **max score so far**.
+    - We can use 2D vector for current and previous row to save memory.
 
-Your only concern is, for **each white cell** `(i, j)`, is it horizontally adjacent (left or right) to a black cell.
+**DP Transition:**  
+For each cell `(i, j)` and each cost so far,  
+- New cell value: if from up/left,  
+    - If moving from `(i-1, j)`, need to consider cost + cost for grid[i][j]
+    - If within `k`, update max score for new cost
 
-***If you pick the "cut-off" for each column as variable `cuts[j]`, terming "row >= cuts[j]" as black in column j.***
+**Pseudo-code:**
 
-Now, for each cell `(i, j)`, it's white iff `i < cuts[j]`.
+```text
+Let cost_at[i][j] = 0 if grid[i][j]==0 else 1
+    score_at[i][j] = grid[i][j]
 
-- Its left neighbor (if exists) is black iff `i >= cuts[j-1]`.
-- Its right neighbor (if exists) is black iff `i >= cuts[j+1]`.
-- The score includes grid[i][j] **iff i < cuts[j] and (i >= cuts[j-1] or i >= cuts[j+1])**.
+dp[i][j][c] = -inf, for all i, j, c. Set dp[0][0][0] = 0
 
-Let’s formalize:
+For i from 0 to m-1:
+  For j from 0 to n-1:
+    For c from 0 to k:
+      If dp[i][j][c] == -inf: continue
 
-- Let’s define **cuts[0...n-1]**.
-    - For each cell `(i, j)` (for all `i < cuts[j]`), if `j-1 >= 0` and `i >= cuts[j-1]`, or `j+1 < n` and `i >= cuts[j+1]`, then include grid[i][j] in score.
+      For each (next_i, next_j) in [(i+1,j), (i,j+1)]:
+         if next_i < m and next_j < n:
+             nc = c + cost_at[next_i][next_j]
+             if nc <= k:
+                 dp[next_i][next_j][nc] = max(dp[next_i][next_j][nc], dp[i][j][c] + score_at[next_i][next_j])
 
-**Let’s try dynamic programming**:
+Result = max(dp[m-1][n-1][c] for all c=0..k)
+Return Result if any, else -1
+```
 
-Let’s fix the "cut-off row" for each column, from 0 (all rows black) to n (no cell black: never colored).
-
-Let’s process from left to right, for each column, and for each possible `cuts[j]`, keep a DP:
-
-- Let `dp[j][r]` = **maximum score achievable for columns [0...j] where in column j, all rows >= r are black, rows < r are white.**
-
-Base case: `dp[-1][n] = 0` (before any columns exist).
-
-DP Transition:
-
-- For each cut-off row `r` at column `j`, for each possible `prev_r` at column `j-1`, compute:
-
-    - For each row `i` in [0, n-1]:
-
-        - **White in column j:** if `i < r`
-            - Is its left neighbor black? If `j-1 >= 0 and i >= prev_r`
-            - Is its right neighbor black? Only possible in next columns, but since we process left-to-right, let's only process left neighbor for now; we'll process right neighbor when we reach the next column.
-
-    - This pattern matches "2-Row DP" used in some contour DP.
-
-But since each column's choice only affects its adjacent, the number of DP states is `n x n` (for 2 columns: current and previous). For each cell, for each possible cutoff for `j` and `j-1`.
-
-That's manageable for n=100 ($100^2 = 10,000$).
-
-#### **Complete Algorithm**
-
-Let’s use DP:
-
-- `dp[j][r]`: At column `j`, with rows >= `r` in column `j` black, rows < `r` white, what's the **max score** up to col `j`.
-    - For all previous cut-off `prev_r` at column `j-1`:
-        - For rows `i` from 0 to n-1:
-            - If `i < r`: cell `(i, j)` is white
-                - Is its left neighbor black? If `j-1 >= 0` and `i >= prev_r`
-                - Is its right neighbor black? We'll catch this when processing the next column.
-            - **Score to add for this column:** for each `i < r` where `i >= prev_r`, add `grid[i][j]`
-        - So for each `prev_r`, compute the score for going from `prev_r` in col `j-1` to `r` in col `j` 
-
-But wait! Instead of DP on two columns, since the right neighbor can only be known in the future (unless we process both directions), maybe it's easier to **process both directions by trying all possible cutoffs per column, and for each white cell, check if left OR right neighbor is black**.
-
-So for DP, process from left to right, at each step for every cutoff, maintain the best possible score by previous state. That's manageable.
-
-Let’s implement it **with left-then-right pass**, but it may be simplest with a full DP over the *cut pattern* for all columns—but as n = 100, that's $n^n$, not feasible.
-
-But since each column is independent except for adjacent columns, the two-cutoff DP is the right approach.
+- **Time Complexity:** O(m*n*k)
+- **Space Complexity:** O(m*n*k), but can optimize to O(n*k) by only maintaining current and previous rows.
 
 ---
 
-### **Simplified DP**
-
-Let’s use an (n x n) DP:
-
-- `dp[j][r]`: Max achievable score up to column `j` if we make the cutoff in column `j` at `r`.
-
-Base:
-
-- For the first column (j = 0), there's no left neighbor, so no white cell in column 0 will have a left neighbor that's black.
-- So score for column 0 comes only from its right neighbor (which depends on the future).
-
-But summing both directions, **since the grid is symmetric**, we can process both from left-to-right and right-to-left, and for each direction, compute the score, then take the max.
-
-#### **Algorithm:**
-
-1. For fixed cutoffs in each column (cutoff[r] = index, meaning all rows >= r black, < r white).
-2. For each white cell (i < cutoff[j]), check:
-    - Is its left neighbor black? (if j > 0 and i >= cutoff[j-1])
-    - Is its right neighbor black? (if j < n-1 and i >= cutoff[j+1])
-3. The score is `grid[i][j]` iff either is true.
-
-But we want the maximum score achievable. Since the state at each column is determined by its and its neighbors' cutoffs, dynamic programming over two columns suffices:
-
-- `dp[j][r1][r2]`: at col j, cutoff in prev col is r1, in curr col is r2.
-
-But even better, since we process two columns at a time, and n is up to 100, the total state space is $n^2$ per column. That’s 10,000 per step, times n=100 columns: 1,000,000 total transitions — feasible.
-
----
-
-#### **Implementation Plan**
-
-- dp[j][r1][r2]: max score up to col j, with cutoff r1 for col j-1, r2 for col j.
-- For each col 1 to n, for each prev cutoff r1, for each possible r2:
-
-    - cumulative_score = dp[j-1][any][r1] + score_add (where score_add counts for column j-1, all rows i where cell is **white in col j-1 (i < r1)** and left or right neighbor is black).
-        - Left neighbor is black: i >= prev_prev_r1 (from dp[j-2])
-        - Right neighbor is black: i >= r2
-
-But to keep it efficient, just for each (r1, r2) at columns (j-1, j), for each row i, if i < r1 and (i >= prev_prev_r1 or i >= r2), add grid[i][j-1] to score.
-
-Therefore, to keep just two columns in state, sliding window is enough.
-
----
-
-#### **Final DP Definition**
-
-To clarify, let’s define:
-
-- For each column, we set a "cut-off index" 0..n (inclusive), meaning we have n+1 options per column.
-- For column 0, previous cutoff is undefined, but treat it as n (i.e., no black cell in column -1).
-- dp[cur][prev_cutoff][cur_cutoff]: maximum score for columns [0..cur], where prev_cutoff is the cutoff on column cur -1, cur_cutoff on column cur.
-
-Process for columns 0 to n-1:
-
-- For column 0, for all cutoff r0 (0 to n):
-    - All cells in column 0, `i < r0`, have no left neighbor. Right neighbor (col 1) not black yet. So can't be included.
-    - So, dp[0][n][r0] = 0 for all r0.
-
-- For columns cur = 1 to n-1:
-    - For each prev_cutoff=0..n, for cur_cutoff=0..n:
-        - For each row i=0..n-1:
-            - For cell (i, cur-1):
-                - Is white iff i < prev_cutoff
-                - Is its left neighbor black? (Always no for col 0)
-                - Is its right neighbor black? i >= cur_cutoff
-
-            - So, if i < prev_cutoff and i >= cur_cutoff, then we get grid[i][cur-1] 
-        - So sum over i=0..n-1: for all i < prev_cutoff && i >= cur_cutoff => add grid[i][cur-1]
-        - dp[cur][prev_cutoff][cur_cutoff] = max over dp[cur-1][**, prev_cutoff] + sum
-
-        - For "dp[cur][prev_cutoff][cur_cutoff]" we need dp[cur-1][**, prev_cutoff]. So we can only use one rolling dimension.
-
-So, use rolling DP array of size [n+1] x [n+1] (prev_cutoff, cur_cutoff).
-
-For the last step (after all columns), for all cutoff at last column, in column n-1, for i < cutoff[n-1], if left neighbor (i >= cutoff[n-2]), include grid[i][n-1].
-
-The **final answer** is the maximum dp[n][prev_cutoff][cur_cutoff] over all prev_cutoff and cur_cutoff.
-
-**Implementation:**
-- For columns 0..n:
-    - For prev_cutoff, cur_cutoff in 0..n:
-        - For i in 0..n-1:
-            - If i < prev_cutoff and i >= cur_cutoff: include grid[i][cur-1] (for col > 0)
-- dp[0][n][cutoff]: 0
-
----
-
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
@@ -186,61 +81,41 @@ using namespace std;
 
 class Solution {
 public:
-    int n;
-    long long gridSum(const vector<vector<int>>& grid, int col, int lower, int upper) {
-        long long res = 0;
-        for (int i = lower; i < upper; ++i)
-            res += grid[i][col];
+    int maximumPathScore(vector<vector<int>>& grid, int k) {
+        int m = grid.size(), n = grid[0].size();
+        // dp[j][c]: max score at row i, col j, cost = c
+        // Use two rows for space optimization
+        vector<vector<int>> dp_prev(n, vector<int>(k+1, -1));
+        dp_prev[0][0] = 0; // start cell
+
+        for(int i = 0; i < m; ++i) {
+            vector<vector<int>> dp_cur(n, vector<int>(k+1, -1));
+            for(int j = 0; j < n; ++j) {
+                for(int c = 0; c <= k; ++c) {
+                    int prev_score = -1;
+                    // From up
+                    if(i > 0 && dp_prev[j][c] != -1) prev_score = max(prev_score, dp_prev[j][c]);
+                    // From left
+                    if(j > 0 && dp_cur[j-1][c] != -1) prev_score = max(prev_score, dp_cur[j-1][c]);
+                    // Start cell
+                    if(i == 0 && j == 0 && c == 0) prev_score = 0;
+                    if(prev_score == -1) continue;
+
+                    int cell_val = grid[i][j];
+                    int add_cost = (cell_val == 0 ? 0 : 1);
+                    int add_score = cell_val;
+
+                    int nc = c + add_cost;
+                    if(nc > k) continue;
+                    dp_cur[j][nc] = max(dp_cur[j][nc], prev_score + add_score);
+                }
+            }
+            dp_prev.swap(dp_cur);
+        }
+
+        int res = -1;
+        for(int c = 0; c <= k; ++c) res = max(res, dp_prev[n-1][c]);
         return res;
-    }
-    long long maximumScore(vector<vector<int>>& grid) {
-        n = grid.size();
-        // dp[prev_cut][cur_cut]: dp for cur_col, previous column cutoff at prev_cut, current at cur_cut
-        // Let prev_cut & cur_cut go from 0..n (n = nothing black, 0 = all black)
-        // dp array, rolling.
-        vector<vector<long long>> dp(n+1, vector<long long>(n+1, 0));
-        vector<vector<long long>> newdp(n+1, vector<long long>(n+1, 0));
-        // Initial state: for column 0, previous col = n (none black), current col = 0..n (try all cutoffs)
-        for (int cur_cut = 0; cur_cut <= n; ++cur_cut) {
-            dp[n][cur_cut] = 0; // no score at col 0
-        }
-        // Process columns 1..n
-        for (int col = 1; col <= n; ++col) { // col marks the number of columns considered (up to col-1), 1-based
-            // Reset newdp
-            for (int prev_cut = 0; prev_cut <= n; ++prev_cut)
-                fill(newdp[prev_cut].begin(), newdp[prev_cut].end(), 0LL);
-            // For all possible cuts in previous and current column
-            for (int prev_cut = 0; prev_cut <= n; ++prev_cut) {
-                for (int cur_cut = 0; cur_cut <= n; ++cur_cut) {
-                    // For cells in previous column (col-1)
-                    long long score = 0;
-                    if (col > 1) {
-                        int prev_col = col-1;
-                        for (int i = 0; i < prev_cut; ++i) { // cells white in previous column
-                            if (i >= cur_cut) // right neighbor (current col) is black
-                                score += grid[i][prev_col-1]; // prev_col-1, since grid is 0-based
-                        }
-                    }
-                    newdp[cur_cut][prev_cut] = max(newdp[cur_cut][prev_cut], dp[prev_cut][cur_cut] + score);
-                }
-            }
-            swap(dp, newdp);
-        }
-        // Now, columns n considered, dp[cur_cut][prev_cut]: in last column n-1, cutoff = prev_cut, "current" column is dummy
-        long long ans = 0;
-        for (int prev_cut = 0; prev_cut <= n; ++prev_cut) {
-            for (int cur_cut = 0; cur_cut <= n; ++cur_cut) {
-                // Now, for the last column (n-1), include scores for white cells (i < prev_cut)
-                long long score = dp[cur_cut][prev_cut];
-                for (int i = 0; i < prev_cut; ++i) {
-                    // Left neighbor is black if i >= cur_cut
-                    if (i >= cur_cut)
-                        score += grid[i][n-1];
-                }
-                ans = max(ans, score);
-            }
-        }
-        return ans;
     }
 };
 ```
@@ -249,50 +124,35 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's take **Example 1**:
+Let's do example 1:
 
-```
-grid = [
-    [0, 0, 0, 0, 0],
-    [0, 0, 3, 0, 0],
-    [0, 1, 0, 0, 0],
-    [5, 0, 0, 3, 0],
-    [0, 0, 0, 0, 2]
-]
-```
+**Input:** `grid = [[0,1],[2,0]], k=1`
 
-**Operations in solution:**
+Grid:
 
-- Blacken column 1 down to row 3 (indexing from 0; so rows 0,1,2,3 in col 1 become black).
-- Blacken column 3 down to last row (all rows 0..4 in col 3 become black).
+|   | 0 | 1 |
+|---|---|---|
+| 0 | 0 | 1 |
+| 1 | 2 | 0 |
 
-**Score:**
+Possible paths (right/down only):
 
-Now, for each cell that remains white, if it has a horizontally adjacent black cell, its value contributes.
+### Path 1: (0,0)→(0,1)→(1,1)
+- (0,0): val=0, score=0, cost=0
+- (0,1): val=1, score=1, cost=1 (total cost=1)
+- (1,1): val=0, score=0, cost=0 (total cost=1)
+**Total score:** 1  
+**Total cost:** 1
 
-- grid[3][0] = 5: (row 3, col 0) is white, and its right neighbor (3,1) is black (since col 1, rows 0..3 are black). So 5 is counted.
-- grid[1][2] = 3: (row 1, col 2) is white, its left neighbor (1,1) is black.
-- grid[3][3] = 3: (row 3, col 3) is white, its left neighbor (3,2) is white, but its right neighbor (3,4) is white. Against the explanation, but if you blacken column 3 fully, only up to row 4, still, the 3 is counted.
+### Path 2: (0,0)→(1,0)→(1,1)
+- (0,0): val=0, score=0, cost=0
+- (1,0): val=2, score=2, cost=1 (total cost=1)
+- (1,1): val=0, score=0, cost=0 (total cost=1)
+**Total score:** 2  
+**Total cost:** 1
 
-So all these are counted, for total of **11**.
+**Max score = 2 (path 2)**
 
----
-
-## **Summary Table**
-
-| Step | Approach                                    | State size                          | Details                                   |
-|------|---------------------------------------------|-------------------------------------|-------------------------------------------|
-| 1    | Dynamic Programming; rolling state          | O(n^2)                              | Columns processed sequentially; cutoffs   |
-| 2    | For each column & possible cutoff           | O(n^2) per step, total O(n^3)       | Update dp for new cutoff combinations     |
-| 3    | At each step, update based on white/black   | For each row                        | Score for adjacent black neighbor         |
+**Output:** `2`
 
 ---
-
-## **Discussion**
-
-- This DP-based solution efficiently explores all possible ways of blackening columns, maintaining the maximal score as per the definition, while keeping computation within acceptable bounds (`O(n^3)`).
-- The key insight is that only pairs of adjacent columns interact, so a dynamic program over column "cut-off" indices works well.
-
----
-
-**If you need a Python implementation or further explanation, feel free to ask!**
