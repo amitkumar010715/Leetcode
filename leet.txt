@@ -1,158 +1,138 @@
-Let's address the problem step by step.
+Let's break down the solution step by step:
 
 ---
 
-## 1. **Short Summary**
+## **1. Short Summary**
 
-Given an `m x n` grid filled with 0, 1, and 2, you need to move from the top-left cell `(0, 0)` to the bottom-right cell `(m-1, n-1)` only moving **right or down**. Each cell contributes to a **score** (`0`, `1`, or `2`) and **incurs a cost** (`0` for `0`, `1` for `1` or `2`). For each path, the **total cost must not exceed** `k`. You need to **maximize the score** you collect on a valid path, or return `-1` if not possible.
+Given an array `nums`, we are to find the maximum value of the **rotation function** defined as:
 
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Grid size:** `1 <= m, n <= 200`
-    - Up to `40,000` cells
-- **Max cost:** `0 <= k <= 1000`
-- **Cell values:** `grid[i][j] in {0, 1, 2}`
-- **grid[0][0] == 0** (No cost or score at start cell)
-- **Edge Cases:**
-    - If there is **no path** where total cost ≤ `k` ⇒ return `-1`.
-    - If endpoints have cells with only 0's (no cost, no score).
-    - If grid is 1x1, output is 0 since no move.
-    - Some cells may be `2`, which give max score per cost (score/cost=2).
-
----
-
-## 3. **Optimal Algorithm**
-
-This is a **constrained shortest/longest path problem**. At each cell, with a certain cost used so far, what is the **max score** you can get at that cell for each possible cost?  
-This fits a **Dynamic Programming (DP)** solution:
-- DP state: `dp[i][j][c] = max total score to reach (i, j) with total cost c`
-- We only care about `c <= k`
-- Initialize `dp` so only `dp[0][0][0] = 0` is possible at the start
-- For each cell, for all costs so far, propagate to `right` and `down`
-- At end, find **max score among all dp[m-1][n-1][c] with c <= k**
-
-Due to constraints:  
-- `m * n` ≤ 40,000, `k` ≤ 1000 ⇒ up to `40 million` states, but we can optimize:
-    - At each cell, for each cost (up to k), we keep track of **max score so far**.
-    - We can use 2D vector for current and previous row to save memory.
-
-**DP Transition:**  
-For each cell `(i, j)` and each cost so far,  
-- New cell value: if from up/left,  
-    - If moving from `(i-1, j)`, need to consider cost + cost for grid[i][j]
-    - If within `k`, update max score for new cost
-
-**Pseudo-code:**
-
-```text
-Let cost_at[i][j] = 0 if grid[i][j]==0 else 1
-    score_at[i][j] = grid[i][j]
-
-dp[i][j][c] = -inf, for all i, j, c. Set dp[0][0][0] = 0
-
-For i from 0 to m-1:
-  For j from 0 to n-1:
-    For c from 0 to k:
-      If dp[i][j][c] == -inf: continue
-
-      For each (next_i, next_j) in [(i+1,j), (i,j+1)]:
-         if next_i < m and next_j < n:
-             nc = c + cost_at[next_i][next_j]
-             if nc <= k:
-                 dp[next_i][next_j][nc] = max(dp[next_i][next_j][nc], dp[i][j][c] + score_at[next_i][next_j])
-
-Result = max(dp[m-1][n-1][c] for all c=0..k)
-Return Result if any, else -1
+```
+F(k) = 0 * arr_k[0] + 1 * arr_k[1] + ... + (n - 1) * arr_k[n-1]
 ```
 
-- **Time Complexity:** O(m*n*k)
-- **Space Complexity:** O(m*n*k), but can optimize to O(n*k) by only maintaining current and previous rows.
+where `arr_k` is `nums` rotated **k times** clockwise.
 
 ---
 
-## 4. **Clean C++ Solution**
+## **2. Constraints & Edge Cases**
+
+- **Constraints**
+    - \(1 \leq n \leq 10^5\): Large, so O(n²) is not feasible.
+    - \(-100 \leq nums[i] \leq 100\): Values can be negative or positive.
+- **Edge Cases**
+    - Single element: rotation does not affect the result.
+    - All elements identical: rotation does not affect the result.
+    - All zeros: All F(k) will be zero.
+    - Negative and positive values.
+
+---
+
+## **3. Optimal Algorithm**
+
+### **Key Insight**
+
+We want an O(n) solution.
+
+Calculate F(0):
+
+```cpp
+F(0) = 0*nums[0] + 1*nums[1] + ... + (n-1)*nums[n-1]
+```
+
+**Let’s analyze how F(k) changes with each rotation:**
+
+Let `totalSum` be the sum of all elements.
+
+If you rotate `nums` one step, the new F is:
+
+```
+F(k) = F(k-1) + totalSum - n * nums[n-k]
+```
+
+- At each rotation:
+    - The value at the end (nums[n-k]) moves to the front (position 0), so its contribution to F(k) is 0 (since 0*val=0), but in F(k-1), it contributed (n-1)*nums[n-k].
+    - All other elements move one position forward.
+
+This recurrence lets us compute all F(k) in O(n):
+
+### **Steps**
+1. Calculate totalSum = sum(nums)
+2. Calculate F(0)
+3. For k = 1 to n-1, use: F(k) = F(k-1) + totalSum - n * nums[n-k]
+4. Track the maximum through the process.
+
+---
+
+## **4. Clean C++ Solution**
 
 ```cpp
 #include <vector>
 #include <algorithm>
-using namespace std;
 
 class Solution {
 public:
-    int maximumPathScore(vector<vector<int>>& grid, int k) {
-        int m = grid.size(), n = grid[0].size();
-        // dp[j][c]: max score at row i, col j, cost = c
-        // Use two rows for space optimization
-        vector<vector<int>> dp_prev(n, vector<int>(k+1, -1));
-        dp_prev[0][0] = 0; // start cell
-
-        for(int i = 0; i < m; ++i) {
-            vector<vector<int>> dp_cur(n, vector<int>(k+1, -1));
-            for(int j = 0; j < n; ++j) {
-                for(int c = 0; c <= k; ++c) {
-                    int prev_score = -1;
-                    // From up
-                    if(i > 0 && dp_prev[j][c] != -1) prev_score = max(prev_score, dp_prev[j][c]);
-                    // From left
-                    if(j > 0 && dp_cur[j-1][c] != -1) prev_score = max(prev_score, dp_cur[j-1][c]);
-                    // Start cell
-                    if(i == 0 && j == 0 && c == 0) prev_score = 0;
-                    if(prev_score == -1) continue;
-
-                    int cell_val = grid[i][j];
-                    int add_cost = (cell_val == 0 ? 0 : 1);
-                    int add_score = cell_val;
-
-                    int nc = c + add_cost;
-                    if(nc > k) continue;
-                    dp_cur[j][nc] = max(dp_cur[j][nc], prev_score + add_score);
-                }
-            }
-            dp_prev.swap(dp_cur);
+    int maxRotateFunction(std::vector<int>& nums) {
+        int n = nums.size();
+        long totalSum = 0;        // total sum of all nums
+        long F = 0;               // F(0)
+        for (int i = 0; i < n; ++i) {
+            totalSum += nums[i];
+            F += (long)i * nums[i];
         }
-
-        int res = -1;
-        for(int c = 0; c <= k; ++c) res = max(res, dp_prev[n-1][c]);
-        return res;
+        long res = F;
+        // Compute F(k) for 1 <= k < n
+        for (int k = 1; k < n; ++k) {
+            // F(k) = F(k - 1) + totalSum - n * nums[n - k]
+            F = F + totalSum - (long)n * nums[n - k];
+            res = std::max(res, F);
+        }
+        return static_cast<int>(res);
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## **5. Example Explanation**
 
-Let's do example 1:
+Let's take **Example 1**:
 
-**Input:** `grid = [[0,1],[2,0]], k=1`
+```
+nums = [4, 3, 2, 6]
+```
 
-Grid:
+- **Compute totalSum:**
+    ```
+    totalSum = 4 + 3 + 2 + 6 = 15
+    ```
+- **Compute F(0):**
+    ```
+    F(0) = 0*4 + 1*3 + 2*2 + 3*6 = 0 + 3 + 4 + 18 = 25
+    ```
+- **Now iteratively:**
 
-|   | 0 | 1 |
-|---|---|---|
-| 0 | 0 | 1 |
-| 1 | 2 | 0 |
+    | k | Formula                             | F(k) | Max so far |
+    |---|-------------------------------------|------|------------|
+    | 0 | Initial (computed above)            | 25   | 25         |
+    | 1 | 25 + 15 - 4*6 = 25 + 15 - 24 = 16   | 16   | 25         |
+    | 2 | 16 + 15 - 4*2 = 16 + 15 - 8 = 23    | 23   | 25         |
+    | 3 | 23 + 15 - 4*3 = 23 + 15 - 12 = 26   | 26   | 26         |
 
-Possible paths (right/down only):
-
-### Path 1: (0,0)→(0,1)→(1,1)
-- (0,0): val=0, score=0, cost=0
-- (0,1): val=1, score=1, cost=1 (total cost=1)
-- (1,1): val=0, score=0, cost=0 (total cost=1)
-**Total score:** 1  
-**Total cost:** 1
-
-### Path 2: (0,0)→(1,0)→(1,1)
-- (0,0): val=0, score=0, cost=0
-- (1,0): val=2, score=2, cost=1 (total cost=1)
-- (1,1): val=0, score=0, cost=0 (total cost=1)
-**Total score:** 2  
-**Total cost:** 1
-
-**Max score = 2 (path 2)**
-
-**Output:** `2`
+**Return 26**.
 
 ---
+
+### **Summary Table**
+
+| k | Rotated Array | F(k) |
+|---|--------------|------|
+| 0 | [4,3,2,6]    | 25   |
+| 1 | [6,4,3,2]    | 16   |
+| 2 | [2,6,4,3]    | 23   |
+| 3 | [3,2,6,4]    | 26   |
+
+So, the answer is **26**.
+
+---
+
+**This method efficiently computes the rotation function in O(n) time.**
