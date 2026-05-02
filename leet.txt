@@ -1,138 +1,100 @@
-Let's break down the solution step by step:
+Let's break down the solution as requested:
 
 ---
 
-## **1. Short Summary**
+## 1. **Short Summary**
 
-Given an array `nums`, we are to find the maximum value of the **rotation function** defined as:
+Given an integer `n`, count how many numbers in the range `[1, n]` are "good"—meaning all digits are valid when rotated 180 degrees **and** the entire number changes to a different value after that rotation.
 
-```
-F(k) = 0 * arr_k[0] + 1 * arr_k[1] + ... + (n - 1) * arr_k[n-1]
-```
-
-where `arr_k` is `nums` rotated **k times** clockwise.
-
----
-
-## **2. Constraints & Edge Cases**
-
-- **Constraints**
-    - \(1 \leq n \leq 10^5\): Large, so O(n²) is not feasible.
-    - \(-100 \leq nums[i] \leq 100\): Values can be negative or positive.
-- **Edge Cases**
-    - Single element: rotation does not affect the result.
-    - All elements identical: rotation does not affect the result.
-    - All zeros: All F(k) will be zero.
-    - Negative and positive values.
+- Valid rotations:
+  - `0, 1, 8` → themselves (not "good" as no change)
+  - `2 ↔ 5`, `6 ↔ 9`
+- Digits `3, 4, 7` make a number invalid because they're not valid upon rotation.
 
 ---
 
-## **3. Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-### **Key Insight**
+- **Constraints**:
+  - `1 <= n <= 10^4` (so a brute-force check for all numbers up to n is efficient)
+- **Edge Cases**:
+  - Numbers that contain only `0, 1, 8` are valid after rotation but are **not "good"** (unchanged).
+  - Numbers containing `3, 4, 7` are invalid.
+  - Only numbers with at least one of `2, 5, 6, 9` and all other digits valid are "good".
 
-We want an O(n) solution.
+---
 
-Calculate F(0):
+## 3. **Optimal Algorithm**
+
+- For each number from `1` to `n`:
+  1. Check all digits:
+     - If contains `3, 4, 7` → skip (invalid).
+  2. Check if at least one digit is `2, 5, 6, 9` (so the rotated number is **different** from the original).
+  3. If both above, increment the count.
+
+This brute-force approach is optimal given the constraint (`n` up to 10000).
+
+---
+
+## 4. **Clean C++ Solution**
 
 ```cpp
-F(0) = 0*nums[0] + 1*nums[1] + ... + (n-1)*nums[n-1]
-```
-
-**Let’s analyze how F(k) changes with each rotation:**
-
-Let `totalSum` be the sum of all elements.
-
-If you rotate `nums` one step, the new F is:
-
-```
-F(k) = F(k-1) + totalSum - n * nums[n-k]
-```
-
-- At each rotation:
-    - The value at the end (nums[n-k]) moves to the front (position 0), so its contribution to F(k) is 0 (since 0*val=0), but in F(k-1), it contributed (n-1)*nums[n-k].
-    - All other elements move one position forward.
-
-This recurrence lets us compute all F(k) in O(n):
-
-### **Steps**
-1. Calculate totalSum = sum(nums)
-2. Calculate F(0)
-3. For k = 1 to n-1, use: F(k) = F(k-1) + totalSum - n * nums[n-k]
-4. Track the maximum through the process.
-
----
-
-## **4. Clean C++ Solution**
-
-```cpp
-#include <vector>
-#include <algorithm>
-
 class Solution {
 public:
-    int maxRotateFunction(std::vector<int>& nums) {
-        int n = nums.size();
-        long totalSum = 0;        // total sum of all nums
-        long F = 0;               // F(0)
-        for (int i = 0; i < n; ++i) {
-            totalSum += nums[i];
-            F += (long)i * nums[i];
+    int rotatedDigits(int n) {
+        int count = 0;
+        for (int i = 1; i <= n; ++i) {
+            bool valid = true, changed = false;
+            int num = i;
+            while (num > 0) {
+                int d = num % 10;
+                if (d == 3 || d == 4 || d == 7) {
+                    valid = false;
+                    break;
+                }
+                if (d == 2 || d == 5 || d == 6 || d == 9)
+                    changed = true;
+                num /= 10;
+            }
+            if (valid && changed)
+                ++count;
         }
-        long res = F;
-        // Compute F(k) for 1 <= k < n
-        for (int k = 1; k < n; ++k) {
-            // F(k) = F(k - 1) + totalSum - n * nums[n - k]
-            F = F + totalSum - (long)n * nums[n - k];
-            res = std::max(res, F);
-        }
-        return static_cast<int>(res);
+        return count;
     }
 };
 ```
 
 ---
 
-## **5. Example Explanation**
+## 5. **Example Explained**
 
-Let's take **Example 1**:
+Take `n = 10`.
 
-```
-nums = [4, 3, 2, 6]
-```
+Let's check each `i` in `1..10`:
 
-- **Compute totalSum:**
-    ```
-    totalSum = 4 + 3 + 2 + 6 = 15
-    ```
-- **Compute F(0):**
-    ```
-    F(0) = 0*4 + 1*3 + 2*2 + 3*6 = 0 + 3 + 4 + 18 = 25
-    ```
-- **Now iteratively:**
+|  i  | Digits | Valid after rotate? | Changes? | Good? |
+|:---:|:------:|:------------------:|:-------:|:-----:|
+|  1  |   1    |  yes (1→1)         | no      |   no  |
+|  2  |   2    |  yes (2→5)         | yes     |  yes  |
+|  3  |   3    |      no            |         |   no  |
+|  4  |   4    |      no            |         |   no  |
+|  5  |   5    |  yes (5→2)         | yes     |  yes  |
+|  6  |   6    |  yes (6→9)         | yes     |  yes  |
+|  7  |   7    |      no            |         |   no  |
+|  8  |   8    |  yes (8→8)         | no      |   no  |
+|  9  |   9    |  yes (9→6)         | yes     |  yes  |
+| 10  | 1,0    |  yes (1→1, 0→0)    | no      |   no  |
 
-    | k | Formula                             | F(k) | Max so far |
-    |---|-------------------------------------|------|------------|
-    | 0 | Initial (computed above)            | 25   | 25         |
-    | 1 | 25 + 15 - 4*6 = 25 + 15 - 24 = 16   | 16   | 25         |
-    | 2 | 16 + 15 - 4*2 = 16 + 15 - 8 = 23    | 23   | 25         |
-    | 3 | 23 + 15 - 4*3 = 23 + 15 - 12 = 26   | 26   | 26         |
-
-**Return 26**.
+So "good" numbers are **2, 5, 6, 9**, total = **4**.
 
 ---
 
 ### **Summary Table**
 
-| k | Rotated Array | F(k) |
-|---|--------------|------|
-| 0 | [4,3,2,6]    | 25   |
-| 1 | [6,4,3,2]    | 16   |
-| 2 | [2,6,4,3]    | 23   |
-| 3 | [3,2,6,4]    | 26   |
-
-So, the answer is **26**.
+- **Valid after rotation?**: All digits must be in {0,1,2,5,6,8,9}
+- **Changes?**: At least one digit in {2,5,6,9}
+- Only then, the number is "good".
 
 ---
 
-**This method efficiently computes the rotation function in O(n) time.**
+Ready to use the code for LeetCode, and that's the reasoning!
