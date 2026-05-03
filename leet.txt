@@ -1,38 +1,37 @@
-Let's break down the solution as requested:
+Let's address the "Rotate String" (`LeetCode 796`) problem step-by-step as you requested.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an integer `n`, count how many numbers in the range `[1, n]` are "good"—meaning all digits are valid when rotated 180 degrees **and** the entire number changes to a different value after that rotation.
-
-- Valid rotations:
-  - `0, 1, 8` → themselves (not "good" as no change)
-  - `2 ↔ 5`, `6 ↔ 9`
-- Digits `3, 4, 7` make a number invalid because they're not valid upon rotation.
+Given two strings `s` and `goal`, determine if `goal` can be obtained by rotating `s` any number of times (shifting the leftmost character to the right end repeatedly). Each shift moves the first character to the end. Return `true` if you can obtain `goal` from `s` by such rotations, else `false`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints**:
-  - `1 <= n <= 10^4` (so a brute-force check for all numbers up to n is efficient)
-- **Edge Cases**:
-  - Numbers that contain only `0, 1, 8` are valid after rotation but are **not "good"** (unchanged).
-  - Numbers containing `3, 4, 7` are invalid.
-  - Only numbers with at least one of `2, 5, 6, 9` and all other digits valid are "good".
+- **Constraints:**  
+  - Lengths: `1 ≤ s.length, goal.length ≤ 100`
+  - Characters: both consist only of lowercase English letters.
+
+- **Edge Cases:**  
+  - If `s` and `goal` are the same (`s == goal`), then return `true` (0 shifts).
+  - If `s.length` ≠ `goal.length`, impossible to rotate into each other (return `false`).
+  - All rotations must preserve all characters and their counts, so if they are permutations but not rotations, return `false` (e.g., `"abcde"` vs `"abced"`).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- For each number from `1` to `n`:
-  1. Check all digits:
-     - If contains `3, 4, 7` → skip (invalid).
-  2. Check if at least one digit is `2, 5, 6, 9` (so the rotated number is **different** from the original).
-  3. If both above, increment the count.
+**Observation:**  
+If you concatenate `s` with itself (`s + s`), all possible rotations of `s` appear as **substrings** of `s + s`.
 
-This brute-force approach is optimal given the constraint (`n` up to 10000).
+**Algorithm Steps:**  
+1. If lengths do not match, return false immediately.
+2. Return whether `goal` is a *substring* of `s + s`.
+
+- **Time Complexity:** O(N\*M) in the worst case (where N is length of `s`, M is length of `goal`) but typically fast enough for `N ≤ 100`.
+- **Space Complexity:** O(N).
 
 ---
 
@@ -41,60 +40,43 @@ This brute-force approach is optimal given the constraint (`n` up to 10000).
 ```cpp
 class Solution {
 public:
-    int rotatedDigits(int n) {
-        int count = 0;
-        for (int i = 1; i <= n; ++i) {
-            bool valid = true, changed = false;
-            int num = i;
-            while (num > 0) {
-                int d = num % 10;
-                if (d == 3 || d == 4 || d == 7) {
-                    valid = false;
-                    break;
-                }
-                if (d == 2 || d == 5 || d == 6 || d == 9)
-                    changed = true;
-                num /= 10;
-            }
-            if (valid && changed)
-                ++count;
-        }
-        return count;
+    bool rotateString(string s, string goal) {
+        // If lengths differ, it's impossible
+        if (s.length() != goal.length()) return false;
+
+        // Concatenate s with itself; check for goal as a substring
+        string doubled = s + s;
+        return doubled.find(goal) != string::npos;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-Take `n = 10`.
+### Example 1
 
-Let's check each `i` in `1..10`:
+#### Input
+- `s = "abcde"`
+- `goal = "cdeab"`
 
-|  i  | Digits | Valid after rotate? | Changes? | Good? |
-|:---:|:------:|:------------------:|:-------:|:-----:|
-|  1  |   1    |  yes (1→1)         | no      |   no  |
-|  2  |   2    |  yes (2→5)         | yes     |  yes  |
-|  3  |   3    |      no            |         |   no  |
-|  4  |   4    |      no            |         |   no  |
-|  5  |   5    |  yes (5→2)         | yes     |  yes  |
-|  6  |   6    |  yes (6→9)         | yes     |  yes  |
-|  7  |   7    |      no            |         |   no  |
-|  8  |   8    |  yes (8→8)         | no      |   no  |
-|  9  |   9    |  yes (9→6)         | yes     |  yes  |
-| 10  | 1,0    |  yes (1→1, 0→0)    | no      |   no  |
+#### Reasoning
 
-So "good" numbers are **2, 5, 6, 9**, total = **4**.
+All rotations of `s`:
+1. "abcde" (original)
+2. "bcdea" (shift 1 left)
+3. "cdeab" (shift 2 left) ← matches `goal`
+4. "deabc"
+5. "eabcd"
 
----
+So after 2 shifts (`"abcde"` → `"bcdea"` → `"cdeab"`), we get `goal`. So output is `true`.
 
-### **Summary Table**
-
-- **Valid after rotation?**: All digits must be in {0,1,2,5,6,8,9}
-- **Changes?**: At least one digit in {2,5,6,9}
-- Only then, the number is "good".
+Or as per our approach,  
+`doubled = "abcdeabcde"`  
+We check if `"cdeab"` is a substring of `"abcdeabcde"`. It is (`"abcde**cdeab**cde"`), so return `true`.
 
 ---
 
-Ready to use the code for LeetCode, and that's the reasoning!
+**Summary:**  
+By concatenating the string with itself and searching for `goal`, we efficiently check if `goal` is a rotation of `s`. This works because all possible rotations of `s` are present as substrings in `s + s`.
