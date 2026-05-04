@@ -1,37 +1,42 @@
-Let's address the "Rotate String" (`LeetCode 796`) problem step-by-step as you requested.
+Sure! Let's go step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given two strings `s` and `goal`, determine if `goal` can be obtained by rotating `s` any number of times (shifting the leftmost character to the right end repeatedly). Each shift moves the first character to the end. Return `true` if you can obtain `goal` from `s` by such rotations, else `false`.
+You are given an n x n 2D matrix. **Rotate the matrix by 90 degrees clockwise in-place** — that is, modify `matrix` directly without using any extra matrix for storage.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**  
-  - Lengths: `1 ≤ s.length, goal.length ≤ 100`
-  - Characters: both consist only of lowercase English letters.
-
-- **Edge Cases:**  
-  - If `s` and `goal` are the same (`s == goal`), then return `true` (0 shifts).
-  - If `s.length` ≠ `goal.length`, impossible to rotate into each other (return `false`).
-  - All rotations must preserve all characters and their counts, so if they are permutations but not rotations, return `false` (e.g., `"abcde"` vs `"abced"`).
+- `matrix` is always square (`n x n`), where `1 <= n <= 20`.
+- Each element is in range `[-1000, 1000]`.
+- **Edge Cases:**
+  - `n = 1`: Only one element; matrix stays the same.
+  - All elements are the same: After rotation, matrix visually remains unchanged.
+  - Even and odd `n`: Make sure your code handles both.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Observation:**  
-If you concatenate `s` with itself (`s + s`), all possible rotations of `s` appear as **substrings** of `s + s`.
+### Rotation by 90° Clockwise (In-Place)
 
-**Algorithm Steps:**  
-1. If lengths do not match, return false immediately.
-2. Return whether `goal` is a *substring* of `s + s`.
+You can achieve this in two clear steps:
 
-- **Time Complexity:** O(N\*M) in the worst case (where N is length of `s`, M is length of `goal`) but typically fast enough for `N ≤ 100`.
-- **Space Complexity:** O(N).
+#### **Step 1: Transpose the Matrix**
+Swap element at `(i, j)` with `(j, i)` for all `i < j`.
+
+#### **Step 2: Reverse Each Row**
+For each row, reverse the elements (swap the first with the last, and so on).
+
+**Why does this work?**
+- Transposing swaps rows and columns.
+- Reversing each row "twists" the rows into the correct order for a 90° clockwise rotation.
+
+**Time Complexity**: O(n²), since every element has to be moved.
+**Space Complexity**: O(1), since we are operating in-place.
 
 ---
 
@@ -40,43 +45,58 @@ If you concatenate `s` with itself (`s + s`), all possible rotations of `s` appe
 ```cpp
 class Solution {
 public:
-    bool rotateString(string s, string goal) {
-        // If lengths differ, it's impossible
-        if (s.length() != goal.length()) return false;
-
-        // Concatenate s with itself; check for goal as a substring
-        string doubled = s + s;
-        return doubled.find(goal) != string::npos;
+    void rotate(vector<vector<int>>& matrix) {
+        int n = matrix.size();
+        // Step 1: Transpose
+        for (int i = 0; i < n; ++i) {
+            for (int j = i + 1; j < n; ++j) {
+                swap(matrix[i][j], matrix[j][i]);
+            }
+        }
+        // Step 2: Reverse each row
+        for (int i = 0; i < n; ++i) {
+            reverse(matrix[i].begin(), matrix[i].end());
+        }
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Walkthrough**
 
-### Example 1
+Let's use example 1:
 
-#### Input
-- `s = "abcde"`
-- `goal = "cdeab"`
+**Input:**  
+```
+[ [1, 2, 3],
+  [4, 5, 6],
+  [7, 8, 9] ]
+```
 
-#### Reasoning
+**Step 1: Transpose**
+Swap `(i, j)` with `(j, i)` for `i < j`:
 
-All rotations of `s`:
-1. "abcde" (original)
-2. "bcdea" (shift 1 left)
-3. "cdeab" (shift 2 left) ← matches `goal`
-4. "deabc"
-5. "eabcd"
+```
+After transpose:
+[ [1, 4, 7],
+  [2, 5, 8],
+  [3, 6, 9] ]
+```
 
-So after 2 shifts (`"abcde"` → `"bcdea"` → `"cdeab"`), we get `goal`. So output is `true`.
+**Step 2: Reverse each row**
+- Row 1: `[1, 4, 7]` -> `[7, 4, 1]`
+- Row 2: `[2, 5, 8]` -> `[8, 5, 2]`
+- Row 3: `[3, 6, 9]` -> `[9, 6, 3]`
 
-Or as per our approach,  
-`doubled = "abcdeabcde"`  
-We check if `"cdeab"` is a substring of `"abcdeabcde"`. It is (`"abcde**cdeab**cde"`), so return `true`.
+**Result:**
+```
+[ [7, 4, 1],
+  [8, 5, 2],
+  [9, 6, 3] ]
+```
+Which matches the expected output.
 
 ---
 
-**Summary:**  
-By concatenating the string with itself and searching for `goal`, we efficiently check if `goal` is a rotation of `s`. This works because all possible rotations of `s` are present as substrings in `s + s`.
+Let me know if you have any questions or would like to see edge case handling!
