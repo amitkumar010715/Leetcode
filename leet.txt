@@ -1,102 +1,130 @@
-Sure! Let's go step by step.
+Let's break down the problem and address all your requirements step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-You are given an n x n 2D matrix. **Rotate the matrix by 90 degrees clockwise in-place** — that is, modify `matrix` directly without using any extra matrix for storage.
+Given a singly linked list, rotate it to the right by `k` places. Rotating means moving the last elements to the front, preserving the order. For example:  
+`head = [1,2,3,4,5], k = 2` → `[4,5,1,2,3]`
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `matrix` is always square (`n x n`), where `1 <= n <= 20`.
-- Each element is in range `[-1000, 1000]`.
+- **Constraints:**
+    - List has 0 to 500 nodes (`0 <= n <= 500`)
+    - Node value in range `[-100, 100]`
+    - `k` can be very large, up to `2 * 10^9`
+
 - **Edge Cases:**
-  - `n = 1`: Only one element; matrix stays the same.
-  - All elements are the same: After rotation, matrix visually remains unchanged.
-  - Even and odd `n`: Make sure your code handles both.
+    1. **Empty List:** If `head == nullptr`, output is also nullptr.
+    2. **Single Node:** Rotating a single-node list (`[x], k = anything`) is just itself.
+    3. **k = 0:** No rotation, return head as is.
+    4. **k >= n:** Rotations are periodic (rotating by the list's length brings it back to the original). Only `k % n` effective rotations are needed.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Rotation by 90° Clockwise (In-Place)
+**Step-by-Step:**
 
-You can achieve this in two clear steps:
+1. **Edge Case Check:** If `head` is `nullptr` or has only one node, or `k` is `0`, return `head`.
 
-#### **Step 1: Transpose the Matrix**
-Swap element at `(i, j)` with `(j, i)` for all `i < j`.
+2. **Find List Length `n` and Tail:** Traverse the list to count the nodes and keep a pointer to the last node (`tail`).
 
-#### **Step 2: Reverse Each Row**
-For each row, reverse the elements (swap the first with the last, and so on).
+3. **Make it Circular:** Connect `tail->next` to `head`, making it a circular list for easier rotation.
 
-**Why does this work?**
-- Transposing swaps rows and columns.
-- Reversing each row "twists" the rows into the correct order for a 90° clockwise rotation.
+4. **Effective Rotations:**  
+   Since rotating by the list's length (`n`) brings back the original, reduce `k` with `k = k % n`.
 
-**Time Complexity**: O(n²), since every element has to be moved.
-**Space Complexity**: O(1), since we are operating in-place.
+5. **Break the Circle at New Tail:**  
+   - New tail will be at position `n - k - 1` (0-indexed).
+   - New head is `new_tail->next`.
+   - Set `new_tail->next = nullptr` to break the ring.
+
+6. **Return the New Head.**
+
+**Time Complexity:** O(n)  
+**Space Complexity:** O(1) (in-place operations)
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
 class Solution {
 public:
-    void rotate(vector<vector<int>>& matrix) {
-        int n = matrix.size();
-        // Step 1: Transpose
-        for (int i = 0; i < n; ++i) {
-            for (int j = i + 1; j < n; ++j) {
-                swap(matrix[i][j], matrix[j][i]);
-            }
+    ListNode* rotateRight(ListNode* head, int k) {
+        if (!head || !head->next || k == 0) return head;
+
+        // 1. Find length and tail
+        int n = 1;
+        ListNode* tail = head;
+        while (tail->next) {
+            tail = tail->next;
+            n++;
         }
-        // Step 2: Reverse each row
-        for (int i = 0; i < n; ++i) {
-            reverse(matrix[i].begin(), matrix[i].end());
+
+        // 2. Make circular
+        tail->next = head;
+        
+        // 3. Effective rotations
+        k = k % n;
+        int stepsToNewTail = n - k;
+        
+        // 4. Find new tail and new head
+        ListNode* newTail = tail;
+        while (stepsToNewTail--) {
+            newTail = newTail->next;
         }
+        ListNode* newHead = newTail->next; // next node is new head
+        
+        // 5. Break the circular link
+        newTail->next = nullptr;
+
+        return newHead;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explanation**
 
-Let's use example 1:
+Let's use **Example 1**:
 
-**Input:**  
-```
-[ [1, 2, 3],
-  [4, 5, 6],
-  [7, 8, 9] ]
-```
+**Input:** `head = [1,2,3,4,5], k = 2`
 
-**Step 1: Transpose**
-Swap `(i, j)` with `(j, i)` for `i < j`:
+- Count nodes: n = 5
+- k = k % n = 2 % 5 = 2
+- Make circle: `5 → 1` (tail links to head)
+- Steps to new tail: `n - k = 5 - 2 = 3`
+    - Start from tail (`5`), move 3 steps:  
+      `5 -> 1 (1st), 2 (2nd), 3 (3rd)`  
+      So `3` is the new tail.
+- New head is `3->next = 4`.
+- Break the circle: Set `3->next = nullptr`
 
-```
-After transpose:
-[ [1, 4, 7],
-  [2, 5, 8],
-  [3, 6, 9] ]
-```
-
-**Step 2: Reverse each row**
-- Row 1: `[1, 4, 7]` -> `[7, 4, 1]`
-- Row 2: `[2, 5, 8]` -> `[8, 5, 2]`
-- Row 3: `[3, 6, 9]` -> `[9, 6, 3]`
-
-**Result:**
-```
-[ [7, 4, 1],
-  [8, 5, 2],
-  [9, 6, 3] ]
-```
-Which matches the expected output.
+So result: `[4,5,1,2,3]`
 
 ---
 
-Let me know if you have any questions or would like to see edge case handling!
+**Summary Table:**
+
+| Step | List                | k   | Action            |
+|------|---------------------|-----|-------------------|
+| 1    | 1 → 2 → 3 → 4 → 5   | 2   | Make circular     |
+| 2    | ...5→1→2...         |     | n = 5            |
+| 3    |                     | 2   | New tail = node 3 |
+| 4    | 3 |→ 4 → 5 → 1 → 2  |     | Break at 3       |
+| 5    | 4 → 5 → 1 → 2 → 3   |     | Done             |
