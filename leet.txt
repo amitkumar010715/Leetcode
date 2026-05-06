@@ -1,98 +1,86 @@
-Let's break down the problem and address all your requirements step by step.
+Let's solve the problem step-by-step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given a singly linked list, rotate it to the right by `k` places. Rotating means moving the last elements to the front, preserving the order. For example:  
-`head = [1,2,3,4,5], k = 2` → `[4,5,1,2,3]`
+Given a 2D matrix representing a box with stones (`#`), obstacles (`*`), and empty cells (`.`), simulate the effect of rotating the box **90° clockwise**. After rotation, "gravity" pulls stones down until they settle on obstacles, other stones, or the box's "floor". Return the new matrix after rotation and gravity.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - List has 0 to 500 nodes (`0 <= n <= 500`)
-    - Node value in range `[-100, 100]`
-    - `k` can be very large, up to `2 * 10^9`
+**Constraints:**
+- `1 <= m, n <= 500` (matrix can be large, so O(mn) is best)
+- Each cell is `"#"` (stone), `"*"` (obstacle), or `"."` (empty)
+- **Each stone rests naturally** before rotation (i.e., no floating stones before or after)
 
-- **Edge Cases:**
-    1. **Empty List:** If `head == nullptr`, output is also nullptr.
-    2. **Single Node:** Rotating a single-node list (`[x], k = anything`) is just itself.
-    3. **k = 0:** No rotation, return head as is.
-    4. **k >= n:** Rotations are periodic (rotating by the list's length brings it back to the original). Only `k % n` effective rotations are needed.
+**Edge Cases:**
+- Only stones, only obstacles, or only empty cells
+- No obstacles: stones should fall to the bottom after gravity
+- Obstacles at bottom/top/corners
+- Single row or single column
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Step-by-Step:**
+**Idea:**
+- **Step 1:** For each row **before rotation**, process from right-to-left—simulate gravity as if the box were "tipped" (since after rotation, gravity goes downward).
+- **Step 2:** Rotate the processed box 90° clockwise.
 
-1. **Edge Case Check:** If `head` is `nullptr` or has only one node, or `k` is `0`, return `head`.
+**Step-by-step:**
 
-2. **Find List Length `n` and Tail:** Traverse the list to count the nodes and keep a pointer to the last node (`tail`).
+### A. Simulate Gravity (before rotation)
 
-3. **Make it Circular:** Connect `tail->next` to `head`, making it a circular list for easier rotation.
+For each row, start from the **right end** and:
+- Track the lowest available position (empty cell or above an obstacle) for a stone to fall into.
+- If you hit an obstacle (`*`), reset your pointer (nothing can fall past it).
+- Place stones as far as they can go (towards the right end of the row).
 
-4. **Effective Rotations:**  
-   Since rotating by the list's length (`n`) brings back the original, reduce `k` with `k = k % n`.
+### B. Rotate 90° Clockwise
 
-5. **Break the Circle at New Tail:**  
-   - New tail will be at position `n - k - 1` (0-indexed).
-   - New head is `new_tail->next`.
-   - Set `new_tail->next = nullptr` to break the ring.
-
-6. **Return the New Head.**
-
-**Time Complexity:** O(n)  
-**Space Complexity:** O(1) (in-place operations)
+New cell `[i][j]` will be at `[j][m-1-i]` in the result.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-/**
- * Definition for singly-linked list.
- * struct ListNode {
- *     int val;
- *     ListNode *next;
- *     ListNode() : val(0), next(nullptr) {}
- *     ListNode(int x) : val(x), next(nullptr) {}
- *     ListNode(int x, ListNode *next) : val(x), next(next) {}
- * };
- */
+#include <vector>
+using namespace std;
+
 class Solution {
 public:
-    ListNode* rotateRight(ListNode* head, int k) {
-        if (!head || !head->next || k == 0) return head;
-
-        // 1. Find length and tail
-        int n = 1;
-        ListNode* tail = head;
-        while (tail->next) {
-            tail = tail->next;
-            n++;
+    vector<vector<char>> rotateTheBox(vector<vector<char>>& box) {
+        int m = box.size();
+        int n = box[0].size();
+        
+        // Step 1: Let stones "fall" to the right in each row
+        for (int i = 0; i < m; ++i) {
+            int empty = n - 1; // the rightmost available position
+            for (int j = n - 1; j >= 0; --j) {
+                if (box[i][j] == '*') {
+                    empty = j - 1;
+                } else if (box[i][j] == '#') {
+                    if (j != empty) {
+                        box[i][empty] = '#';
+                        box[i][j] = '.';
+                    }
+                    empty--;
+                }
+                // Do nothing if box[i][j] == '.'
+            }
         }
-
-        // 2. Make circular
-        tail->next = head;
         
-        // 3. Effective rotations
-        k = k % n;
-        int stepsToNewTail = n - k;
-        
-        // 4. Find new tail and new head
-        ListNode* newTail = tail;
-        while (stepsToNewTail--) {
-            newTail = newTail->next;
+        // Step 2: Rotate the box 90 degrees clockwise
+        vector<vector<char>> result(n, vector<char>(m));
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                result[j][m - 1 - i] = box[i][j];
+            }
         }
-        ListNode* newHead = newTail->next; // next node is new head
-        
-        // 5. Break the circular link
-        newTail->next = nullptr;
-
-        return newHead;
+        return result;
     }
 };
 ```
@@ -101,30 +89,69 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's use **Example 1**:
+**Example 2:**
 
-**Input:** `head = [1,2,3,4,5], k = 2`
+Input:
+```
+box = [
+  ['#', '.', '*', '.'],
+  ['#', '#', '*', '.']
+]
+```
 
-- Count nodes: n = 5
-- k = k % n = 2 % 5 = 2
-- Make circle: `5 → 1` (tail links to head)
-- Steps to new tail: `n - k = 5 - 2 = 3`
-    - Start from tail (`5`), move 3 steps:  
-      `5 -> 1 (1st), 2 (2nd), 3 (3rd)`  
-      So `3` is the new tail.
-- New head is `3->next = 4`.
-- Break the circle: Set `3->next = nullptr`
+### **Step 1: Simulate gravity**
 
-So result: `[4,5,1,2,3]`
+Row 0: `['#', '.', '*', '.']`
+- Start from right (j=3). `.` → nothing
+- j=2: `*` → reset empty pointer to 1
+- j=1: `.` → nothing
+- j=0: `#` → move to far right before obstacle (empty=1): place `#` at 1, set 0 to `.`, empty=0
+
+Result: `['.', '#', '*', '.']`
+
+Row 1: `['#', '#', '*', '.']`
+- Start from right (j=3). `.` → nothing
+- j=2: `*` → reset empty pointer to 1
+- j=1: `#` → already at 1 (empty=1), nothing to move, empty=0
+- j=0: `#` → move to 0 (empty=0): already in place
+
+Result: `['#', '#', '*', '.']`
+
+### **Step 2: Rotate**
+
+Rotate each cell so that result[j][m-1-i] = box[i][j].
+
+After rotation, the result is:
+
+|   |   |   |   |
+|---|---|---|---|
+| ['#', '.'] | (from box[0][0], box[1][0]) |
+| ['#', '#'] | (from box[0][1], box[1][1]) |
+| ['*', '*'] | (from box[0][2], box[1][2]) |
+| ['.', '.'] | (from box[0][3], box[1][3]) |
+
+So:
+
+```
+[
+  ['#', '.'],
+  ['#', '#'],
+  ['*', '*'],
+  ['.', '.']
+]
+```
+
+### **Result matches the expected output!**
 
 ---
 
-**Summary Table:**
+## **Summary Table**
 
-| Step | List                | k   | Action            |
-|------|---------------------|-----|-------------------|
-| 1    | 1 → 2 → 3 → 4 → 5   | 2   | Make circular     |
-| 2    | ...5→1→2...         |     | n = 5            |
-| 3    |                     | 2   | New tail = node 3 |
-| 4    | 3 |→ 4 → 5 → 1 → 2  |     | Break at 3       |
-| 5    | 4 → 5 → 1 → 2 → 3   |     | Done             |
+| Step | Operation |
+|------|-----------|
+| Gravity | let stones fall towards right in each row (since after rotation, this will be "down") |
+| Rotate | construct transposed matrix, placing each cell at its new rotated position |
+
+---
+
+Let me know if you want a Python solution or need more clarifications!
