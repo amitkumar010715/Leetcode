@@ -1,209 +1,164 @@
-Let's address your requirements in order for **Jump Game IX**.
+Let's address your requirements step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums`, you can jump:
+You are given an array `nums`. Starting at index `0`, you want to reach the last index (`n-1`) in minimum jumps. From any index `i`, you can:
+- Jump to adjacent indices (`i-1` or `i+1`, if they exist).
+- If `nums[i]` is **prime**, you can "teleport" to any other index `j ≠ i` such that `nums[j]` is **divisible** by `nums[i]`.
 
-- **Forward** (to a higher index) if `nums[j] < nums[i]`.
-- **Backward** (to a lower index) if `nums[j] > nums[i]`.
-
-From each index `i`, find the **maximum value in `nums` reachable** by any sequence of valid jumps starting at `i`.
+Find the **minimum** number of jumps needed to reach the end.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Size:** Large arrays (up to 1e5 elements), so O(n log n) solutions are needed.
-- **Element Values:** Large (up to 1e9) and not unique.
-- **Edge Cases:**
-    - All elements are equal: Every index can only reach itself, so output is the array itself.
-    - Strictly increasing/decreasing: Only jumps in one direction are possible.
-    - Single element: Only that element is reachable.
+- **n** can be up to 100,000; **nums[i]** up to 1,000,000 &ge; 1.
+- Large constraints mean `O(n log n)` is okay, `O(n^2)` is not.
+- No consecutive duplicate indices in teleportation. (Can’t teleport to self.)
+- If no element is prime, it's a standard adjacency jump problem.
+- Some numbers may repeat in `nums`.
+- All numbers are possible: some may be low (like 1, 2, etc.), some high.
+
+**Edge cases:**
+- Only one number: already at the end, requires 0 jumps.
+- All numbers are non-prime.
+- Repeated numbers, e.g. `[2,2,2,2,2]` – allows teleport chains.
+- Teleportation via primes where no destination is valid (e.g., `[2,3,5,7]`).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Observations:
+- **Model** the problem as a **graph**: indices are nodes.
+- Edges: connect index `i` to `i-1` and `i+1`, and, if `nums[i]` is prime, connect to every index `j` with `nums[j] % nums[i] == 0` and `j != i`.
+- **Find the shortest path** from `0` to `n-1` — classic **0-1 BFS**. Every move has cost 1.
+- To **avoid TLE**:
+    - Precompute all primes up to 1,000,000 (Sieve).
+    - For each **prime**, create a **list of indices** in `nums` whose values are multiples of that prime (reverse mapping).
+    - For each visited prime at `nums[i]`, **do teleportation once**, and don’t process the same prime again globally. (Otherwise repeated work.)
+- **Implementation Steps**:
+    1. Sieve up to `1,000,000` to check primality quickly.
+    2. For each unique prime in `nums`, maintain a mapping: `prime p -> list of indices i` where `nums[i] % p == 0`.
+    3. Standard BFS: enqueue `(index, jumps)`; for each pop, try adjacent moves. If at a **prime** index not processed before, process all teleportable jumps for that prime and mark the teleportations for `nums[i]` prime as used.
+    4. Stop at first time you reach `n-1`.
 
-- **Jumps** can be chained: From `i`, you can jump to a `j`, then from `j` continue, recursively.
-- **From i:** Any sequence of valid jumps. We need the maximum value that can be reached.
-
-We need to precompute (for each index) which other indices it can jump to.
-
-We notice:
-- At each step, we can either jump forward to a strictly smaller value, or backward to a strictly greater value.
-
-This is reminiscent of "jump game with monotonic stacks".
-
-### **Key Insight**
-
-- For each `i`, you can only reach indices recursively where each jump is strictly reducing (`nums[j] < nums[i]` when forward) or strictly increasing (`nums[j] > nums[i]` when backward).
-- But at each step, you can only jump to one direction, but then chain further.
-
-#### **Dynamic Programming with Monotonic Stack:**
-
-1. **For each index, collect two possible "jumps":**
-    - Forward jump: Nearest next strictly smaller (`nums[j] < nums[i]`) index (`j > i`)
-    - Backward jump: Nearest previous strictly greater (`nums[j] > nums[i]`) index (`j < i`)
-2. For each index, the maximum value reachable is the **maximum of:**
-    - Its own value.
-    - DP value from forward jump (if exists).
-    - DP value from backward jump (if exists).
-3. **Compute dp[i]:** the max value reachable from i.
-
-#### **How do we compute nearest strictly smaller/greater efficiently?**
-
-- Use monotonic stacks:
-    - For *next smaller*: scan left→right, stack decreasing, pop while top ≥ current.
-    - For *previous greater*: scan left→right, stack increasing, pop while top ≤ current.
-
-But we update DP in "right" order to ensure all dependencies are computed.
-
-#### **Order of Processing?**
-
-If we process indices from right→left for next smaller and left→right for previous greater, we can fill in jumps. Then, process DP from right→left and left→right again.
-
-But since there are cycles, we use a **topological order**:
-- Values not depending on others (like at ends, or with no possible jumps) are base cases.
-
-**But in fact, since every jump is either forward (to a strictly smaller) or backward (to a strictly greater), if we process the indices in the order of decreasing value, we can fill recursive dependencies.**
-
-Let’s generalize:
-- Sort all indices in order of decreasing `nums[i]`.
-- For each, for both directions, DP is filled either from higher to lower (for forward/reverse jumps) — so no cycles.
-
-**Final Steps:**
-1. For each index, precompute:
-   - Next forward `j` with `nums[j] < nums[i]` (`j > i`)
-   - Previous backward `j` with `nums[j] > nums[i]` (`j < i`)
-2. For each index, initialize `dp[i] = nums[i]`.
-3. For each index in decreasing `nums[i]`:
-    - For each possible jump (forward/backward), update `dp[i] = max(dp[i], dp[j])`.
-4. Return `dp`.
+**BFS guarantees the minimum jumps**.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <stack>
-#include <algorithm>
-
+#include <bits/stdc++.h>
 using namespace std;
+
+// Sieve for fast primality and for collecting primes <= 1e6
+vector<char> primeSieve(int n) {
+    vector<char> is_prime(n + 1, 1);
+    is_prime[0] = is_prime[1] = 0;
+    for (int i = 2; i * i <= n; ++i) {
+        if (!is_prime[i]) continue;
+        for (int j = i * i; j <= n; j += i)
+            is_prime[j] = 0;
+    }
+    return is_prime;
+}
 
 class Solution {
 public:
-    vector<int> maxReachableValues(vector<int>& nums) {
-        int n = nums.size();
-        vector<int> nextSmaller(n, -1);     // right jump: next index with nums[j] < nums[i]
-        vector<int> prevGreater(n, -1);     // left jump:  previous index with nums[j] > nums[i]
-        
-        // Monotonic stack for next smaller to right
-        stack<int> stk;
+    int minimumJumps(vector<int>& nums) {
+        int n = nums.size(), MAX_NUM = 1e6 + 1;
+        auto is_prime = primeSieve(MAX_NUM);
+
+        // Map: prime p -> all indices i where nums[i] % p == 0
+        unordered_map<int, vector<int>> prime_to_indices;
+        // For each unique value in nums, store all its indices for fast search.
+        unordered_map<int, vector<int>> num_to_indices;
+        for (int i = 0; i < n; ++i)
+            num_to_indices[nums[i]].push_back(i);
+
+        // For every unique prime p that exists as nums[i], construct the list
         for (int i = 0; i < n; ++i) {
-            while (!stk.empty() && nums[stk.top()] > nums[i]) {
-                nextSmaller[stk.top()] = i;
-                stk.pop();
+            for (int p = 2; p * p <= nums[i]; ++p) {
+                if (nums[i] % p == 0) {
+                    if (is_prime[p])
+                        prime_to_indices[p]; // will be filled next loop
+                    int temp = nums[i]/p;
+                    if (temp != p && is_prime[temp])
+                        prime_to_indices[temp];
+                }
             }
-            stk.push(i);
+            if (is_prime[nums[i]])
+                prime_to_indices[nums[i]];
         }
-        
-        // Monotonic stack for previous greater to left
-        while (!stk.empty()) stk.pop();
-        for (int i = n - 1; i >= 0; --i) {
-            while (!stk.empty() && nums[stk.top()] < nums[i]) {
-                prevGreater[stk.top()] = i;
-                stk.pop();
-            }
-            stk.push(i);
+        // Now, for each candidate prime p, fill prime_to_indices
+        // For speed, for each p, collect all i where nums[i]%p==0
+        for (auto& pr : prime_to_indices) {
+            int p = pr.first;
+            for (int i = 0; i < n; ++i)
+                if (nums[i] % p == 0)
+                    pr.second.push_back(i);
         }
 
-        // DP: max reachable value from each index
-        vector<int> dp(n);
-        for (int i = 0; i < n; ++i) dp[i] = nums[i];
+        vector<int> dist(n, -1);
+        queue<int> q;
+        dist[0] = 0;
+        q.push(0);
 
-        // To process in topological order, sort indices by decreasing nums[i]
-        vector<int> idx(n);
-        for (int i = 0; i < n; ++i) idx[i] = i;
-        sort(idx.begin(), idx.end(), [&](int a, int b) {
-            return nums[a] > nums[b];
-        });
+        // Keep track of which primes we've already processed in teleportation
+        unordered_set<int> used_prime;
 
-        for (int i : idx) {
-            if (nextSmaller[i] != -1) {
-                dp[i] = max(dp[i], dp[nextSmaller[i]]);
+        while (!q.empty()) {
+            int idx = q.front(); q.pop();
+            int d = dist[idx];
+
+            if (idx == n - 1) return d;
+
+            // Try i-1 and i+1
+            for (int neighbor : {idx - 1, idx + 1}) {
+                if (neighbor >= 0 && neighbor < n && dist[neighbor] == -1) {
+                    dist[neighbor] = d + 1;
+                    q.push(neighbor);
+                }
             }
-            if (prevGreater[i] != -1) {
-                dp[i] = max(dp[i], dp[prevGreater[i]]);
+
+            // Teleportation
+            int val = nums[idx];
+            if (is_prime[val] && !used_prime.count(val)) {
+                used_prime.insert(val);
+                for (int j : prime_to_indices[val]) {
+                    if (j != idx && dist[j] == -1) {
+                        dist[j] = d + 1;
+                        q.push(j);
+                    }
+                }
             }
         }
-        return dp;
+        return -1; // Should not happen per constraints
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation ([2,3,1])**
+## 5. **Example Explained**
 
-```cpp
-nums = [2, 3, 1]
+### Example 1
 
-Indexes: 0   1   2
-Values:  2   3   1
-```
+**Input:** `nums = [1,2,4,6]`
 
-**Jumps:**
-- i=0: next smaller? j > 0 with nums[j] < nums[0]=2 → j=2 (nums[2]=1)
-- i=0: previous greater? none.
+- Start at index 0 (`1`), can only move to index 1.
+- At index 1 (`2`): `2` is prime.
+    - Adjacent moves: can go to index 0 or 2.
+    - **Teleportation:** `nums[2]=4 % 2==0`, `nums[3]=6 % 2==0`.
+        - Index 2 is closer, but 1 step ahead from where we would be without teleportation.
+- Best jump: From index 1 **teleport to index 3** (`6 % 2==0`).
+- Sequence: `0 → 1 → 3`.
 
-- i=1: next smaller? j>1 with nums[j]<nums[1]=3 → j=2 (nums[2]=1)
-- i=1: previous greater? none.
-
-- i=2: next smaller? none.
-- i=2: previous greater? j<2 with nums[j]>nums[2]=1 → j=1 (nums[1]=3)
-
-**Build DP (process indices in order of nums descending: 3,2,1):**
-
-- i=1 (nums=3): 
-  - nextSmaller[1]=2, prevGreater[1]=-1
-  - dp[1] = max(nums[1]=3, dp[2]=1, nothing) = 3
-
-- i=0 (nums=2): 
-  - nextSmaller[0]=2, prevGreater[0]=-1
-  - dp[0] = max(nums[0]=2, dp[2]=1, nothing) = 2
-
-- i=2 (nums=1): 
-  - nextSmaller[2]=-1, prevGreater[2]=1
-  - dp[2] = max(nums[2]=1, dp[1]=3) = 3
-
-**Result: [3,3,3]**
-
-
-**But according to the problem statement, in your example, the expected output is [3,3,3]. The code above matches that.**
+Thus, **answer is 2**.
 
 ---
 
-## **Summary Table**
-
-| Index | Value | Forward jump | Backward jump | Max reachable |
-|-------|-------|--------------|---------------|---------------|
-| 0     | 2     | 2 → 1        | -             | 3             |
-| 1     | 3     | 2 → 1        | -             | 3             |
-| 2     | 1     | -            | 1 ← 3         | 3             |
-
----
-
-### **Summary**
-
-- Use monotonic stacks to precompute valid jumps for each index.
-- Use DP in decreasing value order to propagate maximum reachable value.
-- Total time O(n log n).
-
----
-
-## **End**
+**Let me know if you'd like further explanation or code comments!**
