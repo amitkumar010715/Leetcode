@@ -1,164 +1,150 @@
-Let's address your requirements step by step:
+Let's tackle the problem step by step:
 
 ---
 
-## 1. **Short Summary**
+## **1. Short Summary**
 
-You are given an array `nums`. Starting at index `0`, you want to reach the last index (`n-1`) in minimum jumps. From any index `i`, you can:
-- Jump to adjacent indices (`i-1` or `i+1`, if they exist).
-- If `nums[i]` is **prime**, you can "teleport" to any other index `j ≠ i` such that `nums[j]` is **divisible** by `nums[i]`.
-
-Find the **minimum** number of jumps needed to reach the end.
+Given an `m x n` grid of integers (both `m` and `n` are even), **cyclically rotate each "layer" of the grid counter-clockwise by `k` positions**. Each layer is like the border around the grid, moving inward, and rotating means each value moves to the next position counterclockwise in that layer. Return the resulting grid after applying these rotations.
 
 ---
 
-## 2. **Constraints & Edge Cases**
+## **2. Constraints & Edge Cases**
 
-- **n** can be up to 100,000; **nums[i]** up to 1,000,000 &ge; 1.
-- Large constraints mean `O(n log n)` is okay, `O(n^2)` is not.
-- No consecutive duplicate indices in teleportation. (Can’t teleport to self.)
-- If no element is prime, it's a standard adjacency jump problem.
-- Some numbers may repeat in `nums`.
-- All numbers are possible: some may be low (like 1, 2, etc.), some high.
+- **Constraints:**
+  - `m, n`: 2 to 50 (even numbers)
+  - `k`: up to 10<sup>9</sup> (huge)
+  - Elements: Positive numbers up to 5000
 
-**Edge cases:**
-- Only one number: already at the end, requires 0 jumps.
-- All numbers are non-prime.
-- Repeated numbers, e.g. `[2,2,2,2,2]` – allows teleport chains.
-- Teleportation via primes where no destination is valid (e.g., `[2,3,5,7]`).
-
----
-
-## 3. **Optimal Algorithm**
-
-- **Model** the problem as a **graph**: indices are nodes.
-- Edges: connect index `i` to `i-1` and `i+1`, and, if `nums[i]` is prime, connect to every index `j` with `nums[j] % nums[i] == 0` and `j != i`.
-- **Find the shortest path** from `0` to `n-1` — classic **0-1 BFS**. Every move has cost 1.
-- To **avoid TLE**:
-    - Precompute all primes up to 1,000,000 (Sieve).
-    - For each **prime**, create a **list of indices** in `nums` whose values are multiples of that prime (reverse mapping).
-    - For each visited prime at `nums[i]`, **do teleportation once**, and don’t process the same prime again globally. (Otherwise repeated work.)
-- **Implementation Steps**:
-    1. Sieve up to `1,000,000` to check primality quickly.
-    2. For each unique prime in `nums`, maintain a mapping: `prime p -> list of indices i` where `nums[i] % p == 0`.
-    3. Standard BFS: enqueue `(index, jumps)`; for each pop, try adjacent moves. If at a **prime** index not processed before, process all teleportable jumps for that prime and mark the teleportations for `nums[i]` prime as used.
-    4. Stop at first time you reach `n-1`.
-
-**BFS guarantees the minimum jumps**.
+- **Edge Cases:**
+  - **k > layer length:** Only `k % layer_length` rotations matter for each layer.
+  - **Grid is square or rectangular:** Handle both square and rectangular grids.
+  - **Multiple layers:** There may be several layers; must rotate each independently.
+  - **Layer with only 2 rows or columns:** Still forms a valid loop.
+  - **Smallest possible grid:** 2x2; only one layer.
 
 ---
 
-## 4. **C++ Solution**
+## **3. Optimal Algorithm**
+
+**High-level approach:**
+
+- For each layer:
+  1. Extract elements of the layer into a 1D array in traversal order.
+  2. Rotate this 1D array left by `k % len` positions (counterclockwise).
+  3. Put the elements back to their original positions in the grid.
+
+### **Detailed Steps**
+
+1. For each layer (outermost to innermost):
+
+    - **Layer index (`l`)**: ranges from `0` to `min(m, n) / 2 - 1`
+    - For each layer, extract its coordinates:
+        - **Top row:** from `(l, l)` to `(l, n - l - 1)`
+        - **Right column:** from `(l + 1, n - l - 1)` to `(m - l - 1, n - l - 1)`
+        - **Bottom row:** from `(m - l - 1, n - l - 2)` to `(m - l - 1, l)`
+        - **Left column:** from `(m - l - 2, l)` to `(l + 1, l)`
+
+    - Build a vector `vals` in that order.
+    - Rotate `vals` left by `k % len` positions.
+    - Reassign the rotated values back to their corresponding positions.
+
+2. Return the modified grid.
+
+---
+
+## **4. C++ Solution**
 
 ```cpp
-#include <bits/stdc++.h>
+#include <vector>
+#include <algorithm>
 using namespace std;
-
-// Sieve for fast primality and for collecting primes <= 1e6
-vector<char> primeSieve(int n) {
-    vector<char> is_prime(n + 1, 1);
-    is_prime[0] = is_prime[1] = 0;
-    for (int i = 2; i * i <= n; ++i) {
-        if (!is_prime[i]) continue;
-        for (int j = i * i; j <= n; j += i)
-            is_prime[j] = 0;
-    }
-    return is_prime;
-}
 
 class Solution {
 public:
-    int minimumJumps(vector<int>& nums) {
-        int n = nums.size(), MAX_NUM = 1e6 + 1;
-        auto is_prime = primeSieve(MAX_NUM);
+    vector<vector<int>> rotateGrid(vector<vector<int>>& grid, int k) {
+        int m = grid.size(), n = grid[0].size();
+        int layers = min(m, n) / 2;
 
-        // Map: prime p -> all indices i where nums[i] % p == 0
-        unordered_map<int, vector<int>> prime_to_indices;
-        // For each unique value in nums, store all its indices for fast search.
-        unordered_map<int, vector<int>> num_to_indices;
-        for (int i = 0; i < n; ++i)
-            num_to_indices[nums[i]].push_back(i);
+        for (int l = 0; l < layers; ++l) {
+            vector<int> vals;
 
-        // For every unique prime p that exists as nums[i], construct the list
-        for (int i = 0; i < n; ++i) {
-            for (int p = 2; p * p <= nums[i]; ++p) {
-                if (nums[i] % p == 0) {
-                    if (is_prime[p])
-                        prime_to_indices[p]; // will be filled next loop
-                    int temp = nums[i]/p;
-                    if (temp != p && is_prime[temp])
-                        prime_to_indices[temp];
-                }
-            }
-            if (is_prime[nums[i]])
-                prime_to_indices[nums[i]];
+            // Top row (left to right)
+            for (int j = l; j < n - l; ++j) vals.push_back(grid[l][j]);
+            // Right col (top to bottom, excluding corner)
+            for (int i = l + 1; i < m - l - 1; ++i) vals.push_back(grid[i][n - l - 1]);
+            // Bottom row (right to left)
+            for (int j = n - l - 1; j >= l; --j) vals.push_back(grid[m - l - 1][j]);
+            // Left col (bottom to top, excluding corner)
+            for (int i = m - l - 2; i > l; --i) vals.push_back(grid[i][l]);
+
+            int cnt = vals.size();
+            int r = k % cnt;
+
+            // Rotate left by r
+            rotate(vals.begin(), vals.begin() + r, vals.end());
+
+            int idx = 0;
+            // Fill top row
+            for (int j = l; j < n - l; ++j) grid[l][j] = vals[idx++];
+            // Fill right col
+            for (int i = l + 1; i < m - l - 1; ++i) grid[i][n - l - 1] = vals[idx++];
+            // Fill bottom row
+            for (int j = n - l - 1; j >= l; --j) grid[m - l - 1][j] = vals[idx++];
+            // Fill left col
+            for (int i = m - l - 2; i > l; --i) grid[i][l] = vals[idx++];
         }
-        // Now, for each candidate prime p, fill prime_to_indices
-        // For speed, for each p, collect all i where nums[i]%p==0
-        for (auto& pr : prime_to_indices) {
-            int p = pr.first;
-            for (int i = 0; i < n; ++i)
-                if (nums[i] % p == 0)
-                    pr.second.push_back(i);
-        }
-
-        vector<int> dist(n, -1);
-        queue<int> q;
-        dist[0] = 0;
-        q.push(0);
-
-        // Keep track of which primes we've already processed in teleportation
-        unordered_set<int> used_prime;
-
-        while (!q.empty()) {
-            int idx = q.front(); q.pop();
-            int d = dist[idx];
-
-            if (idx == n - 1) return d;
-
-            // Try i-1 and i+1
-            for (int neighbor : {idx - 1, idx + 1}) {
-                if (neighbor >= 0 && neighbor < n && dist[neighbor] == -1) {
-                    dist[neighbor] = d + 1;
-                    q.push(neighbor);
-                }
-            }
-
-            // Teleportation
-            int val = nums[idx];
-            if (is_prime[val] && !used_prime.count(val)) {
-                used_prime.insert(val);
-                for (int j : prime_to_indices[val]) {
-                    if (j != idx && dist[j] == -1) {
-                        dist[j] = d + 1;
-                        q.push(j);
-                    }
-                }
-            }
-        }
-        return -1; // Should not happen per constraints
+        return grid;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## **5. Example Explanation**
 
-### Example 1
+### **Input:**
+```plaintext
+grid = [[1,2,3,4],
+        [5,6,7,8],
+        [9,10,11,12],
+        [13,14,15,16]]
+k = 2
+```
 
-**Input:** `nums = [1,2,4,6]`
+### **Step-by-step:**
 
-- Start at index 0 (`1`), can only move to index 1.
-- At index 1 (`2`): `2` is prime.
-    - Adjacent moves: can go to index 0 or 2.
-    - **Teleportation:** `nums[2]=4 % 2==0`, `nums[3]=6 % 2==0`.
-        - Index 2 is closer, but 1 step ahead from where we would be without teleportation.
-- Best jump: From index 1 **teleport to index 3** (`6 % 2==0`).
-- Sequence: `0 → 1 → 3`.
+#### **Layer 0 (outer border):**
+- Extraction order: `(0,0)→(0,3)`, `(1,3)→(3,3)`, `(3,2)→(3,0)`, `(2,0)→(1,0)`
+- Elements: [1, 2, 3, 4, 8, 12, 16, 15, 14, 13, 9, 5]
+- Rotate left by 2: [3,4,8,12,16,15,14,13,9,5,1,2]
+- Write back in the same order.
 
-Thus, **answer is 2**.
+#### **Layer 1 (inner square):**
+- Extraction order: `(1,1)→(1,2)`, `(2,2)`, `(2,1)`
+- Elements: [6, 7, 11, 10]
+- Rotate left by 2: [11, 10, 6, 7]
+- Write back in the same order.
+
+### **Result grid:**
+```
+[[3, 4, 8, 12],
+ [2, 11, 10, 16],
+ [1, 7, 6, 15],
+ [5, 9, 13, 14]]
+```
+
 
 ---
 
-**Let me know if you'd like further explanation or code comments!**
+## **Summary Table**
+
+| Layer | Original elements                 | Rotated (by 2)           |
+|-------|-----------------------------------|--------------------------|
+| 0     | 1 2 3 4 8 12 16 15 14 13 9 5     | 3 4 8 12 16 15 14 13 9 5 1 2 |
+| 1     | 6 7 11 10                        | 11 10 6 7                |
+
+All steps are handled efficiently, and the code adapts to any valid even-sized grid.
+
+---
+
+**Let me know if you need further walkthroughs or have questions on variations!**
