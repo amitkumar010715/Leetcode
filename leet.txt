@@ -1,58 +1,42 @@
-Let's tackle the problem step by step:
+Certainly! Let's break this down step by step.
 
 ---
 
-## **1. Short Summary**
+## 1. **Short Summary**
 
-Given an `m x n` grid of integers (both `m` and `n` are even), **cyclically rotate each "layer" of the grid counter-clockwise by `k` positions**. Each layer is like the border around the grid, moving inward, and rotating means each value moves to the next position counterclockwise in that layer. Return the resulting grid after applying these rotations.
-
----
-
-## **2. Constraints & Edge Cases**
-
-- **Constraints:**
-  - `m, n`: 2 to 50 (even numbers)
-  - `k`: up to 10<sup>9</sup> (huge)
-  - Elements: Positive numbers up to 5000
-
-- **Edge Cases:**
-  - **k > layer length:** Only `k % layer_length` rotations matter for each layer.
-  - **Grid is square or rectangular:** Handle both square and rectangular grids.
-  - **Multiple layers:** There may be several layers; must rotate each independently.
-  - **Layer with only 2 rows or columns:** Still forms a valid loop.
-  - **Smallest possible grid:** 2x2; only one layer.
+Given an array `nums` and an integer `target`, you start at index `0`. From index `i`, you can jump to any `j > i` (i.e., to the right), only if `nums[j] - nums[i]` is in the range `[-target, target]`. The goal is to **maximize** the number of jumps needed to reach the last index (`n-1`). If you can't reach it, return `-1`.
 
 ---
 
-## **3. Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-**High-level approach:**
+### **Constraints**
+- `2 <= n <= 1000` (small enough for O(n²) solutions)
+- `nums[i]` can be large (`-1e9` to `1e9`), but only their differences are used.
+- `0 <= target <= 2e9` (including `0`, which can block all jumps)
 
-- For each layer:
-  1. Extract elements of the layer into a 1D array in traversal order.
-  2. Rotate this 1D array left by `k % len` positions (counterclockwise).
-  3. Put the elements back to their original positions in the grid.
-
-### **Detailed Steps**
-
-1. For each layer (outermost to innermost):
-
-    - **Layer index (`l`)**: ranges from `0` to `min(m, n) / 2 - 1`
-    - For each layer, extract its coordinates:
-        - **Top row:** from `(l, l)` to `(l, n - l - 1)`
-        - **Right column:** from `(l + 1, n - l - 1)` to `(m - l - 1, n - l - 1)`
-        - **Bottom row:** from `(m - l - 1, n - l - 2)` to `(m - l - 1, l)`
-        - **Left column:** from `(m - l - 2, l)` to `(l + 1, l)`
-
-    - Build a vector `vals` in that order.
-    - Rotate `vals` left by `k % len` positions.
-    - Reassign the rotated values back to their corresponding positions.
-
-2. Return the modified grid.
+### **Edge Cases**
+- If `target == 0`, can only jump to a `j` such that `nums[j] == nums[i]`.
+- If there are no valid jumps at all, output is `-1`.
+- It's possible that you can reach `n-1` by multiple paths; we need **the one with the maximum number of jumps**.
+- If only direct jump from `0` to `n-1` is possible, answer is `1`.
 
 ---
 
-## **4. C++ Solution**
+## 3. **Optimal Algorithm**
+
+Since `n` is at most 1000, an **O(n²) DP** is feasible.
+
+- **State:** Let `dp[i]` be the maximum number of jumps needed to reach index `i`; initialize all values to `-1`.
+- **Transition:** For every `j > i`, if `abs(nums[j] - nums[i]) <= target`, we can jump from `i` to `j`, and do:  
+  `dp[j] = max(dp[j], dp[i] + 1)`.
+- Start with `dp[0]=0` (0 jumps to reach index 0).
+- Iterate forwards; for each `i`, update possible `j`s.
+- Finally, if `dp[n-1] == -1`, output `-1` (cannot reach); else output `dp[n-1]`.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
@@ -61,90 +45,69 @@ using namespace std;
 
 class Solution {
 public:
-    vector<vector<int>> rotateGrid(vector<vector<int>>& grid, int k) {
-        int m = grid.size(), n = grid[0].size();
-        int layers = min(m, n) / 2;
-
-        for (int l = 0; l < layers; ++l) {
-            vector<int> vals;
-
-            // Top row (left to right)
-            for (int j = l; j < n - l; ++j) vals.push_back(grid[l][j]);
-            // Right col (top to bottom, excluding corner)
-            for (int i = l + 1; i < m - l - 1; ++i) vals.push_back(grid[i][n - l - 1]);
-            // Bottom row (right to left)
-            for (int j = n - l - 1; j >= l; --j) vals.push_back(grid[m - l - 1][j]);
-            // Left col (bottom to top, excluding corner)
-            for (int i = m - l - 2; i > l; --i) vals.push_back(grid[i][l]);
-
-            int cnt = vals.size();
-            int r = k % cnt;
-
-            // Rotate left by r
-            rotate(vals.begin(), vals.begin() + r, vals.end());
-
-            int idx = 0;
-            // Fill top row
-            for (int j = l; j < n - l; ++j) grid[l][j] = vals[idx++];
-            // Fill right col
-            for (int i = l + 1; i < m - l - 1; ++i) grid[i][n - l - 1] = vals[idx++];
-            // Fill bottom row
-            for (int j = n - l - 1; j >= l; --j) grid[m - l - 1][j] = vals[idx++];
-            // Fill left col
-            for (int i = m - l - 2; i > l; --i) grid[i][l] = vals[idx++];
+    int maximumJumps(vector<int>& nums, int target) {
+        int n = nums.size();
+        vector<int> dp(n, -1);
+        dp[0] = 0;
+        for (int i = 0; i < n-1; ++i) {
+            if (dp[i] == -1) continue; // Unreachable
+            for (int j = i+1; j < n; ++j) {
+                int diff = nums[j] - nums[i];
+                if (diff >= -target && diff <= target) {
+                    dp[j] = max(dp[j], dp[i] + 1);
+                }
+            }
         }
-        return grid;
+        return dp[n-1];
     }
 };
 ```
 
 ---
 
-## **5. Example Explanation**
+## 5. **Example Walkthrough**
 
-### **Input:**
-```plaintext
-grid = [[1,2,3,4],
-        [5,6,7,8],
-        [9,10,11,12],
-        [13,14,15,16]]
-k = 2
+**Example 1:**
+
+```
+nums = [1,3,6,4,1,2], target = 2
 ```
 
-### **Step-by-step:**
+### Step-by-Step:
 
-#### **Layer 0 (outer border):**
-- Extraction order: `(0,0)→(0,3)`, `(1,3)→(3,3)`, `(3,2)→(3,0)`, `(2,0)→(1,0)`
-- Elements: [1, 2, 3, 4, 8, 12, 16, 15, 14, 13, 9, 5]
-- Rotate left by 2: [3,4,8,12,16,15,14,13,9,5,1,2]
-- Write back in the same order.
+- Start at idx 0 (`dp[0]=0`).
+- From 0, check jumps:
+  - idx 1: diff = 3-1 = 2 ∈ [-2,2] → dp[1]=1
+  - idx 2: diff = 5 (not within bounds)
+  - idx 3: diff = 3 (not within bounds)
+  - idx 4: diff = 0 ∈ [-2,2] → dp[4]=1
+  - idx 5: diff = 1 ∈ [-2,2] → dp[5]=1
+- Now, from idx 1 (`dp[1]=1`):
+  - idx 2: 6-3=3 (not valid)
+  - idx 3: 4-3=1 ∈ [-2,2], so dp[3]=2
+  - idx 4: 1-3=-2 ∈ [-2,2], so dp[4]=max(1,2)=2
+  - idx 5: 2-3=-1 ∈ [-2,2], so dp[5]=max(1,2)=2
+- Continue to idx 3 (`dp[3]=2`):
+  - idx 4: 1-4=-3 (not valid)
+  - idx 5: 2-4=-2 ∈ [-2,2], so dp[5]=max(2,3)=3
 
-#### **Layer 1 (inner square):**
-- Extraction order: `(1,1)→(1,2)`, `(2,2)`, `(2,1)`
-- Elements: [6, 7, 11, 10]
-- Rotate left by 2: [11, 10, 6, 7]
-- Write back in the same order.
-
-### **Result grid:**
-```
-[[3, 4, 8, 12],
- [2, 11, 10, 16],
- [1, 7, 6, 15],
- [5, 9, 13, 14]]
-```
-
+At the end, `dp[5]=3` is the answer.
 
 ---
 
 ## **Summary Table**
 
-| Layer | Original elements                 | Rotated (by 2)           |
-|-------|-----------------------------------|--------------------------|
-| 0     | 1 2 3 4 8 12 16 15 14 13 9 5     | 3 4 8 12 16 15 14 13 9 5 1 2 |
-| 1     | 6 7 11 10                        | 11 10 6 7                |
+| Index | dp value | How reachable                                                      |
+|-------|----------|---------------------------------------------------------------------|
+|   0   |    0     | Start here                                                         |
+|   1   |    1     | from 0                                                             |
+|   2   |   -1     | not reachable                                                      |
+|   3   |    2     | 0→1→3                                                              |
+|   4   |    2     | 0→1→4 or 0→4                                                       |
+|   5   |    3     | 0→1→3→5 **(max jumps on any path)**                                |
 
-All steps are handled efficiently, and the code adapts to any valid even-sized grid.
+**Final answer:** `3`
 
 ---
 
-**Let me know if you need further walkthroughs or have questions on variations!**
+Let me know if you want a Python solution too!
