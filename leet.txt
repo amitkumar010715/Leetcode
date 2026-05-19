@@ -1,157 +1,83 @@
-Sure! Let's solve **"Jump Game IV"** step by step as per your requirements.
+Certainly! Let's go step by step:
 
 ---
 
-## 1. Short Summary
+## 1. **Short Summary**
 
-You are at the start of an array and can jump to adjacent indices or any other index with the same value. Find the minimum number of steps needed to reach the last index.
+Given two **sorted** arrays, return the smallest integer present in both. If there is no common integer, return -1.
 
 ---
 
-## 2. Constraints & Edge Cases
+## 2. **Constraints & Edge Cases**
 
 **Constraints:**
-- Array size: `1 <= arr.length <= 5 * 10^4`
-- Value range: `-10^8 <= arr[i] <= 10^8`
+- `1 <= nums1.length, nums2.length <= 1e5`
+- `1 <= nums1[i], nums2[j] <= 1e9`
+- Both arrays are **sorted non-decreasingly.**
 
 **Edge Cases:**
-- The array has length 1: Already at the destination, answer is `0`.
-- No possible jumps except neighbors: Move step by step.
-- Many duplicate values: Faster by value jumps.
-- All values unique: Must jump by neighbors only.
-- All values are the same: Can jump directly from start to end in 1 step.
+- Arrays with no common values (should return -1)
+- Arrays with all values the same (should return the repeated value)
+- Arrays with only one value in common (should return it)
+- First value (minimum) is the common one (should return directly)
+- Duplicates in one or both arrays
+- Arrays of different lengths
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-**Observation:**  
-The problem asks for _the shortest path_ from the first to the last index, using any mix of neighbor jumps _and_ value-jumps.  
-Thus, this is a **shortest path problem** in an implicit graph: each index is a node, and there are edges to `i-1`, `i+1`, and all other indices with same value.
+**Observation:**
+Since both arrays are sorted, we can use a **two-pointer approach**:
+- Let `i` point to the start of `nums1`, `j` to the start of `nums2`.
+- At each step:
+    - If `nums1[i] == nums2[j]`, return `nums1[i]`.
+    - Else, increment the pointer that points to the smaller value.
+- If we reach the end of either array without finding a match, return -1.
 
-**Algorithm:**  
-- BFS (Breadth-First Search) from index 0.
-- For each index, can go to:
-    - `i-1` if valid
-    - `i+1` if valid
-    - All other indices with `arr[i]`
-- Use a **visited array** to prevent revisiting positions.
-- For performance, after using value-jumps for a number, clear its list so we never visit those again.
-
-**Time Complexity:**  
-- Each index at most once: O(N)
-- Each value's jump edges processed at most once: O(N)
-- Total: **O(N)**
+**Time Complexity**:  
+O(N+M) where N and M are lengths of the two arrays.  
+**Space Complexity**:  
+O(1) extra space.
 
 ---
 
-## 4. Clean C++ Solution
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <queue>
-#include <unordered_map>
 using namespace std;
 
 class Solution {
 public:
-    int minJumps(vector<int>& arr) {
-        int n = arr.size();
-        if (n == 1) return 0;
-        unordered_map<int, vector<int>> val_indices;
-        for (int i = 0; i < n; ++i)
-            val_indices[arr[i]].push_back(i);
-
-        vector<bool> visited(n, false);
-        queue<int> q;
-        q.push(0);
-        visited[0] = true;
-        int steps = 0;
-        
-        while (!q.empty()) {
-            int sz = q.size();
-            while (sz--) {
-                int i = q.front(); q.pop();
-                // Can we reach the end?
-                if (i == n - 1) return steps;
-
-                // Neighbor jumps
-                if (i + 1 < n && !visited[i+1]) {
-                    visited[i+1] = true;
-                    q.push(i+1);
-                }
-                if (i - 1 >= 0 && !visited[i-1]) {
-                    visited[i-1] = true;
-                    q.push(i-1);
-                }
-
-                // Value jumps
-                auto& indices = val_indices[arr[i]];
-                for (int nxt : indices) {
-                    if (!visited[nxt]) {
-                        visited[nxt] = true;
-                        q.push(nxt);
-                    }
-                }
-                // Don't revisit the same-value nodes again to avoid TLE
-                indices.clear();
-            }
-            steps++;
+    int getCommon(vector<int>& nums1, vector<int>& nums2) {
+        int i = 0, j = 0;
+        int n = nums1.size(), m = nums2.size();
+        while(i < n && j < m) {
+            if(nums1[i] == nums2[j]) return nums1[i];
+            else if(nums1[i] < nums2[j]) ++i;
+            else ++j;
         }
-        return -1; // Should never happen
+        return -1;
     }
 };
 ```
 
 ---
 
-## 5. Example Walkthrough
+## 5. **Example Explained**
 
-**Example:**
-```text
-Input: arr = [100,-23,-23,404,100,23,23,23,3,404]
+**Example:**  
+`nums1 = [1,2,3,6], nums2 = [2,3,4,5]`
 
-Step by Step:
+**Walkthrough:**
+- `i=0, j=0`: nums1[0]=1, nums2[0]=2  → 1<2 so increment `i`.
+- `i=1, j=0`: nums1[1]=2, nums2[0]=2  → Equal! Return 2.
 
-- Start at index 0 (value 100)
-    - Possible moves:
-        - i+1 -> index 1 (value -23)
-        - i-1 -> not possible
-        - any other index with value 100 -> index 4
-    - Now queue = [1,4]
-    - Mark 0,1,4 as visited.
-
-- Step = 1:
-    - Next layer: [1,4]
-    - For index 1 (-23): valid jumps: 0 (visited), 2 (unvisited, add), all other -23s: index 2, already enqueued.
-    - For index 4 (100): neighbors: 3 (unvisited, add), 5 (unvisited, add), value jumps for 100 already used.
-    - Now queue = [2,3,5]
-
-- Step = 2:
-    - Process [2,3,5]:
-      - index 2: neighbors are 1 (visited), 3 (in queue).
-          - value indices for -23 are 1,2 (already processed).
-      - index 3: neighbors: 2 (visited), 4 (visited), value jumps for 404: 3,9. Add index 9 (unvisited, add).
-      - index 5: neighbors: 4 (visited), 6 (unvisited, add), value jumps for 23: 5,6,7.
-          - Add 6,7 (if not already in queue). Now, queue = [9,6,7].
-    - Now queue = [9,6,7]
-
-- Step = 3:
-    - Process: [9,6,7]
-    - Index 9 is last index! Reached in 3 steps.
-
-**Answer: 3**
+**Output:**  
+`2` (the smallest common element)
 
 ---
 
-## Summary Table
-
-| Input                             | Output | Steps                        |
-|------------------------------------|--------|------------------------------|
-| `[100,-23,-23,404,100,23,23,23,3,404]` | 3      | 0→4→3→9                     |
-| `[7]`                             | 0      | already at last index        |
-| `[7,6,9,6,9,6,9,7]`               | 1      | 0→7 (direct same-value jump) |
-
----
-
-Let me know if you'd like a detailed breakdown of any other case or need an optimized version for a specific constraint!
+**Summary:**  
+Use two pointers to scan both arrays from the start. Only advance a pointer if its array has the smaller value. As soon as matching elements are found, return the value—guaranteed minimal due to sorted order. If no such value is found, return -1.
