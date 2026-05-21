@@ -1,175 +1,141 @@
-Sure! Here’s a detailed breakdown for the problem **"Find the Prefix Common Array of Two Arrays"**:
+Sure! Let’s go step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. Short Summary
 
-Given two permutations **A** and **B** of length **n**, construct an array **C** such that **C[i]** is the count of numbers that appear **at or before index i in both A and B** (i.e., in their prefixes `[0..i]`).
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- Constraints:
-  - `1 <= n <= 50` (small input)
-  - `A` and `B` are both permutations of `1..n`
-- Edge Cases:
-  - Smallest case: n=1. Both A and B have a single element. If they're the same, C[0]=1, else C[0]=0.
-  - No common up to a certain prefix (i.e., all C[0..j]=0 for j < some k).
-  - The order in which elements appear in A and B can be completely different.
+Given two arrays of positive integers, find the **length of the longest common prefix** (as digit strings) that exists between any pair of integers, with one integer from each array. Prefix: integer formed by a leading sequence of digits from the left.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-Given the small constraint (`n <= 50`), a brute-force approach is totally acceptable. However, for clarity and efficiency, we can use **sets** to keep track of the numbers seen so far in both A and B, then count the intersection at each position.
-
-### Steps:
-1. Initialize two unordered sets (`seenA`, `seenB`) to keep track of numbers seen so far in A and B.
-2. For each position `i` from 0 to n-1:
-    1. Insert `A[i]` into `seenA`, `B[i]` into `seenB`.
-    2. For efficiency, keep a running count (`common_count`) that increases by 1 for each number newly inserted into both sets (i.e., the number just appeared in both sets).
-    3. Append the current `common_count` to the answer.
-3. Return the result array.
-
-#### Performance:
-- **Time Complexity:** O(n²) (due to set intersection, but here intersection at each step is O(n), and n<=50, so very fast)
-- **Space Complexity:** O(n)
-
-However, we can optimize that with an integer array of size n+1 as a boolean marker (as n is small).
-
-#### Even faster implementation:
-- Use two boolean arrays visited_A[1..n], visited_B[1..n] to check if a number has been seen.
-- At every step, for the numbers newly inserted, check all numbers from 1 to n and count the numbers seen in both A and B so far.
-- Or, even better: As we process, for each number, when it gets seen in both, increment the `common_count` *at that point*, so we only count newly "doubly-seen" numbers.
+- **Array sizes:** up to 50000 each, implying O(N²) solutions are too slow.
+- **Element values:** up to 100,000,000 (at most 8 digits per number).
+- **Edge cases:**
+    - No common prefix at all (output 0).
+    - All numbers are single digit.
+    - Arrays with duplicate numbers.
+    - One array with a single element.
+    - Very large numbers.
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm
 
-Here’s a clean and efficient C++ solution:
+### Key Observations
 
-```cpp
-#include <vector>
-using namespace std;
+- Brute-force comparing all pairs is too slow.
+- Since we care about digit prefixes, treating numbers as strings is effective.
+- The **longest common prefix** for two numbers is determined by comparing their string representations from the left.
 
-class Solution {
-public:
-    vector<int> findThePrefixCommonArray(vector<int>& A, vector<int>& B) {
-        int n = A.size();
-        vector<bool> seenA(n+1, false), seenB(n+1, false);
-        vector<int> res(n);
-        int common_count = 0;
-        
-        for(int i = 0; i < n; ++i) {
-            seenA[A[i]] = true;
-            seenB[B[i]] = true;
-            // If A[i] is also seen in B, and this is the first time both have seen it
-            if(seenA[A[i]] && seenB[A[i]] && 
-               ((A[i] == B[i] && i == 0) || A[i] != B[i] || (A[i] == B[i] && i > 0 && !seenA[A[i]]))) {
-                common_count += (A[i]==B[i]) ? 1 : 0; // For A[i] == B[i] but not counted before
-            }
-            // Also, check for B[i] (apart from situation A[i] == B[i])
-            if (A[i] != B[i] && seenA[B[i]] && seenB[B[i]]) {
-                common_count++;
-            }
-            res[i] = 0;
-            // Count all numbers 1..n present in both sets
-            for(int x = 1; x <= n; ++x)
-                if(seenA[x] && seenB[x])
-                    res[i]++;
-        }
-        return res;
-    }
-};
+### Efficient Approach
+
+We want to **quickly check for the longest common prefix between any x in arr1 and y in arr2**.
+
+#### Steps:
+
+1. **Convert all numbers to string representations.**
+2. **For each possible prefix length `l` (from max possible down to 1):**
+    - Build **all prefixes of length `l`** from arr1 and arr2 (by extracting substrings of length `l`).
+    - Use sets or maps to store prefixes for **fast checking**.
+    - If there is any prefix that is present in both sets, that's the answer.
+
+Since number lengths are at most 8, we can check from 8 down to 1 quickly.
+
+#### Complexity
+
+- For each length 8..1 (~8 steps)
+    - O(N) for extracting prefixes from each array (O(8*N) worst-case).
+- Set intersection can be optimized with hash sets.
+- Total: **O(8*N + 8*M)**, where N = arr1.size(), M = arr2.size().
+
+### Pseudocode
+
 ```
-**But** the above can be further cleaned to do only one count per insert (by remembering already counted elements). Let's use a `counted` array to mark when a number has already been counted as common:
+For len = max_length down to 1:
+    Build set of all prefixes of len in arr1
+    Build set of all prefixes of len in arr2
+    If there is intersection:
+        return len
+return 0
+```
 
-### Cleanest and Most Efficient Solution
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 #include <vector>
+#include <string>
+#include <unordered_set>
+
 using namespace std;
 
 class Solution {
 public:
-    vector<int> findThePrefixCommonArray(vector<int>& A, vector<int>& B) {
-        int n = A.size();
-        vector<bool> seenA(n+1, false), seenB(n+1, false), counted(n+1, false);
-        vector<int> res;
-        int common_count = 0;
-        for(int i=0; i<n; ++i) {
-            seenA[A[i]] = true;
-            seenB[B[i]] = true;
-            // For each of A[i] and B[i], check if they're now seen in both and haven't been counted yet
-            for(int num : {A[i], B[i]}) {
-                if(seenA[num] && seenB[num] && !counted[num]) {
-                    common_count++;
-                    counted[num] = true;
+    int longestCommonPrefix(vector<int>& arr1, vector<int>& arr2) {
+        vector<string> s1, s2;
+        int maxlen = 0;
+        // Convert to strings & track max length
+        for (int x : arr1) {
+            string sx = to_string(x);
+            s1.push_back(sx);
+            if (sx.size() > maxlen) maxlen = sx.size();
+        }
+        for (int x : arr2) {
+            string sx = to_string(x);
+            s2.push_back(sx);
+            if (sx.size() > maxlen) maxlen = sx.size();
+        }
+
+        // Try from maxlen down to 1
+        for (int len = maxlen; len >= 1; --len) {
+            unordered_set<string> prefix1, prefix2;
+
+            for (const string& sx : s1) {
+                if (sx.size() >= len)
+                    prefix1.insert(sx.substr(0, len));
+            }
+            for (const string& sy : s2) {
+                if (sy.size() >= len)
+                    prefix2.insert(sy.substr(0, len));
+            }
+
+            // Check if any common prefix exists
+            for (const string& p : prefix1) {
+                if (prefix2.count(p)) {
+                    return len;
                 }
             }
-            res.push_back(common_count);
         }
-        return res;
+        return 0;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. Example Explained
 
-### Example:
+**Example 1:**
 
-**A = [1,3,2,4], B = [3,1,2,4]**
+Input:  
+`arr1 = [1,10,100], arr2 = [1000]`
 
-Let's walk through the code step by step:
+Let's convert each to strings:
 
-#### Initial:
-- seenA={}, seenB={}, counted={}, common_count=0
+- arr1: ["1", "10", "100"]
+- arr2: ["1000"]
 
-#### i=0: 
-- seenA: {1}
-- seenB: {3}
-- Numbers at i=0: A[0]=1, B[0]=3
-- 1 only in seenA, 3 only in seenB -- so no common yet.
-- C[0]=0
+Check for longest common prefix:
 
-#### i=1:
-- seenA: {1,3}
-- seenB: {3,1}
-- Numbers: A[1]=3, B[1]=1
-- 3: seen in both (first time), so count 1 for '3'
-- 1: seen in both (first time), so count 1 for '1' (now count=2)
-- C[1]=2
-
-#### i=2:
-- seenA: {1,2,3}
-- seenB: {3,1,2}
-- Numbers: A[2]=2, B[2]=2
-- 2: seen in both (first time), count 1 for '2' (now count=3)
-- C[2]=3
-
-#### i=3:
-- seenA: {1,2,3,4}
-- seenB: {3,1,2,4}
-- Numbers: A[3]=4, B[3]=4
-- 4: seen in both (first time), count 1 for '4' (now count=4)
-- C[3]=4
-
-**Final answer:** `[0,2,3,4]`
+- Length 3:
+    - arr1: "100"
+    - arr2: "100"
+    - Common prefix "100" (length 3) (since "1000".substr(0,3) = "100")
+- There is a match at length 3; so the answer is **3**.
 
 ---
 
-## **Summary Table**
-
-| Step (i) | seenA    | seenB    | # new commons | Common Count | C[i] |
-|----------|----------|----------|---------------|--------------|------|
-| 0        | 1        | 3        | 0             | 0            | 0    |
-| 1        | 1,3      | 3,1      | 2 (1 & 3)     | 2            | 2    |
-| 2        | 1,3,2    | 3,1,2    | 1 (2)         | 3            | 3    |
-| 3        | 1,3,2,4  | 3,1,2,4  | 1 (4)         | 4            | 4    |
-
----
-
-This approach is **efficient, clear, and robust** for all edge cases and constraint limits.
+Let me know if you'd like further optimizations or explanations!
