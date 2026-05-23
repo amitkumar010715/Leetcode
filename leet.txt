@@ -1,55 +1,43 @@
-Absolutely! Let’s break down the problem step by step:
+Certainly, let's address your requirements step by step:
 
 ---
 
 ## 1. Short Summary
 
-**Problem:**  
-Given an ascending sorted array that may have been rotated at an unknown pivot (with all elements unique), and a `target` value, efficiently determine the index of the target value, or return -1 if it does not exist.
-
-**Goal:**  
-Algorithm must run in **O(log n)** time.
+We need to check if an input array `nums` can be obtained by rotating a non-decreasingly sorted array. That is, its elements are sorted (possibly with duplicates), and they're *rotated* some number of times (including zero). Return `true` if possible, otherwise `false`.
 
 ---
 
 ## 2. Constraints & Edge Cases
 
-- **Array Length:** `1 <= nums.length <= 5000`.
-- **Element Value Range:** All elements and the target are in `[-10000, 10000]`.
-- **Unique Values:** No duplicates in `nums`.
-- **Always a Rotation:** Could be a zero rotation (not rotated at all).
-- **Possible Edges:**
-  - Array is not rotated (normal binary search).
-  - Array has length 1.
-  - Target is not present.
-  - Target is at the pivot or the boundaries.
-  - Minimal or maximal values may be the target.
-  
+- **Constraints:**
+  - `1 <= nums.length <= 100` (number of elements is small, so O(N) solutions are fine)
+  - `1 <= nums[i] <= 100` (all integers are in [1, 100])
+
+- **Edge Cases:**
+  - Arrays of length 1: Always `true`.
+  - Already sorted (no rotation): Should return `true`.
+  - Arrays with all elements the same: Should return `true`.
+  - Two or more "drops" (places where nums[i] > nums[i+1]): Should return `false`.
+  - Comparing last to first element, since rotation is circular.
+  - Duplicates: Should still work (since non-decreasing).
+
 ---
 
 ## 3. Optimal Algorithm
 
-Since the array is essentially two sorted ascending subarrays split by the rotation, we can **modify binary search** as follows:
-
-- At each step, you examine `nums[mid]`. 
-- One "half" (left or right) must be **sorted** (since a single rotation splits at only one point).
-- Decide if the target is in the sorted half, and **narrow search** accordingly.
+**Observation:**
+- If an array is a sorted array rotated (possibly zero) times, there should be at most *one place* where `nums[i] > nums[i+1]` (called a "drop").
+    - If no such place, it's already sorted.
+    - If exactly one such place, rotation happened at that index.
+    - More than one such place: not possible.
 
 **Steps:**
-1. Set `low = 0`, `high = n-1`.
-2. While `low <= high`:
-    - Get `mid = (low + high) / 2`.
-    - If `nums[mid] == target`: **Return `mid`.**
-    - Identify the **sorted half**:
-      - If `nums[low] <= nums[mid]`: **Left half is sorted**.
-          - If `nums[low] <= target < nums[mid]`: search **left half** (`high = mid - 1`).
-          - Else: search **right half** (`low = mid + 1`).
-      - Else: **Right half is sorted**.
-          - If `nums[mid] < target <= nums[high]`: search **right half** (`low = mid + 1`).
-          - Else: search **left half** (`high = mid - 1`).
-3. If target not found, return **-1**.
+1. Count number of pairs `nums[i] > nums[(i+1) % n]` (modulo for circular check).
+2. If the count is `0` or `1`, return `true`; else, return `false`.
 
-This approach always discards half of the range, guaranteeing O(log n) time.
+**Time Complexity:** O(N)  
+**Space Complexity:** O(1)
 
 ---
 
@@ -58,29 +46,15 @@ This approach always discards half of the range, guaranteeing O(log n) time.
 ```cpp
 class Solution {
 public:
-    int search(vector<int>& nums, int target) {
-        int low = 0, high = nums.size() - 1;
-        while (low <= high) {
-            int mid = low + (high - low) / 2;
-            if (nums[mid] == target)
-                return mid;
-            
-            // Left half is sorted
-            if (nums[low] <= nums[mid]) {
-                if (nums[low] <= target && target < nums[mid])
-                    high = mid - 1;      // Target in left half
-                else
-                    low = mid + 1;       // Target in right half
-            }
-            // Right half is sorted
-            else {
-                if (nums[mid] < target && target <= nums[high])
-                    low = mid + 1;       // Target in right half
-                else
-                    high = mid - 1;      // Target in left half
+    bool check(vector<int>& nums) {
+        int n = nums.size();
+        int count = 0;
+        for (int i = 0; i < n; ++i) {
+            if (nums[i] > nums[(i+1)%n]) {
+                count++;
             }
         }
-        return -1;
+        return count <= 1;
     }
 };
 ```
@@ -89,26 +63,18 @@ public:
 
 ## 5. Example Explanation
 
-**Example:**  
-`nums = [4,5,6,7,0,1,2], target = 0`
+**Example:** `[3, 4, 5, 1, 2]`
 
-- Initial: `low=0`, `high=6`
-- 1st Iteration:  
-    - `mid=3`, `nums[3]=7`
-    - Left half `[4,5,6,7]` is sorted
-    - Is `target` (`0`) in `[4,5,6,7]`? No (`0 < 4`)
-    - So, search right: `low = 4`
-- 2nd Iteration:  
-    - `low=4`, `high=6`
-    - `mid=5`, `nums[5]=1`
-    - Right half `[1,2]` is sorted
-    - Is `target` (`0`) in `[0,1,2]`? Yes (`0 >= 0 && 0 < 1`)
-    - So, search left: `high = 4`
-- 3rd Iteration:
-    - `low=4`, `high=4`
-    - `mid=4`, `nums[4]=0` (Found target!)
-- **Return index 4.**
+- Check drops:
+  - `3 < 4` (OK)
+  - `4 < 5` (OK)
+  - `5 > 1` (**Drop 1**)
+  - `1 < 2` (OK)
+  - `2 < 3` (since circular, last to first) (OK)
+- Only *one* drop (`5 > 1`), so this is a sorted array rotated (`[1,2,3,4,5]` rotated by 2 places).
+- Return: **`true`**
 
 ---
 
-Let me know if you need further clarification!
+**In summary:**  
+Check for at most one "drop" in the circular array. If the count is more than one, the array is not a rotation of a sorted array. Otherwise, it is.
