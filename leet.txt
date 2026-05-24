@@ -1,80 +1,125 @@
-Certainly, let's address your requirements step by step:
+Let's break down and solve **Jump Game V** step by step:
 
 ---
 
-## 1. Short Summary
-
-We need to check if an input array `nums` can be obtained by rotating a non-decreasingly sorted array. That is, its elements are sorted (possibly with duplicates), and they're *rotated* some number of times (including zero). Return `true` if possible, otherwise `false`.
+## 1. **Summary**
+You're given an array `arr` and a distance `d`. From any index, you can "jump" up to `d` indices left or right, but only **to a strictly smaller value**, and only if all elements between current and target indices are **smaller** than your starting point. You want to find the **maximum number of indices you can visit** (including where you start), starting from any index.
 
 ---
 
-## 2. Constraints & Edge Cases
-
-- **Constraints:**
-  - `1 <= nums.length <= 100` (number of elements is small, so O(N) solutions are fine)
-  - `1 <= nums[i] <= 100` (all integers are in [1, 100])
-
+## 2. **Constraints & Edge Cases**
+- `1 <= arr.length <= 1000`  
+- `1 <= arr[i] <= 10^5`  
+- `1 <= d <= arr.length`
 - **Edge Cases:**
-  - Arrays of length 1: Always `true`.
-  - Already sorted (no rotation): Should return `true`.
-  - Arrays with all elements the same: Should return `true`.
-  - Two or more "drops" (places where nums[i] > nums[i+1]): Should return `false`.
-  - Comparing last to first element, since rotation is circular.
-  - Duplicates: Should still work (since non-decreasing).
+    - All elements are equal, e.g., `[2,2,2]` ➔ Only single jumps.
+    - Strictly increasing or strictly decreasing arrays.
+    - `d = 1`, can only jump to adjacent.
+    - Jumps blocked by higher elements in between.
+    - Should consider every starting index for maximum.
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-**Observation:**
-- If an array is a sorted array rotated (possibly zero) times, there should be at most *one place* where `nums[i] > nums[i+1]` (called a "drop").
-    - If no such place, it's already sorted.
-    - If exactly one such place, rotation happened at that index.
-    - More than one such place: not possible.
+**Main insight:**  
+We want the **longest decreasing jump path** from each index, considering the `d` bound and the "between must be lower" rule.
 
-**Steps:**
-1. Count number of pairs `nums[i] > nums[(i+1) % n]` (modulo for circular check).
-2. If the count is `0` or `1`, return `true`; else, return `false`.
+### **Approach:**
+#### **Dynamic Programming with Memoization (DFS + DP)**
+- For each index, compute the maximum number of indices you can reach (including itself).
+- Use **memoization** so each index is only computed once.
 
-**Time Complexity:** O(N)  
-**Space Complexity:** O(1)
+#### **For each index i:**
+1. Try **all step sizes** up to `d` **to the right** (`i + x`). Stop if:
+    - `arr[i+x] >= arr[i]` (higher or equal)
+    - For steps, if any between (`arr[i+k]`) is not strictly less than `arr[i]`, break.
+    - If valid, recursively calculate the maximum from that index.
+2. **Symmetrically do for left jumps**.
+3. **The result for index i is 1 + max(jump results)**.
+
+#### **Time Complexity:**  
+`O(n * d)` — For each index, up to `2*d` steps, but with memoization it’s fast for n ≤ 1000.
 
 ---
 
-## 4. Clean C++ Solution
+## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    bool check(vector<int>& nums) {
-        int n = nums.size();
-        int count = 0;
-        for (int i = 0; i < n; ++i) {
-            if (nums[i] > nums[(i+1)%n]) {
-                count++;
+    int maxJumps(vector<int>& arr, int d) {
+        int n = arr.size();
+        vector<int> memo(n, -1);
+
+        // Helper DFS function with memoization
+        function<int(int)> dfs = [&](int i) {
+            if (memo[i] != -1) return memo[i];
+            int res = 1; // At least the current index
+
+            // Jump right
+            for (int step = 1; step <= d; ++step) {
+                int j = i + step;
+                if (j >= n || arr[j] >= arr[i]) break;
+                res = max(res, 1 + dfs(j));
             }
-        }
-        return count <= 1;
+            // Jump left
+            for (int step = 1; step <= d; ++step) {
+                int j = i - step;
+                if (j < 0 || arr[j] >= arr[i]) break;
+                res = max(res, 1 + dfs(j));
+            }
+            memo[i] = res;
+            return res;
+        };
+
+        int ans = 0;
+        for (int i = 0; i < n; ++i)
+            ans = max(ans, dfs(i));
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. Example Explanation
+## 5. **Example Explanation**
 
-**Example:** `[3, 4, 5, 1, 2]`
+#### Example 1:
 
-- Check drops:
-  - `3 < 4` (OK)
-  - `4 < 5` (OK)
-  - `5 > 1` (**Drop 1**)
-  - `1 < 2` (OK)
-  - `2 < 3` (since circular, last to first) (OK)
-- Only *one* drop (`5 > 1`), so this is a sorted array rotated (`[1,2,3,4,5]` rotated by 2 places).
-- Return: **`true`**
+**Input:**  
+`arr = [6,4,14,6,8,13,9,7,10,6,12], d = 2`
+
+**Walkthrough for index 10 (`arr[10] = 12`)**:
+- Right within 2 steps: no valid as out of bounds.
+- Left:
+    - 10→9: arr[9]=6 (<12), can jump. From 9:
+        - 9→8: arr[8]=10 (<6)? No (10>6), can't.
+        - 9→8: arr[8]=10 (<12), but still check further: from 8
+            - 8→7: arr[7]=7 (<10), from 7 can't go further.
+        - So path is 10 → 9 → 8 → 7 (visits 4 indices).
+    - 10→8: arr[8]=10 (<12), from 8 as above.
+
+**Thus, the answer is** `4`.
 
 ---
 
-**In summary:**  
-Check for at most one "drop" in the circular array. If the count is more than one, the array is not a rotation of a sorted array. Otherwise, it is.
+## **Summary Table**
+
+| Index | Value | Max Path from here |
+|-------|-------|-------------------|
+| 10    | 12    | 4                 |
+| ...   | ...   | ...               |
+
+---
+
+# **In Short**
+- Use memoized DFS to calculate, for each index, the max path following the jump rules.
+- For each valid jump, recursively compute and maintain the max.
+- Final answer is the highest among all possible starting points.
+
+Let me know if you want code for a specific language or further test case breakdown!
