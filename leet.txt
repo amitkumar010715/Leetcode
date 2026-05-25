@@ -1,125 +1,101 @@
-Let's break down and solve **Jump Game V** step by step:
+Let's break it down as requested:
 
 ---
 
-## 1. **Summary**
-You're given an array `arr` and a distance `d`. From any index, you can "jump" up to `d` indices left or right, but only **to a strictly smaller value**, and only if all elements between current and target indices are **smaller** than your starting point. You want to find the **maximum number of indices you can visit** (including where you start), starting from any index.
+## 1. **Short Summary**
+
+Given a binary string `s`, starting at index 0, and two integers `minJump` and `maxJump`, you can move from index `i` to any index `j` where:
+- `i + minJump <= j <= min(i + maxJump, n - 1)`
+- `s[j] == '0'`
+
+Return `true` if you can reach the last index using such jumps, otherwise return `false`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
-- `1 <= arr.length <= 1000`  
-- `1 <= arr[i] <= 10^5`  
-- `1 <= d <= arr.length`
-- **Edge Cases:**
-    - All elements are equal, e.g., `[2,2,2]` ➔ Only single jumps.
-    - Strictly increasing or strictly decreasing arrays.
-    - `d = 1`, can only jump to adjacent.
-    - Jumps blocked by higher elements in between.
-    - Should consider every starting index for maximum.
+
+- `2 <= s.length <= 1e5` — large, so O(n) solutions are needed.
+- Movement can only be to positions marked with `'0'`.
+- `s[0] == '0'`, thus always a valid start.
+- `1 <= minJump <= maxJump < s.length`
+- Edge cases:
+    - All zeros: should return `true`.
+    - All ones after `s[0]`: should return `false`.
+    - No `'0'` in last minJump-maxJump window: unreachable.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Main insight:**  
-We want the **longest decreasing jump path** from each index, considering the `d` bound and the "between must be lower" rule.
+A naïve BFS/DP checking every possible jump is O(n * maxJump) — too slow for n=1e5.  
+Instead, **Sliding Window + DP**:
 
-### **Approach:**
-#### **Dynamic Programming with Memoization (DFS + DP)**
-- For each index, compute the maximum number of indices you can reach (including itself).
-- Use **memoization** so each index is only computed once.
+- Use `dp[i]` to represent if position `i` is reachable (from 0).
+- Maintain a running `prefix sum` or count of reachable indices in the last `[i - maxJump, i - minJump]` window.
+- At each position `i`, if `s[i] == '0'`, 
+    - If there is any `dp[j]==true` such that `j` in `[i-maxJump, i-minJump]`, then you can reach `i`.
 
-#### **For each index i:**
-1. Try **all step sizes** up to `d` **to the right** (`i + x`). Stop if:
-    - `arr[i+x] >= arr[i]` (higher or equal)
-    - For steps, if any between (`arr[i+k]`) is not strictly less than `arr[i]`, break.
-    - If valid, recursively calculate the maximum from that index.
-2. **Symmetrically do for left jumps**.
-3. **The result for index i is 1 + max(jump results)**.
+### High-Level Steps
+1. Initialize `dp[0] = true`, rest are false.
+2. Use a **running window count** to check if the jump window leading to `i` has any reachable index.
+3. Iterate from `1 to n-1`, for each position:
+    - If `i >= minJump`, add `dp[i-minJump]` to `count`.
+    - If `i > maxJump`, subtract `dp[i-maxJump-1]` from `count`.
+    - If `s[i]=='0'` and `count>0`, set `dp[i]=true`.
 
-#### **Time Complexity:**  
-`O(n * d)` — For each index, up to `2*d` steps, but with memoization it’s fast for n ≤ 1000.
+This approach is O(n).
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-using namespace std;
-
 class Solution {
 public:
-    int maxJumps(vector<int>& arr, int d) {
-        int n = arr.size();
-        vector<int> memo(n, -1);
-
-        // Helper DFS function with memoization
-        function<int(int)> dfs = [&](int i) {
-            if (memo[i] != -1) return memo[i];
-            int res = 1; // At least the current index
-
-            // Jump right
-            for (int step = 1; step <= d; ++step) {
-                int j = i + step;
-                if (j >= n || arr[j] >= arr[i]) break;
-                res = max(res, 1 + dfs(j));
+    bool canReach(string s, int minJump, int maxJump) {
+        int n = s.size();
+        vector<bool> dp(n, false);
+        dp[0] = true;
+        int windowReachable = 0;
+        
+        for (int i = 1; i < n; ++i) {
+            // Expand the window: add new left end.
+            if (i >= minJump && dp[i - minJump]) windowReachable++;
+            // Shrink the window: remove old out-of-range left end.
+            if (i > maxJump && dp[i - maxJump - 1]) windowReachable--;
+            
+            // If current is '0' and window has at least one reachable.
+            if (s[i] == '0' && windowReachable > 0) {
+                dp[i] = true;
             }
-            // Jump left
-            for (int step = 1; step <= d; ++step) {
-                int j = i - step;
-                if (j < 0 || arr[j] >= arr[i]) break;
-                res = max(res, 1 + dfs(j));
-            }
-            memo[i] = res;
-            return res;
-        };
-
-        int ans = 0;
-        for (int i = 0; i < n; ++i)
-            ans = max(ans, dfs(i));
-        return ans;
+        }
+        return dp[n - 1];
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-#### Example 1:
+**Example 1:**
+Input: `s = "011010"`, `minJump = 2`, `maxJump = 3`
 
-**Input:**  
-`arr = [6,4,14,6,8,13,9,7,10,6,12], d = 2`
+- Indices: 0 1 2 3 4 5
+- s:      0 1 1 0 1 0
 
-**Walkthrough for index 10 (`arr[10] = 12`)**:
-- Right within 2 steps: no valid as out of bounds.
-- Left:
-    - 10→9: arr[9]=6 (<12), can jump. From 9:
-        - 9→8: arr[8]=10 (<6)? No (10>6), can't.
-        - 9→8: arr[8]=10 (<12), but still check further: from 8
-            - 8→7: arr[7]=7 (<10), from 7 can't go further.
-        - So path is 10 → 9 → 8 → 7 (visits 4 indices).
-    - 10→8: arr[8]=10 (<12), from 8 as above.
+Let's step:
+- Start at index 0 (must).
+- Can jump from 0 to indices: 2 (s[2]=='1'), 3 (s[3]=='0')
+    - 3 is possible, so mark `dp[3] = true`.
+- From 3, can jump to indices: 5 (`3+2` to `3+3`)
+    - s[5]=='0', so mark `dp[5] = true`.
 
-**Thus, the answer is** `4`.
+We can reach the last index!
 
 ---
 
-## **Summary Table**
+**Summary:**  
+We use a DP table where `dp[i]` tracks if position `i` can be reached, and a sliding window to efficiently check the range of valid previous indices. This efficiently solves the problem within constraints.
 
-| Index | Value | Max Path from here |
-|-------|-------|-------------------|
-| 10    | 12    | 4                 |
-| ...   | ...   | ...               |
-
----
-
-# **In Short**
-- Use memoized DFS to calculate, for each index, the max path following the jump rules.
-- For each valid jump, recursively compute and maintain the max.
-- Final answer is the highest among all possible starting points.
-
-Let me know if you want code for a specific language or further test case breakdown!
+Let me know if you'd like a fully commented version, or additional examples!
