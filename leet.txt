@@ -1,101 +1,83 @@
-Let's break it down as requested:
+Let's go through the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a binary string `s`, starting at index 0, and two integers `minJump` and `maxJump`, you can move from index `i` to any index `j` where:
-- `i + minJump <= j <= min(i + maxJump, n - 1)`
-- `s[j] == '0'`
-
-Return `true` if you can reach the last index using such jumps, otherwise return `false`.
+Given a string `word` consisting of uppercase and lowercase English letters, **count how many distinct letters appear in both lowercase and uppercase forms** within the string. These letters are called "special".
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `2 <= s.length <= 1e5` — large, so O(n) solutions are needed.
-- Movement can only be to positions marked with `'0'`.
-- `s[0] == '0'`, thus always a valid start.
-- `1 <= minJump <= maxJump < s.length`
-- Edge cases:
-    - All zeros: should return `true`.
-    - All ones after `s[0]`: should return `false`.
-    - No `'0'` in last minJump-maxJump window: unreachable.
+- **Constraints:**
+  - `1 <= word.length <= 50` (small size, so O(N) is fine)
+  - Only 'a'-'z' and 'A'-'Z' in the string.
+
+- **Edge Cases:**
+  - All letters are lowercase or all are uppercase ⇒ Output should be 0.
+  - The same letter appears multiple times, but only in one case ⇒ Not counted.
+  - String contains a letter in both cases ⇒ Count once per letter.
+  - Overlapping special letters, i.e., more than one letter is special.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-A naïve BFS/DP checking every possible jump is O(n * maxJump) — too slow for n=1e5.  
-Instead, **Sliding Window + DP**:
-
-- Use `dp[i]` to represent if position `i` is reachable (from 0).
-- Maintain a running `prefix sum` or count of reachable indices in the last `[i - maxJump, i - minJump]` window.
-- At each position `i`, if `s[i] == '0'`, 
-    - If there is any `dp[j]==true` such that `j` in `[i-maxJump, i-minJump]`, then you can reach `i`.
-
-### High-Level Steps
-1. Initialize `dp[0] = true`, rest are false.
-2. Use a **running window count** to check if the jump window leading to `i` has any reachable index.
-3. Iterate from `1 to n-1`, for each position:
-    - If `i >= minJump`, add `dp[i-minJump]` to `count`.
-    - If `i > maxJump`, subtract `dp[i-maxJump-1]` from `count`.
-    - If `s[i]=='0'` and `count>0`, set `dp[i]=true`.
-
-This approach is O(n).
+- **Idea**: For each letter from 'a' to 'z', check if *both* the lowercase and uppercase forms appear in the string.
+- **How to Check?**
+  - Use sets to store **all lowercase letters** and **all uppercase letters** present in the string.
+  - For each letter 'a' to 'z':
+      - If its lowercase is in the lowercase set **and**
+      - Its uppercase is in the uppercase set,
+      - Then it's "special".
+- **Time Complexity:** O(N) + O(26) where N = word length.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
+#include <unordered_set>
+#include <string>
+using namespace std;
+
 class Solution {
 public:
-    bool canReach(string s, int minJump, int maxJump) {
-        int n = s.size();
-        vector<bool> dp(n, false);
-        dp[0] = true;
-        int windowReachable = 0;
-        
-        for (int i = 1; i < n; ++i) {
-            // Expand the window: add new left end.
-            if (i >= minJump && dp[i - minJump]) windowReachable++;
-            // Shrink the window: remove old out-of-range left end.
-            if (i > maxJump && dp[i - maxJump - 1]) windowReachable--;
-            
-            // If current is '0' and window has at least one reachable.
-            if (s[i] == '0' && windowReachable > 0) {
-                dp[i] = true;
+    int numberOfSpecialChars(string word) {
+        unordered_set<char> lower, upper;
+        for (char c : word) {
+            if (islower(c)) lower.insert(c);
+            else if (isupper(c)) upper.insert(c);
+        }
+        int cnt = 0;
+        for (char ch = 'a'; ch <= 'z'; ++ch) {
+            if (lower.count(ch) && upper.count(toupper(ch))) {
+                cnt++;
             }
         }
-        return dp[n - 1];
+        return cnt;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Explain One Example**
 
-**Example 1:**
-Input: `s = "011010"`, `minJump = 2`, `maxJump = 3`
+Let's do this for: `word = "aaAbcBC"`
 
-- Indices: 0 1 2 3 4 5
-- s:      0 1 1 0 1 0
+- Lowercase in string: `{a, b, c}`
+- Uppercase in string: `{A, B, C}`
 
-Let's step:
-- Start at index 0 (must).
-- Can jump from 0 to indices: 2 (s[2]=='1'), 3 (s[3]=='0')
-    - 3 is possible, so mark `dp[3] = true`.
-- From 3, can jump to indices: 5 (`3+2` to `3+3`)
-    - s[5]=='0', so mark `dp[5] = true`.
+**Check for each 'a' to 'z':**
+- For 'a': 'a' in lower and 'A' in upper ⇒ special
+- For 'b': 'b' in lower and 'B' in upper ⇒ special
+- For 'c': 'c' in lower and 'C' in upper ⇒ special
 
-We can reach the last index!
+So, answer = **3**.
 
 ---
 
-**Summary:**  
-We use a DP table where `dp[i]` tracks if position `i` can be reached, and a sliding window to efficiently check the range of valid previous indices. This efficiently solves the problem within constraints.
-
-Let me know if you'd like a fully commented version, or additional examples!
+**Summary**:  
+Keep track of all lowercase and all uppercase letters present. For each possible letter, if it exists in both, count it as special. The algorithm is efficient and straightforward.
