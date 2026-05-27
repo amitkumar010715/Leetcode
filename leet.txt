@@ -1,83 +1,119 @@
-Let's go through the problem step by step:
+Let's break down the problem and get you an optimal solution.
 
 ---
 
-## 1. **Short Summary**
+## 1. Short Summary
 
-Given a string `word` consisting of uppercase and lowercase English letters, **count how many distinct letters appear in both lowercase and uppercase forms** within the string. These letters are called "special".
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints:**
-  - `1 <= word.length <= 50` (small size, so O(N) is fine)
-  - Only 'a'-'z' and 'A'-'Z' in the string.
-
-- **Edge Cases:**
-  - All letters are lowercase or all are uppercase ⇒ Output should be 0.
-  - The same letter appears multiple times, but only in one case ⇒ Not counted.
-  - String contains a letter in both cases ⇒ Count once per letter.
-  - Overlapping special letters, i.e., more than one letter is special.
+Given a string of upper and lower case letters, count how many letters appear **both in lowercase and uppercase**, and **all lowercase occurrences come before any uppercase**. Such letters are called **special** in this problem.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints and Edge Cases
 
-- **Idea**: For each letter from 'a' to 'z', check if *both* the lowercase and uppercase forms appear in the string.
-- **How to Check?**
-  - Use sets to store **all lowercase letters** and **all uppercase letters** present in the string.
-  - For each letter 'a' to 'z':
-      - If its lowercase is in the lowercase set **and**
-      - Its uppercase is in the uppercase set,
-      - Then it's "special".
-- **Time Complexity:** O(N) + O(26) where N = word length.
+### Constraints:
+- Length of `word`: up to 200,000.
+- Letters: only lowercase (`a-z`) and uppercase (`A-Z`) English letters.
+
+### Edge Cases:
+- Only lowercase or only uppercase: always 0 special letters.
+- No lowercase occurrence before an uppercase of the same letter: not special.
+- Multiple blocks of lower/uppercase: must ensure *all* lowercase are before the *first* uppercase for the letter.
+- Very long strings: Need efficient O(n) solution.
+- Mixed casing: Like `aAbBC`, where not all letters are special.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 3. Optimal Algorithm
+
+We need to, for each letter, check:
+1. Does it appear at least once as lowercase and uppercase?
+2. Are *all* lowercase occurrences before the *first* uppercase?
+
+### Steps:
+
+- For each letter (26 possibilities):
+    - Store indices of all lowercase and the index of the first uppercase.
+- Traverse `word` **once** to fill:
+    - For each 'a' to 'z': leftmost lowercase index (`minLower`), rightmost lowercase index (`maxLower`)
+    - For each 'A' to 'Z': leftmost uppercase index (`minUpper`)
+- For each letter, say `c`:
+    - If it never appears in lower or upper: **skip**
+    - If `maxLower` < `minUpper`: **special letter**
+- Count such letters.
+
+### Time & Space:
+- O(n) time, O(1) space (fixed at 26 letters).
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
-#include <unordered_set>
+#include <vector>
 #include <string>
+#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int numberOfSpecialChars(string word) {
-        unordered_set<char> lower, upper;
-        for (char c : word) {
-            if (islower(c)) lower.insert(c);
-            else if (isupper(c)) upper.insert(c);
-        }
-        int cnt = 0;
-        for (char ch = 'a'; ch <= 'z'; ++ch) {
-            if (lower.count(ch) && upper.count(toupper(ch))) {
-                cnt++;
+    int countSpecialLetters(string word) {
+        // Stores first and last occur index for lowercase and first occurrence for uppercase
+        vector<int> minLower(26, INT_MAX), maxLower(26, INT_MIN), minUpper(26, INT_MAX), hasUpper(26, 0), hasLower(26,0);
+        
+        int n = word.size();
+        for (int i = 0; i < n; ++i) {
+            char c = word[i];
+            if (islower(c)) {
+                int idx = c - 'a';
+                hasLower[idx] = 1;
+                minLower[idx] = min(minLower[idx], i);
+                maxLower[idx] = max(maxLower[idx], i);
+            } else if (isupper(c)) {
+                int idx = c - 'A';
+                hasUpper[idx] = 1;
+                minUpper[idx] = min(minUpper[idx], i);
             }
         }
-        return cnt;
+        int ans = 0;
+        for (int i = 0; i < 26; ++i) {
+            if (hasLower[i] && hasUpper[i] && maxLower[i] < minUpper[i]) {
+                ans++;
+            }
+        }
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Explain One Example**
+## 5. Example Explained
 
-Let's do this for: `word = "aaAbcBC"`
+**Input:** `word = "aaAbcBC"`
 
-- Lowercase in string: `{a, b, c}`
-- Uppercase in string: `{A, B, C}`
+Processing:  
+- For `'a'`:
+    - Lowercase at indices 0 and 1
+    - Uppercase at index 2
+    - All 'a' (lower) at 0, 1; uppercase 'A' at 2
+    - So `maxLower['a'] = 1`, `minUpper['a'] = 2`  
+    - 1 < 2, so 'a' is special.
+- For `'b'`:
+    - Lower at 3
+    - Upper at 4
+    - 3 < 4 ⇒ special.
+- For `'c'`:
+    - Lower at 5
+    - Upper at 6
+    - 5 < 6 ⇒ special.
+- All other letters: don't appear in both cases.
 
-**Check for each 'a' to 'z':**
-- For 'a': 'a' in lower and 'A' in upper ⇒ special
-- For 'b': 'b' in lower and 'B' in upper ⇒ special
-- For 'c': 'c' in lower and 'C' in upper ⇒ special
-
-So, answer = **3**.
+**Output:** `3`  
+**Special letters:** 'a', 'b', 'c'
 
 ---
 
-**Summary**:  
-Keep track of all lowercase and all uppercase letters present. For each possible letter, if it exists in both, count it as special. The algorithm is efficient and straightforward.
+**Summary:**  
+Count, for each letter, if it appears as both cases *and* all lowercase come before any uppercase. Use indices to check in O(n) time.  
+
+Let me know if you need further clarifications, or want Python/Java versions!
