@@ -1,119 +1,175 @@
-Let's break down the problem and get you an optimal solution.
+Let's work through the requirements step by step.
 
 ---
 
-## 1. Short Summary
+## 1. **Short Summary**
 
-Given a string of upper and lower case letters, count how many letters appear **both in lowercase and uppercase**, and **all lowercase occurrences come before any uppercase**. Such letters are called **special** in this problem.
+Given two string arrays (`wordsContainer` and `wordsQuery`), for each `wordsQuery[i]`, find the **index** of a string in `wordsContainer` sharing the **longest common suffix**. Among all such matches, choose the container string that is **shortest in length**; if tie, pick the one **occurring earliest** (smallest index).
 
 ---
 
-## 2. Constraints and Edge Cases
+## 2. **Constraints & Edge Cases**
 
 ### Constraints:
-- Length of `word`: up to 200,000.
-- Letters: only lowercase (`a-z`) and uppercase (`A-Z`) English letters.
+- Up to **10,000 strings** in each array.
+- Each string length up to **5,000**.
+- Total length across all container/query words up to **500,000**.
+- Only **lowercase English letters**.
 
 ### Edge Cases:
-- Only lowercase or only uppercase: always 0 special letters.
-- No lowercase occurrence before an uppercase of the same letter: not special.
-- Multiple blocks of lower/uppercase: must ensure *all* lowercase are before the *first* uppercase for the letter.
-- Very long strings: Need efficient O(n) solution.
-- Mixed casing: Like `aAbBC`, where not all letters are special.
+- Multiple container strings may have the same suffix; need tie-breaking.
+- If no common suffix is found—the empty string is always a shared suffix.
+- Strings can be of different lengths.
+- All strings could be the same.
+- Query string may be longer or shorter than container strings.
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-We need to, for each letter, check:
-1. Does it appear at least once as lowercase and uppercase?
-2. Are *all* lowercase occurrences before the *first* uppercase?
+### High-level idea:
 
-### Steps:
+- To efficiently find the **longest common suffix**, we should process suffixes from the end of words. Since suffix lookup is needed, a **Trie** is well-suited, but for suffix, we use **reversed strings**.
+- For each container string (reversed), build a Trie.
+- At each Trie node, keep:
+    - The best matching container string index (`index`)
+    - Its length (`length`)
+    - If multiple strings share same suffix, save the **shortest**, and on tie, the **earliest** index.
 
-- For each letter (26 possibilities):
-    - Store indices of all lowercase and the index of the first uppercase.
-- Traverse `word` **once** to fill:
-    - For each 'a' to 'z': leftmost lowercase index (`minLower`), rightmost lowercase index (`maxLower`)
-    - For each 'A' to 'Z': leftmost uppercase index (`minUpper`)
-- For each letter, say `c`:
-    - If it never appears in lower or upper: **skip**
-    - If `maxLower` < `minUpper`: **special letter**
-- Count such letters.
+#### Steps:
+1. **Build a reversed Trie** for all `wordsContainer` strings.
+    - For each string, walk through its reversed form, updating Trie nodes with the "best" string seen at that node (shortest, then earliest index).
+2. **For each query:**
+    - Walk down the Trie with the reversed query string.
+    - Keep track of the latest "best" index as you go.
+    - The deepest node reached gives the **longest possible suffix** match.
+3. **Return the indices** found for each query.
 
-### Time & Space:
-- O(n) time, O(1) space (fixed at 26 letters).
+#### Time Complexity:
+- Building the Trie: **O(total length of all wordsContainer strings)**
+- Querying: **O(total length of all wordsQuery strings)**
+- This fits comfortably under the constraints.
 
 ---
 
-## 4. Clean C++ Solution
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
 #include <string>
 #include <algorithm>
+
 using namespace std;
+
+struct TrieNode {
+    TrieNode* children[26];
+    // index of the best candidate at or below this node
+    int index;
+    int length;
+    TrieNode() : index(-1), length(1e9) {
+        fill(begin(children), end(children), nullptr);
+    }
+};
 
 class Solution {
 public:
-    int countSpecialLetters(string word) {
-        // Stores first and last occur index for lowercase and first occurrence for uppercase
-        vector<int> minLower(26, INT_MAX), maxLower(26, INT_MIN), minUpper(26, INT_MAX), hasUpper(26, 0), hasLower(26,0);
-        
-        int n = word.size();
-        for (int i = 0; i < n; ++i) {
-            char c = word[i];
-            if (islower(c)) {
-                int idx = c - 'a';
-                hasLower[idx] = 1;
-                minLower[idx] = min(minLower[idx], i);
-                maxLower[idx] = max(maxLower[idx], i);
-            } else if (isupper(c)) {
-                int idx = c - 'A';
-                hasUpper[idx] = 1;
-                minUpper[idx] = min(minUpper[idx], i);
+    vector<int> stringIndices(vector<string>& wordsContainer, vector<string>& wordsQuery) {
+        TrieNode* root = new TrieNode();
+
+        // Insert all container words (reversed)
+        for (int i = 0; i < wordsContainer.size(); ++i) {
+            string& s = wordsContainer[i];
+            TrieNode* node = root;
+
+            // At every node visited (including root), update best index
+            // For empty suffix ("") which matches root, update as well
+            update(node, s.length(), i);
+
+            for (int j = s.length() - 1; j >= 0; --j) {
+                int c = s[j] - 'a';
+                if (!node->children[c])
+                    node->children[c] = new TrieNode();
+                node = node->children[c];
+
+                update(node, s.length(), i);
             }
         }
-        int ans = 0;
-        for (int i = 0; i < 26; ++i) {
-            if (hasLower[i] && hasUpper[i] && maxLower[i] < minUpper[i]) {
-                ans++;
+
+        vector<int> res;
+        // For each query, search for longest matching suffix
+        for (string& q : wordsQuery) {
+            TrieNode* node = root;
+            int bestIdx = node->index; // best found so far (empty suffix)
+            for (int j = q.length() - 1; j >= 0; --j) {
+                int c = q[j] - 'a';
+                if (!node->children[c])
+                    break;
+                node = node->children[c];
+                bestIdx = node->index;
             }
+            res.push_back(bestIdx);
         }
-        return ans;
+        return res;
+    }
+
+private:
+    void update(TrieNode* node, int length, int idx) {
+        if (length < node->length || (length == node->length && idx < node->index)) {
+            node->length = length;
+            node->index = idx;
+        }
     }
 };
 ```
 
 ---
 
-## 5. Example Explained
+## 5. **Example Walkthrough**
 
-**Input:** `word = "aaAbcBC"`
+Let's use **Example 1**:  
+`wordsContainer = ["abcd","bcd","xbcd"]`, `wordsQuery = ["cd","bcd","xyz"]`
 
-Processing:  
-- For `'a'`:
-    - Lowercase at indices 0 and 1
-    - Uppercase at index 2
-    - All 'a' (lower) at 0, 1; uppercase 'A' at 2
-    - So `maxLower['a'] = 1`, `minUpper['a'] = 2`  
-    - 1 < 2, so 'a' is special.
-- For `'b'`:
-    - Lower at 3
-    - Upper at 4
-    - 3 < 4 ⇒ special.
-- For `'c'`:
-    - Lower at 5
-    - Upper at 6
-    - 5 < 6 ⇒ special.
-- All other letters: don't appear in both cases.
+**Step 1: Build Suffix Trie (reversed words):**
 
-**Output:** `3`  
-**Special letters:** 'a', 'b', 'c'
+```
+Container[0] = "abcd"  →  reverse: "dcba"
+Container[1] = "bcd"   →  reverse: "dcb"
+Container[2] = "xbcd"  →  reverse: "dcbx"
+```
+
+At each Trie node, we remember the *best* (shortest, then earliest) index.
+
+- All "d"->"c" ("dc") nodes will point to index 1 (`"bcd"`), because it is shorter than `"abcd"` and occurs earlier than `"xbcd"` if lengths are equal.
+
+**Step 2: Query "cd"**
+
+- Reverse: "dc"
+- Traverse Trie: root → 'd' → 'c'
+- The best index at that node: **1**
+- So, answer = 1.
+
+**Query "bcd"**
+
+- Reverse: "dcb"
+- Traverse Trie: root → 'd' → 'c' → 'b'
+- Best index: **1**
+
+**Query "xyz"**
+
+- Reverse: "zyx"
+- At root, try 'z', missing. So, only empty string matches (root).
+- Best index from root: **1**
+
+Final result: `[1, 1, 1]`
 
 ---
 
-**Summary:**  
-Count, for each letter, if it appears as both cases *and* all lowercase come before any uppercase. Use indices to check in O(n) time.  
+### **Summary Table for Example 1**
 
-Let me know if you need further clarifications, or want Python/Java versions!
+| Query | Suffix matching | Candidates         | Min Length | First |
+|-------|-----------------|-------------------|------------|-------|
+| "cd"  | "cd"            | 0 ("abcd"), 1 ("bcd"), 2 ("xbcd") | 3        | 1     |
+| "bcd" | "bcd"           | 0, 1, 2           | 3          | 1     |
+| "xyz" | ""              | 0, 1, 2           | 3          | 1     |
+
+---
