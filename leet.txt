@@ -1,175 +1,112 @@
-Let's work through the requirements step by step.
+Let's address each requirement step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given two string arrays (`wordsContainer` and `wordsQuery`), for each `wordsQuery[i]`, find the **index** of a string in `wordsContainer` sharing the **longest common suffix**. Among all such matches, choose the container string that is **shortest in length**; if tie, pick the one **occurring earliest** (smallest index).
+Given an array of integers, for each number, replace it with the sum of its digits. Then, return the **minimum** value from this transformed array.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### Constraints:
-- Up to **10,000 strings** in each array.
-- Each string length up to **5,000**.
-- Total length across all container/query words up to **500,000**.
-- Only **lowercase English letters**.
-
-### Edge Cases:
-- Multiple container strings may have the same suffix; need tie-breaking.
-- If no common suffix is found—the empty string is always a shared suffix.
-- Strings can be of different lengths.
-- All strings could be the same.
-- Query string may be longer or shorter than container strings.
+- **Constraints:**
+    - `1 <= nums.length <= 100`
+    - `1 <= nums[i] <= 10^4`
+- **Edge Cases:**
+    - All numbers are single-digit (`nums[i] < 10`): They remain unchanged. The minimum is simply `min(nums)`.
+    - All numbers are the same.
+    - Large numbers test the digit sum logic (e.g., 9999 → 9+9+9+9 = 36).
+    - The minimum digit sum could potentially appear multiple times.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### High-level idea:
+- For each number in the array, compute the **sum of its digits** (usually O(num of digits), but num ≤ 10,000 so max 5 digits).
+- Track the **minimum** sum.
+- Time Complexity: O(N * D), where D is max number of digits (≤ 5) and N = size of array (≤ 100) — highly efficient.
 
-- To efficiently find the **longest common suffix**, we should process suffixes from the end of words. Since suffix lookup is needed, a **Trie** is well-suited, but for suffix, we use **reversed strings**.
-- For each container string (reversed), build a Trie.
-- At each Trie node, keep:
-    - The best matching container string index (`index`)
-    - Its length (`length`)
-    - If multiple strings share same suffix, save the **shortest**, and on tie, the **earliest** index.
-
-#### Steps:
-1. **Build a reversed Trie** for all `wordsContainer` strings.
-    - For each string, walk through its reversed form, updating Trie nodes with the "best" string seen at that node (shortest, then earliest index).
-2. **For each query:**
-    - Walk down the Trie with the reversed query string.
-    - Keep track of the latest "best" index as you go.
-    - The deepest node reached gives the **longest possible suffix** match.
-3. **Return the indices** found for each query.
-
-#### Time Complexity:
-- Building the Trie: **O(total length of all wordsContainer strings)**
-- Querying: **O(total length of all wordsQuery strings)**
-- This fits comfortably under the constraints.
+**Steps:**
+1. Loop over each number.
+2. Compute the digit sum.
+3. Update the minimum digit sum found so far.
+4. Return the minimum at the end.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <string>
 #include <algorithm>
-
 using namespace std;
-
-struct TrieNode {
-    TrieNode* children[26];
-    // index of the best candidate at or below this node
-    int index;
-    int length;
-    TrieNode() : index(-1), length(1e9) {
-        fill(begin(children), end(children), nullptr);
-    }
-};
 
 class Solution {
 public:
-    vector<int> stringIndices(vector<string>& wordsContainer, vector<string>& wordsQuery) {
-        TrieNode* root = new TrieNode();
-
-        // Insert all container words (reversed)
-        for (int i = 0; i < wordsContainer.size(); ++i) {
-            string& s = wordsContainer[i];
-            TrieNode* node = root;
-
-            // At every node visited (including root), update best index
-            // For empty suffix ("") which matches root, update as well
-            update(node, s.length(), i);
-
-            for (int j = s.length() - 1; j >= 0; --j) {
-                int c = s[j] - 'a';
-                if (!node->children[c])
-                    node->children[c] = new TrieNode();
-                node = node->children[c];
-
-                update(node, s.length(), i);
+    int minimumSum(vector<int>& nums) {
+        int minVal = INT_MAX;
+        for (int n : nums) {
+            int sum = 0, temp = n;
+            while (temp > 0) {
+                sum += temp % 10;
+                temp /= 10;
             }
+            minVal = min(minVal, sum);
         }
-
-        vector<int> res;
-        // For each query, search for longest matching suffix
-        for (string& q : wordsQuery) {
-            TrieNode* node = root;
-            int bestIdx = node->index; // best found so far (empty suffix)
-            for (int j = q.length() - 1; j >= 0; --j) {
-                int c = q[j] - 'a';
-                if (!node->children[c])
-                    break;
-                node = node->children[c];
-                bestIdx = node->index;
-            }
-            res.push_back(bestIdx);
-        }
-        return res;
-    }
-
-private:
-    void update(TrieNode* node, int length, int idx) {
-        if (length < node->length || (length == node->length && idx < node->index)) {
-            node->length = length;
-            node->index = idx;
-        }
+        return minVal;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Explaining Example 3** (`nums = [999, 19, 199]`)
 
-Let's use **Example 1**:  
-`wordsContainer = ["abcd","bcd","xbcd"]`, `wordsQuery = ["cd","bcd","xyz"]`
+- **999:** sum = 9 + 9 + 9 = **27**
+- **19:** sum = 1 + 9 = **10**
+- **199:** sum = 1 + 9 + 9 = **19**
 
-**Step 1: Build Suffix Trie (reversed words):**
-
-```
-Container[0] = "abcd"  →  reverse: "dcba"
-Container[1] = "bcd"   →  reverse: "dcb"
-Container[2] = "xbcd"  →  reverse: "dcbx"
-```
-
-At each Trie node, we remember the *best* (shortest, then earliest) index.
-
-- All "d"->"c" ("dc") nodes will point to index 1 (`"bcd"`), because it is shorter than `"abcd"` and occurs earlier than `"xbcd"` if lengths are equal.
-
-**Step 2: Query "cd"**
-
-- Reverse: "dc"
-- Traverse Trie: root → 'd' → 'c'
-- The best index at that node: **1**
-- So, answer = 1.
-
-**Query "bcd"**
-
-- Reverse: "dcb"
-- Traverse Trie: root → 'd' → 'c' → 'b'
-- Best index: **1**
-
-**Query "xyz"**
-
-- Reverse: "zyx"
-- At root, try 'z', missing. So, only empty string matches (root).
-- Best index from root: **1**
-
-Final result: `[1, 1, 1]`
+So, transformed array: [27, 10, 19], and the minimum is **10**.
 
 ---
 
-### **Summary Table for Example 1**
+### **Summary Table**
 
-| Query | Suffix matching | Candidates         | Min Length | First |
-|-------|-----------------|-------------------|------------|-------|
-| "cd"  | "cd"            | 0 ("abcd"), 1 ("bcd"), 2 ("xbcd") | 3        | 1     |
-| "bcd" | "bcd"           | 0, 1, 2           | 3          | 1     |
-| "xyz" | ""              | 0, 1, 2           | 3          | 1     |
+| Original | Digit Sum |
+|----------|-----------|
+|   999    |    27     |
+|   19     |    10     |
+|   199    |    19     |
+|**Minimum**| **10**   |
+
 
 ---
+
+# **Final C++ Solution**
+
+```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+class Solution {
+public:
+    int minimumSum(vector<int>& nums) {
+        int minVal = INT_MAX;
+        for (int n : nums) {
+            int sum = 0, temp = n;
+            while (temp > 0) {
+                sum += temp % 10;
+                temp /= 10;
+            }
+            minVal = min(minVal, sum);
+        }
+        return minVal;
+    }
+};
+```
+
+---
+
+Let me know if you'd like to see more test cases or further optimizations!
