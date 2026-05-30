@@ -1,112 +1,166 @@
-Let's address each requirement step by step.
+Let's break down the problem and solution systematically:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array of integers, for each number, replace it with the sum of its digits. Then, return the **minimum** value from this transformed array.
+You are given a sequence of two types of queries:
+- Type 1: Add an obstacle at a position \( x \) on the positive number line.
+- Type 2: Given \( x \) and \( sz \), ask if you can place a block of length \( sz \) somewhere in the interval \([0, x]\) **without** intersecting any obstacle (but may touch them).
+
+Return a boolean per type-2 query: **can you place the block as required at the time the query is asked**?
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `1 <= nums.length <= 100`
-    - `1 <= nums[i] <= 10^4`
-- **Edge Cases:**
-    - All numbers are single-digit (`nums[i] < 10`): They remain unchanged. The minimum is simply `min(nums)`.
-    - All numbers are the same.
-    - Large numbers test the digit sum logic (e.g., 9999 → 9+9+9+9 = 36).
-    - The minimum digit sum could potentially appear multiple times.
+- Up to **150,000** queries; \( x \) and \( sz \) as large as 50,000.  
+- There are never duplicate obstacles at the same position.
+- For type-2, you must consider **all previous obstacles.**
+- Type-2 queries can appear in any order with respect to type-1.
+- Edge Cases:
+  - No obstacle: check from 0 to \( x \).
+  - Obstacle at 0 or at \( x \).
+  - Block as large as \( x \) or even larger than any free segment.
+  - Touching an obstacle is allowed, overlapping is not.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- For each number in the array, compute the **sum of its digits** (usually O(num of digits), but num ≤ 10,000 so max 5 digits).
-- Track the **minimum** sum.
-- Time Complexity: O(N * D), where D is max number of digits (≤ 5) and N = size of array (≤ 100) — highly efficient.
+We need to check, after every type-1 (insert obstacle), whether some gap of at least \( sz \) exists within \([0, x]\) for a type-2 query.
 
-**Steps:**
-1. Loop over each number.
-2. Compute the digit sum.
-3. Update the minimum digit sum found so far.
-4. Return the minimum at the end.
+Let's note:
+- Placing obstacles always increases; obstacles accumulate.
+- Each type-2 query needs to check up-to-date obstacle positions.
+
+#### **Data Structure**
+- Store all obstacle positions in a **balanced BST**, e.g., `std::set<int>`, for efficient insert and range queries.
+
+#### **For each type-2 query**:
+1. Identify "gaps" between obstacles (including before the first and after the last).
+2. For interval \([0, x]\), find:
+    - The next obstacle \(\geq 0\) (begin iterating at 0).
+    - For each consecutive pair ([prev+1], curr-1), check if the gap is at least \( sz \).
+    - Specifically, look at:
+        - Start of the range: gap = (first_obstacle − 0)
+        - Between obstacles: gap = (cur_obstacle − prev_obstacle − 1)
+        - After last obstacle <= x: gap = (x − last_obstacle)
+    - A block of size \( sz \) can be placed anywhere such a gap \(\geq sz\) exists.
+
+#### **How do we make these gap checks efficient?**
+- As the obstacles only increase, we can keep a sorted data structure (`set`).
+- For each type-2 query, locate all obstacles in \([0, x]\), iterate over their positions in sorted order, and check the gaps for possibility.
+
+#### **Time Complexity**
+- Insertion: \( O(\log N) \) per insert.
+- Query: \( O(k) \), where \( k \) is the number of obstacle points in \([0, x]\) (can be up to \( O(N) \), but expected to be far fewer).
+- Using `set` with lower_bound/upper_bound gives efficient access.
+
+#### **Optimization**
+- As \( x \leq 50,000 \) (reasonably small), number of obstacles in any interval is moderate.
+- For faster block queries: for each type-2 query, get all obstacles in \([0, x]\) using lower_bound and upper_bound.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
+#include <set>
 using namespace std;
 
 class Solution {
 public:
-    int minimumSum(vector<int>& nums) {
-        int minVal = INT_MAX;
-        for (int n : nums) {
-            int sum = 0, temp = n;
-            while (temp > 0) {
-                sum += temp % 10;
-                temp /= 10;
+    vector<bool> blockPlacementQueries(vector<vector<int>>& queries) {
+        set<int> obstacles;
+        vector<bool> answer;
+        for (const auto& q : queries) {
+            if (q[0] == 1) {
+                obstacles.insert(q[1]);
+            } else {
+                int x = q[1], sz = q[2];
+
+                // All positions where the left side of the block can be placed: [0, x-sz]
+                // Check "gaps" between obstacles for a place to fit the block of size sz within [0,x].
+                int prev = -1; // virtual obstacle at -1 for logic (so the first segment is [0, first_obstacle))
+
+                // Get all obstacles in (0,x], i.e., up to x
+                auto it = obstacles.lower_bound(0);
+                bool possible = false;
+                int left = 0;
+
+                while (left + sz - 1 <= x) {
+                    // Next obstacle at or after left
+                    auto next = obstacles.lower_bound(left);
+                    int next_obstacle = (next != obstacles.end() && *next <= x) ? *next : x + 1;
+                    // We can go up to min(next_obstacle-1, x-sz+1) at this probe
+                    int max_left = min(next_obstacle - sz, x - sz + 1);
+                    if (left <= max_left) {
+                        possible = true;
+                        break;
+                    }
+                    // Jump to after this obstacle
+                    if (next_obstacle == x + 1) break;
+                    left = next_obstacle + 1;
+                }
+
+                answer.push_back(possible);
             }
-            minVal = min(minVal, sum);
         }
-        return minVal;
+        return answer;
     }
 };
 ```
 
----
-
-## 5. **Explaining Example 3** (`nums = [999, 19, 199]`)
-
-- **999:** sum = 9 + 9 + 9 = **27**
-- **19:** sum = 1 + 9 = **10**
-- **199:** sum = 1 + 9 + 9 = **19**
-
-So, transformed array: [27, 10, 19], and the minimum is **10**.
+**Explanation:**
+- For each type-2 query, slide a "window" of length `sz` from left to right.
+- For every position after each obstacle, check if the free range up to the next obstacle or up to \( x \) has space for the block.
+- The block can end at \( x \), but not cross obstacles.
 
 ---
 
-### **Summary Table**
+## 5. **Example Explanation**
 
-| Original | Digit Sum |
-|----------|-----------|
-|   999    |    27     |
-|   19     |    10     |
-|   199    |    19     |
-|**Minimum**| **10**   |
+**Example:**  
+`queries = [[1,2],[2,3,3],[2,3,1],[2,2,2]]`
 
+- Query 0: `[1,2]`  
+  Place an obstacle at 2.
+- Query 1: `[2,3,3]`  
+  Can you place a block of size 3 anywhere in [0,3] not crossing 2?  
+  Obstacles: {2}
+  - First gap: [0,2): length 2 (from 0 up to but not including 2) – too small.
+  - Next gap: [3,3]: only one point after 2 (from 2 to 3), length 1.
+  - No spot for block of size 3. **Return: false**
+- Query 2: `[2,3,1]`  
+  Can you place a block of size 1 anywhere in [0,3]?  
+  - [0,2): gap length 2 → room for size 1.
+  - So, YES. **Return: true**
+- Query 3: `[2,2,2]`  
+  Can you place a block of size 2 anywhere in [0,2]?  
+  - [0,2): gap length 2, block of 2 fits: at 0.
+  - YES. **Return: true**
 
----
-
-# **Final C++ Solution**
-
-```cpp
-#include <vector>
-#include <algorithm>
-using namespace std;
-
-class Solution {
-public:
-    int minimumSum(vector<int>& nums) {
-        int minVal = INT_MAX;
-        for (int n : nums) {
-            int sum = 0, temp = n;
-            while (temp > 0) {
-                sum += temp % 10;
-                temp /= 10;
-            }
-            minVal = min(minVal, sum);
-        }
-        return minVal;
-    }
-};
-```
+**Final Output:** `[false, true, true]`
 
 ---
 
-Let me know if you'd like to see more test cases or further optimizations!
+## **Summary Table**
+
+| Query           | Obstacles      | Block Query          | Gaps checked                | Output |
+|-----------------|---------------|----------------------|-----------------------------|--------|
+| [1, 2]          | {2}           | -                    | -                           | -      |
+| [2, 3, 3]       | {2}           | block in [0,3], sz=3 | gaps: [0,2), [2,3]          | false  |
+| [2, 3, 1]       | {2}           | block in [0,3], sz=1 | [0,2): length 2 room for 1  | true   |
+| [2, 2, 2]       | {2}           | block in [0,2], sz=2 | [0,2): length 2 room for 2  | true   |
+
+---
+
+## **Conceptual Takeaway**
+- Every time you make a type-2 query, efficiently sweep through each free segment (between obstacles) and see if you can slot in a block of the given size, never overlapping obstacles (touching is fine).
+- Using a balanced BST (ordered set) makes this efficient for large numbers of queries.
+
+---
+
+*Let me know if you want a Python version or a further-optimized (segment tree) approach!*
