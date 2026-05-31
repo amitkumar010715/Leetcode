@@ -1,166 +1,93 @@
-Let's break down the problem and solution systematically:
+Sure! Let's tackle the "Destroying Asteroids" LeetCode problem in a structured way:
 
 ---
 
 ## 1. **Short Summary**
 
-You are given a sequence of two types of queries:
-- Type 1: Add an obstacle at a position \( x \) on the positive number line.
-- Type 2: Given \( x \) and \( sz \), ask if you can place a block of length \( sz \) somewhere in the interval \([0, x]\) **without** intersecting any obstacle (but may touch them).
-
-Return a boolean per type-2 query: **can you place the block as required at the time the query is asked**?
+You control a planet with an initial mass (`mass`) and are given a list of asteroids (`asteroids[]`), each with their own mass. You can collide with the asteroids in any order. If your planet's mass is **at least as large** as an asteroid, the asteroid is destroyed, and your planet's mass increases by the asteroid's mass. If you ever reach an asteroid that's too big, the planet is destroyed. Your goal: **Can you destroy all asteroids?**
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- Up to **150,000** queries; \( x \) and \( sz \) as large as 50,000.  
-- There are never duplicate obstacles at the same position.
-- For type-2, you must consider **all previous obstacles.**
-- Type-2 queries can appear in any order with respect to type-1.
-- Edge Cases:
-  - No obstacle: check from 0 to \( x \).
-  - Obstacle at 0 or at \( x \).
-  - Block as large as \( x \) or even larger than any free segment.
-  - Touching an obstacle is allowed, overlapping is not.
+- **Constraints:**
+    - `1 <= mass <= 1e5`
+    - `1 <= asteroids.length <= 1e5`
+    - `1 <= asteroids[i] <= 1e5`
+- **Edge Cases:**
+    - The asteroid list may be empty (but per constraints, at least 1 asteroid).
+    - The initial mass may be less than, equal to, or greater than any asteroid.
+    - There may be multiple asteroids larger than the initial mass—but if you can grow big enough before hitting them, that's OK.
+    - Watch for integer overflow when summing masses (but in C++ with long long, this is fine due to up to 1e10 sum).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-We need to check, after every type-1 (insert obstacle), whether some gap of at least \( sz \) exists within \([0, x]\) for a type-2 query.
+**Greedy Approach:**
+- **Principle:** Always destroy the smallest available asteroid first. This grows your mass as fast as possible, maximizing the chance of defeating larger asteroids later.
+- **Steps:**
+    1. **Sort** `asteroids[]` in non-decreasing order.
+    2. Iterate through each asteroid:
+        - If `mass >= asteroid`, add its mass to `mass`.
+        - Else, you cannot destroy it, so return `false`.
+    3. If you finish the loop, return `true`.
 
-Let's note:
-- Placing obstacles always increases; obstacles accumulate.
-- Each type-2 query needs to check up-to-date obstacle positions.
-
-#### **Data Structure**
-- Store all obstacle positions in a **balanced BST**, e.g., `std::set<int>`, for efficient insert and range queries.
-
-#### **For each type-2 query**:
-1. Identify "gaps" between obstacles (including before the first and after the last).
-2. For interval \([0, x]\), find:
-    - The next obstacle \(\geq 0\) (begin iterating at 0).
-    - For each consecutive pair ([prev+1], curr-1), check if the gap is at least \( sz \).
-    - Specifically, look at:
-        - Start of the range: gap = (first_obstacle − 0)
-        - Between obstacles: gap = (cur_obstacle − prev_obstacle − 1)
-        - After last obstacle <= x: gap = (x − last_obstacle)
-    - A block of size \( sz \) can be placed anywhere such a gap \(\geq sz\) exists.
-
-#### **How do we make these gap checks efficient?**
-- As the obstacles only increase, we can keep a sorted data structure (`set`).
-- For each type-2 query, locate all obstacles in \([0, x]\), iterate over their positions in sorted order, and check the gaps for possibility.
-
-#### **Time Complexity**
-- Insertion: \( O(\log N) \) per insert.
-- Query: \( O(k) \), where \( k \) is the number of obstacle points in \([0, x]\) (can be up to \( O(N) \), but expected to be far fewer).
-- Using `set` with lower_bound/upper_bound gives efficient access.
-
-#### **Optimization**
-- As \( x \leq 50,000 \) (reasonably small), number of obstacles in any interval is moderate.
-- For faster block queries: for each type-2 query, get all obstacles in \([0, x]\) using lower_bound and upper_bound.
+**Time Complexity:**
+- Sorting: `O(N log N)`  
+- One pass: `O(N)`  
+- **Total:** `O(N log N)`
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <set>
+#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    vector<bool> blockPlacementQueries(vector<vector<int>>& queries) {
-        set<int> obstacles;
-        vector<bool> answer;
-        for (const auto& q : queries) {
-            if (q[0] == 1) {
-                obstacles.insert(q[1]);
-            } else {
-                int x = q[1], sz = q[2];
-
-                // All positions where the left side of the block can be placed: [0, x-sz]
-                // Check "gaps" between obstacles for a place to fit the block of size sz within [0,x].
-                int prev = -1; // virtual obstacle at -1 for logic (so the first segment is [0, first_obstacle))
-
-                // Get all obstacles in (0,x], i.e., up to x
-                auto it = obstacles.lower_bound(0);
-                bool possible = false;
-                int left = 0;
-
-                while (left + sz - 1 <= x) {
-                    // Next obstacle at or after left
-                    auto next = obstacles.lower_bound(left);
-                    int next_obstacle = (next != obstacles.end() && *next <= x) ? *next : x + 1;
-                    // We can go up to min(next_obstacle-1, x-sz+1) at this probe
-                    int max_left = min(next_obstacle - sz, x - sz + 1);
-                    if (left <= max_left) {
-                        possible = true;
-                        break;
-                    }
-                    // Jump to after this obstacle
-                    if (next_obstacle == x + 1) break;
-                    left = next_obstacle + 1;
-                }
-
-                answer.push_back(possible);
-            }
+    bool asteroidsDestroyed(int mass, vector<int>& asteroids) {
+        // To avoid integer overflow, use long long!
+        long long curMass = mass;
+        sort(asteroids.begin(), asteroids.end());
+        for (int a : asteroids) {
+            if (curMass < a)
+                return false;
+            curMass += a;
         }
-        return answer;
+        return true;
     }
 };
 ```
 
-**Explanation:**
-- For each type-2 query, slide a "window" of length `sz` from left to right.
-- For every position after each obstacle, check if the free range up to the next obstacle or up to \( x \) has space for the block.
-- The block can end at \( x \), but not cross obstacles.
+---
+
+## 5. **Example Explained**
+
+**Input:**  
+`mass = 10, asteroids = [3,9,19,5,21]`
+
+**Stepwise:**
+
+1. **Sort asteroids**: `[3, 5, 9, 19, 21]`
+2. **Start with mass = 10**
+
+- Asteroid 3: 10 ≥ 3 → destroy → new mass = 10+3 = 13
+- Asteroid 5: 13 ≥ 5 → destroy → new mass = 13+5 = 18
+- Asteroid 9: 18 ≥ 9 → destroy → new mass = 18+9 = 27
+- Asteroid 19: 27 ≥ 19 → destroy → new mass = 27+19 = 46
+- Asteroid 21: 46 ≥ 21 → destroy → new mass = 46+21 = 67
+
+**All asteroids destroyed! Return `true`.**
 
 ---
 
-## 5. **Example Explanation**
+**In summary:**  
+- Always destroy the smallest asteroid first,
+- Grow your mass step by step,
+- Return `false` the moment an asteroid is too big for you!
 
-**Example:**  
-`queries = [[1,2],[2,3,3],[2,3,1],[2,2,2]]`
-
-- Query 0: `[1,2]`  
-  Place an obstacle at 2.
-- Query 1: `[2,3,3]`  
-  Can you place a block of size 3 anywhere in [0,3] not crossing 2?  
-  Obstacles: {2}
-  - First gap: [0,2): length 2 (from 0 up to but not including 2) – too small.
-  - Next gap: [3,3]: only one point after 2 (from 2 to 3), length 1.
-  - No spot for block of size 3. **Return: false**
-- Query 2: `[2,3,1]`  
-  Can you place a block of size 1 anywhere in [0,3]?  
-  - [0,2): gap length 2 → room for size 1.
-  - So, YES. **Return: true**
-- Query 3: `[2,2,2]`  
-  Can you place a block of size 2 anywhere in [0,2]?  
-  - [0,2): gap length 2, block of 2 fits: at 0.
-  - YES. **Return: true**
-
-**Final Output:** `[false, true, true]`
-
----
-
-## **Summary Table**
-
-| Query           | Obstacles      | Block Query          | Gaps checked                | Output |
-|-----------------|---------------|----------------------|-----------------------------|--------|
-| [1, 2]          | {2}           | -                    | -                           | -      |
-| [2, 3, 3]       | {2}           | block in [0,3], sz=3 | gaps: [0,2), [2,3]          | false  |
-| [2, 3, 1]       | {2}           | block in [0,3], sz=1 | [0,2): length 2 room for 1  | true   |
-| [2, 2, 2]       | {2}           | block in [0,2], sz=2 | [0,2): length 2 room for 2  | true   |
-
----
-
-## **Conceptual Takeaway**
-- Every time you make a type-2 query, efficiently sweep through each free segment (between obstacles) and see if you can slot in a block of the given size, never overlapping obstacles (touching is fine).
-- Using a balanced BST (ordered set) makes this efficient for large numbers of queries.
-
----
-
-*Let me know if you want a Python version or a further-optimized (segment tree) approach!*
+Let me know if you'd like further clarifications or more test cases.
