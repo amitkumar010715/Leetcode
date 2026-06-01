@@ -1,46 +1,45 @@
-Sure! Let's tackle the "Destroying Asteroids" LeetCode problem in a structured way:
+Let's address your requirements step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-You control a planet with an initial mass (`mass`) and are given a list of asteroids (`asteroids[]`), each with their own mass. You can collide with the asteroids in any order. If your planet's mass is **at least as large** as an asteroid, the asteroid is destroyed, and your planet's mass increases by the asteroid's mass. If you ever reach an asteroid that's too big, the planet is destroyed. Your goal: **Can you destroy all asteroids?**
+You are given an array of candy costs. When buying candies, for every **two candies** you purchase, you can take a **third candy for free**, **but only if its cost is ≤ the cheaper of the two candies you buy**. Your goal is to buy all candies and pay the **least total cost** possible.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `1 <= mass <= 1e5`
-    - `1 <= asteroids.length <= 1e5`
-    - `1 <= asteroids[i] <= 1e5`
-- **Edge Cases:**
-    - The asteroid list may be empty (but per constraints, at least 1 asteroid).
-    - The initial mass may be less than, equal to, or greater than any asteroid.
-    - There may be multiple asteroids larger than the initial mass—but if you can grow big enough before hitting them, that's OK.
-    - Watch for integer overflow when summing masses (but in C++ with long long, this is fine due to up to 1e10 sum).
+- **Constraints**:
+    - `1 <= cost.length <= 100`  (Small input size – O(N log N) is acceptable)
+    - `1 <= cost[i] <= 100`
+- **Edge Cases**:
+    - If less than 3 candies, none can be taken for free.
+    - Free candy cost must be ≤ minimum purchased candy in group of 2
+    - There may be duplicates in costs.
+    - All costs may be the same.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Greedy Approach:**
-- **Principle:** Always destroy the smallest available asteroid first. This grows your mass as fast as possible, maximizing the chance of defeating larger asteroids later.
-- **Steps:**
-    1. **Sort** `asteroids[]` in non-decreasing order.
-    2. Iterate through each asteroid:
-        - If `mass >= asteroid`, add its mass to `mass`.
-        - Else, you cannot destroy it, so return `false`.
-    3. If you finish the loop, return `true`.
+### **Greedy Strategy**
 
-**Time Complexity:**
-- Sorting: `O(N log N)`  
-- One pass: `O(N)`  
-- **Total:** `O(N log N)`
+- **Observation**: To minimize your cost, always pay for the most expensive candies and get the least expensive ones for free (as the constraint ensures the free candy can't be pricier than either purchased one).
+- **Step-by-step**:
+    1. **Sort the `cost` array in descending order**
+    2. **Iterate through the sorted array in chunks of 3**:
+        - Pay for the first two candies (`i`, `i+1`) in the chunk.
+        - If there is a third (`i+2`), you get it for free (since it's lesser in cost, due to the sorting).
+        - Continue until the end.
+    3. **Sum up the paid candies**.
+
+- **Why this works**:  
+  By always paying for the greatest costs, you maximize the value of what you get for free while minimizing overall expenditure, as you only skip paying for the lowest cost in each triplet.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
@@ -49,16 +48,16 @@ using namespace std;
 
 class Solution {
 public:
-    bool asteroidsDestroyed(int mass, vector<int>& asteroids) {
-        // To avoid integer overflow, use long long!
-        long long curMass = mass;
-        sort(asteroids.begin(), asteroids.end());
-        for (int a : asteroids) {
-            if (curMass < a)
-                return false;
-            curMass += a;
+    int minimumCost(vector<int>& cost) {
+        sort(cost.rbegin(), cost.rend());       // Sort in descending order
+        int total = 0;
+        for (int i = 0; i < cost.size(); ++i) {
+            if (i % 3 != 2) {                  // Pay for the 1st and 2nd candy in each group of three
+                total += cost[i];
+            }
+            // else: take the 3rd as free, do not add to total
         }
-        return true;
+        return total;
     }
 };
 ```
@@ -67,27 +66,35 @@ public:
 
 ## 5. **Example Explained**
 
-**Input:**  
-`mass = 10, asteroids = [3,9,19,5,21]`
+### **Example:** `[6,5,7,9,2,2]`
 
-**Stepwise:**
+#### **Step 1. Sort descending:**  
+`[9, 7, 6, 5, 2, 2]`
 
-1. **Sort asteroids**: `[3, 5, 9, 19, 21]`
-2. **Start with mass = 10**
+#### **Step 2. Pay for 1st & 2nd, skip 3rd in each group:**
+1. **First group:**  
+   - 9 (paid), 7 (paid), **6 (free)**
+2. **Second group:**  
+   - 5 (paid), 2 (paid), **2 (free)**
 
-- Asteroid 3: 10 ≥ 3 → destroy → new mass = 10+3 = 13
-- Asteroid 5: 13 ≥ 5 → destroy → new mass = 13+5 = 18
-- Asteroid 9: 18 ≥ 9 → destroy → new mass = 18+9 = 27
-- Asteroid 19: 27 ≥ 19 → destroy → new mass = 27+19 = 46
-- Asteroid 21: 46 ≥ 21 → destroy → new mass = 46+21 = 67
+#### **Total paid:**
+- 9 + 7 + 5 + 2 = **23**
 
-**All asteroids destroyed! Return `true`.**
+**Which matches the problem's output.**
 
 ---
 
-**In summary:**  
-- Always destroy the smallest asteroid first,
-- Grow your mass step by step,
-- Return `false` the moment an asteroid is too big for you!
+## **Summary Table**
 
-Let me know if you'd like further clarifications or more test cases.
+| Purchased | Paid        | Free      |
+|-----------|-------------|-----------|
+| 9, 7, 6   | 9, 7        | 6         |
+| 5, 2, 2   | 5, 2        | 2         |
+
+---
+
+### **In conclusion:**
+
+- Sort descending
+- For every 3 candies, pay the first two and get the third (cheapest among them) for free.
+- This is greedy, optimal, and works due to small input constraints.
