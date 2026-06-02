@@ -1,45 +1,59 @@
-Let's address your requirements step by step:
+Let's address the problem step by step.
 
 ---
 
-## 1. **Short Summary**
+## 1. Summary
 
-You are given an array of candy costs. When buying candies, for every **two candies** you purchase, you can take a **third candy for free**, **but only if its cost is ≤ the cheaper of the two candies you buy**. Your goal is to buy all candies and pay the **least total cost** possible.
+**Given:**  
+- Several `land` and `water` rides, each with an *opening time* and *duration*.
+- You must take exactly one land and one water ride, in either order, waiting at opening times as necessary.
 
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints**:
-    - `1 <= cost.length <= 100`  (Small input size – O(N log N) is acceptable)
-    - `1 <= cost[i] <= 100`
-- **Edge Cases**:
-    - If less than 3 candies, none can be taken for free.
-    - Free candy cost must be ≤ minimum purchased candy in group of 2
-    - There may be duplicates in costs.
-    - All costs may be the same.
+**Task:**  
+**Return the minimum possible time to finish both rides**, starting with either a land or a water ride.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-### **Greedy Strategy**
+- `1 <= n, m <= 100`: manageable brute force over all pairs.
+- Each list (landStartTime, landDuration, etc.) has at least one element, no empty inputs.
+- All opening times and durations are positive, up to 1000.
+- Need to check **both** orders for each possible (land, water) pair.
+- It's possible rides open after the other finishes, so waiting is needed.
+- Only one ride of each type must be picked.
 
-- **Observation**: To minimize your cost, always pay for the most expensive candies and get the least expensive ones for free (as the constraint ensures the free candy can't be pricier than either purchased one).
-- **Step-by-step**:
-    1. **Sort the `cost` array in descending order**
-    2. **Iterate through the sorted array in chunks of 3**:
-        - Pay for the first two candies (`i`, `i+1`) in the chunk.
-        - If there is a third (`i+2`), you get it for free (since it's lesser in cost, due to the sorting).
-        - Continue until the end.
-    3. **Sum up the paid candies**.
-
-- **Why this works**:  
-  By always paying for the greatest costs, you maximize the value of what you get for free while minimizing overall expenditure, as you only skip paying for the lowest cost in each triplet.
+**Edge Cases:**
+- Only one ride for each type.
+- Rides where opening times are way after the other finishes (forces waiting).
+- Durations are much larger for one category.
+- Multiple pairs might yield the same minimal time.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 3. Optimal Algorithm
+
+Given small constraints, brute-force through **all** `(land, water)` ride pairs and both orders:
+
+For each land[li] and water[wi]:
+- Try: `land -> water`
+  - Start land at max(current time, landStartTime[li])
+  - Finish land at (startL + landDuration[li])
+  - Wait for water: startWater = max(finishL, waterStartTime[wi])
+  - Finish both: finishW = startWater + waterDuration[wi]
+- Try: `water -> land`
+  - Start water at waterStartTime[wi]
+  - Finish water at (startW + waterDuration[wi])
+  - Wait for land: startLand = max(finishW, landStartTime[li])
+  - Finish both: finishL = startLand + landDuration[li]
+
+Take the minimum finish time among all possibilities.
+
+**Time Complexity:**  
+O(n * m), since for every land and water ride we check both orderings.
+
+---
+
+## 4. C++ Solution
 
 ```cpp
 #include <vector>
@@ -48,53 +62,73 @@ using namespace std;
 
 class Solution {
 public:
-    int minimumCost(vector<int>& cost) {
-        sort(cost.rbegin(), cost.rend());       // Sort in descending order
-        int total = 0;
-        for (int i = 0; i < cost.size(); ++i) {
-            if (i % 3 != 2) {                  // Pay for the 1st and 2nd candy in each group of three
-                total += cost[i];
+    int earliestFinishTime(vector<int>& landStartTime, vector<int>& landDuration,
+                           vector<int>& waterStartTime, vector<int>& waterDuration) {
+        int n = landStartTime.size(), m = waterStartTime.size();
+        int minFinish = INT_MAX;
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < m; ++j) {
+                // Land first, then water
+                int landStart = landStartTime[i];
+                int landEnd = landStart + landDuration[i];
+                int waterStartA = max(waterStartTime[j], landEnd);
+                int finishA = waterStartA + waterDuration[j];
+
+                // Water first, then land
+                int waterStart = waterStartTime[j];
+                int waterEnd = waterStart + waterDuration[j];
+                int landStartB = max(landStartTime[i], waterEnd);
+                int finishB = landStartB + landDuration[i];
+
+                minFinish = min({minFinish, finishA, finishB});
             }
-            // else: take the 3rd as free, do not add to total
         }
-        return total;
+        return minFinish;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. Example Explained
 
-### **Example:** `[6,5,7,9,2,2]`
+Take **Example 1**:
 
-#### **Step 1. Sort descending:**  
-`[9, 7, 6, 5, 2, 2]`
+```
+landStartTime = [2, 8]
+landDuration = [4, 1]
+waterStartTime = [6]
+waterDuration = [3]
+```
 
-#### **Step 2. Pay for 1st & 2nd, skip 3rd in each group:**
-1. **First group:**  
-   - 9 (paid), 7 (paid), **6 (free)**
-2. **Second group:**  
-   - 5 (paid), 2 (paid), **2 (free)**
+Let's check all combinations:
 
-#### **Total paid:**
-- 9 + 7 + 5 + 2 = **23**
+### Pair (land0, water0):
+- Land0: start at 2, ends at 6.
+- Water0 opens at 6, can start immediately, ends at 9.
+- **Finish time: 9.**
 
-**Which matches the problem's output.**
+### Pair (land1, water0):
+- Land1: start at 8, ends at 9.
+- Water0 opens at 6, wait till 9, finish at 12.
+- **Finish time: 12.**
+
+### Pair (water0, land0):
+- Water0: start at 6, ends at 9.
+- Land0 opens at 2, so land0 can start at 9, finish at 13.
+- **Finish time: 13.**
+
+### Pair (water0, land1):
+- Water0: start at 6, ends at 9.
+- Land1 opens at 8, so can start at 9, finish at 10.
+- **Finish time: 10.**
+
+**Earliest is 9.**
 
 ---
 
-## **Summary Table**
+## **Final Notes**
 
-| Purchased | Paid        | Free      |
-|-----------|-------------|-----------|
-| 9, 7, 6   | 9, 7        | 6         |
-| 5, 2, 2   | 5, 2        | 2         |
-
----
-
-### **In conclusion:**
-
-- Sort descending
-- For every 3 candies, pay the first two and get the third (cheapest among them) for free.
-- This is greedy, optimal, and works due to small input constraints.
+- The above code is efficient for the given constraints.
+- Both orders are checked for each ride pair.
+- Can extend or optimize further if needed for larger inputs, but unnecessary for n, m ≤ 100.
