@@ -1,134 +1,272 @@
-Let's address the problem step by step.
+Sure! Let's solve this LeetCode problem step by step:
 
 ---
 
-## 1. Summary
+## 1. **Short Summary**
 
-**Given:**  
-- Several `land` and `water` rides, each with an *opening time* and *duration*.
-- You must take exactly one land and one water ride, in either order, waiting at opening times as necessary.
-
-**Task:**  
-**Return the minimum possible time to finish both rides**, starting with either a land or a water ride.
+You're given two lists of rides: land and water. Each ride has an opening time and a duration. You must take **one land ride AND one water ride**, in **any order**, and may start each ride **at its opening time or later**. After finishing the first ride, you may board the second when it opens or wait until then. The goal is to find the **earliest possible time you could finish both rides**.
 
 ---
 
-## 2. Constraints & Edge Cases
-
-- `1 <= n, m <= 100`: manageable brute force over all pairs.
-- Each list (landStartTime, landDuration, etc.) has at least one element, no empty inputs.
-- All opening times and durations are positive, up to 1000.
-- Need to check **both** orders for each possible (land, water) pair.
-- It's possible rides open after the other finishes, so waiting is needed.
-- Only one ride of each type must be picked.
-
-**Edge Cases:**
-- Only one ride for each type.
-- Rides where opening times are way after the other finishes (forces waiting).
-- Durations are much larger for one category.
-- Multiple pairs might yield the same minimal time.
+## 2. **Constraints & Edge Cases**
+- Up to 50,000 rides in each category—so O(N²) is far too slow!
+- **Start**: can only start a ride **at or after** its opening time.
+- Must take **exactly one** land and one water ride.
+- **Either order** is allowed (land→water, or water→land).
+- Edge cases:
+  - Only one ride in each type (trivial to handle).
+  - All rides have very late openings.
+  - Some rides are much longer/shorter than others.
+  - Multiple rides open at the same time.
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-Given small constraints, brute-force through **all** `(land, water)` ride pairs and both orders:
+Let's look for an O(N+M) solution (since the sizes are huge).
 
-For each land[li] and water[wi]:
-- Try: `land -> water`
-  - Start land at max(current time, landStartTime[li])
-  - Finish land at (startL + landDuration[li])
-  - Wait for water: startWater = max(finishL, waterStartTime[wi])
-  - Finish both: finishW = startWater + waterDuration[wi]
-- Try: `water -> land`
-  - Start water at waterStartTime[wi]
-  - Finish water at (startW + waterDuration[wi])
-  - Wait for land: startLand = max(finishW, landStartTime[li])
-  - Finish both: finishL = startLand + landDuration[li]
+### **Observation**
 
-Take the minimum finish time among all possibilities.
+For **any** pair of rides `(land i, water j)`, the finish time is:
+1. **Land ride first:**
+   - Start at `max(landStartTime[i], 0)`.
+   - Finish land at `landStartTime[i] + landDuration[i]` (if started at opening).
+   - Water may only start after both: finish land and its own opening time, so starts at `max(landStartTime[i] + landDuration[i], waterStartTime[j])`, and finishes at this time + waterDuration[j].
+   - **Total finish time:**  
+     `finish = max(landStartTime[i], 0) + landDuration[i]` → `start_water = max(land_end, waterStartTime[j])` → final = `start_water + waterDuration[j]`
+   - Condensing:  
+     `finish = max(landStartTime[i], 0) + landDuration[i]` = `landEnd`  
+     `finish_time = max(landEnd, waterStartTime[j]) + waterDuration[j]`
 
-**Time Complexity:**  
-O(n * m), since for every land and water ride we check both orderings.
+2. **Water ride first:**
+   - Similar logic swaps land & water.
+
+**Our job: For all i, j, what's the minimal possible finish time?**
+
+#### **Naive O(N * M)**
+
+But that's too slow.
+
+### **Key: for fixed FIRST ride, minimize the finish with optimal SECOND ride.**
+
+Suppose you choose land ride i first:
+- Land end: `landStartTime[i] + landDuration[i]`
+- For each water ride j:  
+  - Water can start at `max(waterStartTime[j], land_end)`
+  - Finish at `max(waterStartTime[j], land_end) + waterDuration[j]`
+
+But, for each fixed land_end, what's the **minimum possible finish over all water rides**?
+
+#### **Thus: For every possible value of S, we want to be able to answer quickly:**
+> Among all water rides, what is the minimal `max(waterStartTime[j], S) + waterDuration[j]`?
+
+Luckily, this is a classic sweep/preprocess problem.
+
+#### **Let’s define helper:**
+
+- For all water rides, prepare:
+  - For each waterStartTime, track the *smallest* waterDuration at that time.
+- Build an array of *pairs*: (waterStartTime[j], waterDuration[j]), sorted by waterStartTime.
+- Preprocess: for every waterStartTime increasing, track the minimal waterDuration so far.
+
+We'll want, for **any** query S, the minimal value of `max(waterStartTime, S) + waterDuration` among all water rides.
+
+#### **Efficient approach:**
+- For each land_end (i.e., landStartTime[i] + landDuration[i]),  
+  - Lower_bound on waterStartTime array, find first index where waterStartTime >= land_end.
+  - For earlier waterStartTime, water ride can be started at land_end.
+    - So finish time = land_end + min_waterDuration_over_all_waterStartTime <= land_end
+  - For later waterStartTime, you must wait until waterStartTime, and finish time = waterStartTime + corresponding waterDuration.
+- So, we need:
+  - For all water rides, build two arrays:
+    1. sorted by waterStartTime; for each, cumulative running minimum of waterDuration downward (from right): for queries at or after t, what's the minimal waterDuration for t or greater.
+    2. Overall minimal waterDuration for all rides with waterStartTime <= S.
+
+#### **Alternative, simpler:** Use a segment tree, or simply preprocess:
+
+##### **Forward & backward prefix min arrays**
+
+Let’s process:
+
+- sort all water rides by waterStartTime.
+- For each waterStartTime:
+  - Build array water[(waterStartTime, waterDuration)]
+- For index i in water sorted array:
+  - minDurFromStart[i] = min(waterDuration[0 ... i])
+  - minDurFromEnd[i] = min(waterDuration[i ... n-1])
+
+For *any* value S:
+- Upper_bound on waterStartTime < S: last idx with waterStartTime <= S.
+    - All those rides are open before S: you can ride any at S.
+    - Earliest possible finish: S + minDurFromStart[idx]
+- For S < waterStartTime
+    - look at index where waterStartTime >= S, finish is waterStartTime + waterDuration.
+
+But actually: For given S, earliest finish is min(
+  - For rides open before S: S + their minimal duration,
+  - For rides opening after S: min(waterStartTime + waterDuration)
+)
+
+So, for each query, the answer is:
+
+    finish = min(
+        if idx >= 0: S + minDurFromStart[idx],
+        if idx+1 < m: waterStartTime[idx+1] + waterDuration[idx+1]+
+    )
+
+Similarly precompute for land rides.
+
+#### **Concrete Steps:**
+1. Build waterRides[], landRides[] as (start, duration), sorted by start.
+2. For each sort, precompute minDurationSoFar to enable O(1) query for minimum duration up to i.
+3. For each land ride ending-time S = landStartTime[i] + landDuration[i]:
+   - Binary search in waterRides to find:
+     - last j with waterStartTime[j] <= S
+     - if exists: finish at S + waterMinDuration[j]
+     - for water rides after S: finish at waterStartTime[j+1] + corresponding duration.
+   - Take minimum of both.
+
+4. Similarly, swap roles for trying water ride first -> land after.
+
+5. The minimal finish time over all combinations tried above is the answer.
 
 ---
 
-## 4. C++ Solution
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
 #include <algorithm>
+#include <climits>
 using namespace std;
 
 class Solution {
 public:
     int earliestFinishTime(vector<int>& landStartTime, vector<int>& landDuration,
-                           vector<int>& waterStartTime, vector<int>& waterDuration) {
+                           vector<int>& waterStartTime, vector<int>& waterDuration) 
+    {
         int n = landStartTime.size(), m = waterStartTime.size();
-        int minFinish = INT_MAX;
+
+        // Preprocess water rides
+        vector<pair<int, int>> water(m);
+        for (int i = 0; i < m; ++i)
+            water[i] = {waterStartTime[i], waterDuration[i]};
+        sort(water.begin(), water.end());
+        vector<int> waterMinDur(m); // minimal duration up to i
+        waterMinDur[0] = water[0].second;
+        for (int i = 1; i < m; ++i)
+            waterMinDur[i] = min(waterMinDur[i-1], water[i].second);
+
+        // Similarly for land
+        vector<pair<int, int>> land(n);
+        for (int i = 0; i < n; ++i)
+            land[i] = {landStartTime[i], landDuration[i]};
+        sort(land.begin(), land.end());
+        vector<int> landMinDur(n);
+        landMinDur[0] = land[0].second;
+        for (int i = 1; i < n; ++i)
+            landMinDur[i] = min(landMinDur[i-1], land[i].second);
+
+        int ans = INT_MAX;
+
+        // Try land first, water second
         for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < m; ++j) {
-                // Land first, then water
-                int landStart = landStartTime[i];
-                int landEnd = landStart + landDuration[i];
-                int waterStartA = max(waterStartTime[j], landEnd);
-                int finishA = waterStartA + waterDuration[j];
+            int landEnd = land[i].first + land[i].second;
 
-                // Water first, then land
-                int waterStart = waterStartTime[j];
-                int waterEnd = waterStart + waterDuration[j];
-                int landStartB = max(landStartTime[i], waterEnd);
-                int finishB = landStartB + landDuration[i];
-
-                minFinish = min({minFinish, finishA, finishB});
+            // For water rides: find rightmost waterStartTime <= landEnd
+            int l = 0, r = m-1, idx = -1;
+            while (l <= r) {
+                int mid = (l + r) / 2;
+                if (water[mid].first <= landEnd) {
+                    idx = mid;
+                    l = mid + 1;
+                } else {
+                    r = mid - 1;
+                }
+            }
+            // Case 1: water ride already open
+            if (idx >= 0) {
+                ans = min(ans, landEnd + waterMinDur[idx]);
+            }
+            // Case 2: need to wait for next water ride
+            if (idx+1 < m) {
+                int finish = water[idx+1].first + water[idx+1].second;
+                ans = min(ans, finish);
             }
         }
-        return minFinish;
+
+        // Try water first, land second
+        for (int i = 0; i < m; ++i) {
+            int waterEnd = water[i].first + water[i].second;
+            // For land rides: find rightmost landStartTime <= waterEnd
+            int l = 0, r = n-1, idx = -1;
+            while (l <= r) {
+                int mid = (l + r) / 2;
+                if (land[mid].first <= waterEnd) {
+                    idx = mid;
+                    l = mid + 1;
+                } else {
+                    r = mid - 1;
+                }
+            }
+            if (idx >= 0) {
+                ans = min(ans, waterEnd + landMinDur[idx]);
+            }
+            if (idx+1 < n) {
+                int finish = land[idx+1].first + land[idx+1].second;
+                ans = min(ans, finish);
+            }
+        }
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. Example Explained
+## 5. **Example Explained**
 
-Take **Example 1**:
+Let's take Example 1:
 
-```
-landStartTime = [2, 8]
-landDuration = [4, 1]
+```python
+landStartTime = [2,8]
+landDuration = [4,1]
 waterStartTime = [6]
 waterDuration = [3]
 ```
+**After building rides:**
+- Land rides:  
+  - 0: open 2, duration 4 ⇒ ends at 6
+  - 1: open 8, duration 1 ⇒ ends at 9
+- Water ride:  
+  - 0: open 6, duration 3 ⇒ ends at 9
 
-Let's check all combinations:
+### Try land 0 first:
+- Land 0: 2+4=6
+- Water ride opens at 6: can start immediately, finish at 6+3=9.
 
-### Pair (land0, water0):
-- Land0: start at 2, ends at 6.
-- Water0 opens at 6, can start immediately, ends at 9.
-- **Finish time: 9.**
+Total finish time: **9**
 
-### Pair (land1, water0):
-- Land1: start at 8, ends at 9.
-- Water0 opens at 6, wait till 9, finish at 12.
-- **Finish time: 12.**
+### Try land 1 first:
+- Land 1: 8+1=9
+- Water opened at 6: must wait until finish land, so start water at 9, finish at 12.
 
-### Pair (water0, land0):
-- Water0: start at 6, ends at 9.
-- Land0 opens at 2, so land0 can start at 9, finish at 13.
-- **Finish time: 13.**
+Total finish time: 12.
 
-### Pair (water0, land1):
-- Water0: start at 6, ends at 9.
-- Land1 opens at 8, so can start at 9, finish at 10.
-- **Finish time: 10.**
+### Try water 0 first:
+- Water 0: starts at 6, finishes 9
+- Land 0: open at 2 (so already open), can start at 9, finish at 9+4=13.
+- Land 1: open at 8, can start at 9, finish at 9+1=10.
 
-**Earliest is 9.**
+Total finish times: 13, 10.
+
+The earliest: **9** (land 0, water 0 as in the solution).
 
 ---
 
-## **Final Notes**
+## **Summary**
 
-- The above code is efficient for the given constraints.
-- Both orders are checked for each ride pair.
-- Can extend or optimize further if needed for larger inputs, but unnecessary for n, m ≤ 100.
+- The approach is to preprocess minimum durations over possible start times for both ride types.
+- Then, for each ride, find the earliest you can finish both by efficiently querying the other list.
+- Result is the minimal such completion time.  
+- The code runs in O(N log N + M log M) time, which is efficient for input sizes up to 50,000.
