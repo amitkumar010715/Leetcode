@@ -1,79 +1,134 @@
-Let's address your requirements step by step:
+Let's break down your requirements for the **LeetCode daily challenge: "Create Binary Tree From Descriptions"**.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums`, compute arrays `leftSum` and `rightSum`, where `leftSum[i]` is the sum of all elements to the left of index `i`, and `rightSum[i]` is the sum of all elements to the right. Return an array `answer` with `answer[i] = |leftSum[i] - rightSum[i]|`.
+You are given a list of descriptions specifying parent-child relationships (along with left/right indication) in a binary tree having unique node values. Each description says: `parent` is the parent of `child`, and whether `child` is its left or right child. Your task is to reconstruct and return the root of the binary tree.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= nums.length <= 1000` — The array can have as little as 1 element and up to 1000.
-- `1 <= nums[i] <= 10^5` — Each entry is a positive integer.
-- **Edge cases:**  
-    - If `nums` has length 1, both sums are zero.
-    - If all elements are the same, differences may be symmetric.
-    - No negative numbers, so sums grow monotonically.
+**Constraints:**
+- `1 <= descriptions.length <= 10^4`: Up to 10,000 relationships.
+- Each value in the tree is unique and in the range `[1, 10^5]`.
+- The binary tree is **valid** (e.g., no cycles, no multi-parents, etc.)
+
+**Edge Cases:**
+- The tree can be a straight line (e.g., only left or right children).
+- Some nodes may not appear as parent/child in the same roles.
+- The root is the only node **never** appearing as a child.
+- Tree can have only two nodes (minimal case).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-We can compute everything efficiently in three passes (O(n) time, O(n) space):
+**Approach:**
+1. **Node Creation:** For each unique value, create a single `TreeNode` object.
+2. **Build Relationships:** For each description, set the left/right child relationship using those nodes.
+3. **Find Root:** After building, the root is the node who **never appears as a child**.
 
-1. Calculate `totalSum = sum(nums)`, which is equal to rightSum[0] since there are no left elements for index 0.
-2. Initialize `leftSum = 0`.
-3. For each index `i` from 0 to n-1:
-    - Compute `answer[i] = |leftSum - (totalSum - leftSum - nums[i])|`
-       - where `(totalSum - leftSum - nums[i])` is the right sum for index i,
-         because `leftSum` sums nums[0..i-1], `nums[i]` is current, and the rest is right.
-    - Update `leftSum += nums[i]`
+**Steps:**
+- Use two hash maps / sets:
+    - one mapping value → TreeNode* (to access/create nodes)
+    - one set to store all children
+- Iterate all descriptions, connecting nodes and populating the child set.
+- The root is the node that is not present in the child set.
 
-**This avoids allocating extra arrays for leftSum/rightSum.**
+**Time Complexity:**  
+O(N), where N is the number of descriptions; each operation is O(1) with hash maps.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <cmath>
-using namespace std;
-
+/**
+ * Definition for a binary tree node.
+ * struct TreeNode {
+ *     int val;
+ *     TreeNode *left;
+ *     TreeNode *right;
+ *     TreeNode() : val(0), left(nullptr), right(nullptr) {}
+ *     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+ *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
+ * };
+ */
 class Solution {
 public:
-    vector<int> leftRightDifference(vector<int>& nums) {
-        int totalSum = 0, n = nums.size();
-        for (int num : nums) totalSum += num;
-        vector<int> answer(n);
-        int leftSum = 0;
-        for (int i = 0; i < n; ++i) {
-            int rightSum = totalSum - leftSum - nums[i];
-            answer[i] = abs(leftSum - rightSum);
-            leftSum += nums[i];
+    TreeNode* createBinaryTree(vector<vector<int>>& descriptions) {
+        unordered_map<int, TreeNode*> nodes;
+        unordered_set<int> childSet;
+
+        // 1. Create all nodes and build the tree
+        for (const auto& desc : descriptions) {
+            int parent = desc[0];
+            int child = desc[1];
+            int isLeft = desc[2];
+
+            // Create parent and child node if it doesn't exist yet
+            if (!nodes.count(parent)) 
+                nodes[parent] = new TreeNode(parent);
+            if (!nodes.count(child)) 
+                nodes[child] = new TreeNode(child);
+
+            // Link the child to parent
+            if (isLeft)
+                nodes[parent]->left = nodes[child];
+            else
+                nodes[parent]->right = nodes[child];
+
+            // Mark child
+            childSet.insert(child);
         }
-        return answer;
+
+        // 2. The root is the node never seen as child
+        for (const auto& entry : nodes) {
+            if (!childSet.count(entry.first))
+                return entry.second;
+        }
+        return nullptr; // Shouldn't happen for valid input
     }
 };
 ```
 
 ---
 
-## 5. **Explain One Example**
+## 5. **Example Walkthrough**
 
-Let’s use the first example: `nums = [10, 4, 8, 3]`
+**Input:**  
+`descriptions = [[1,2,1],[2,3,0],[3,4,1]]`
 
-- totalSum = 10 + 4 + 8 + 3 = **25**
-- Iteration:
-    1. i=0: leftSum=0, rightSum=25-0-10=15 → answer[0]=|0-15|=15, leftSum+=10→leftSum=10
-    2. i=1: leftSum=10, rightSum=25-10-4=11 → answer[1]=|10-11|=1, leftSum+=4→leftSum=14
-    3. i=2: leftSum=14, rightSum=25-14-8=3 → answer[2]=|14-3|=11, leftSum+=8→leftSum=22
-    4. i=3: leftSum=22, rightSum=25-22-3=0 → answer[3]=|22-0|=22, leftSum+=3→leftSum=25
+**Step-by-step Build:**
+1. First, create nodes for all values as needed.
+2. Process [1,2,1]:  
+   - `1` is parent, `2` is left child.
+3. Process [2,3,0]:  
+   - `2` is parent, `3` is right child.
+4. Process [3,4,1]:  
+   - `3` is parent, `4` is left child.
 
-**Result:** `[15, 1, 11, 22]`
+**Child Set:** `{2, 3, 4}`  
+**Node map:** `{1, 2, 3, 4}`
+
+**Find root:**  
+Node in map but not in child set is `1`.
+
+**Resulting tree:**  
+```
+     1
+    /
+   2
+    \
+     3
+    /
+   4
+```
+Which matches the diagram/example.
 
 ---
 
-Let me know if you want further clarifications!
+**Summary:**  
+We map each value to a `TreeNode`, connect them as described, and deduce the root by elimination. The method is efficient and simple.
