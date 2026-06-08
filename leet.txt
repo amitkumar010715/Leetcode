@@ -1,134 +1,102 @@
-Let's break down your requirements for the **LeetCode daily challenge: "Create Binary Tree From Descriptions"**.
+Certainly! Let's break down the solution step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-You are given a list of descriptions specifying parent-child relationships (along with left/right indication) in a binary tree having unique node values. Each description says: `parent` is the parent of `child`, and whether `child` is its left or right child. Your task is to reconstruct and return the root of the binary tree.
+Given an array `nums` and a `pivot`, we must **rearrange** `nums` so that:
+
+- All elements **less than `pivot`** come first,
+- then all elements **equal to `pivot`**,
+- and finally, all elements **greater than `pivot`** at the end.
+
+We **must maintain** the **relative order** of elements *within* each group.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- `1 <= descriptions.length <= 10^4`: Up to 10,000 relationships.
-- Each value in the tree is unique and in the range `[1, 10^5]`.
-- The binary tree is **valid** (e.g., no cycles, no multi-parents, etc.)
-
-**Edge Cases:**
-- The tree can be a straight line (e.g., only left or right children).
-- Some nodes may not appear as parent/child in the same roles.
-- The root is the only node **never** appearing as a child.
-- Tree can have only two nodes (minimal case).
+- `1 <= nums.length <= 10^5` ⇒ Efficient, linear (O(n)) solution required.
+- `-10^6 <= nums[i] <= 10^6` ⇒ All values reasonable for array processing.
+- `pivot` is guaranteed to be in the array.
+- **Edge Cases:**
+  - All elements are the same as `pivot`.
+  - No elements less than or greater than `pivot`.
+  - Only one element.
+  - Multiple occurrences of `pivot`.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Approach:**
-1. **Node Creation:** For each unique value, create a single `TreeNode` object.
-2. **Build Relationships:** For each description, set the left/right child relationship using those nodes.
-3. **Find Root:** After building, the root is the node who **never appears as a child**.
+### Approach: **Three Lists (Stable Partition)**
 
-**Steps:**
-- Use two hash maps / sets:
-    - one mapping value → TreeNode* (to access/create nodes)
-    - one set to store all children
-- Iterate all descriptions, connecting nodes and populating the child set.
-- The root is the node that is not present in the child set.
+Since we need to partition by *three* groups (less than, equal to, greater than) and maintain relative order, an efficient way is to traverse `nums` **once** and store numbers in three separate vectors:
 
-**Time Complexity:**  
-O(N), where N is the number of descriptions; each operation is O(1) with hash maps.
+1. `less`: elements `< pivot`
+2. `equal`: elements `== pivot`
+3. `greater`: elements `> pivot`
+
+After the traversal, **concatenate** the vectors in the order `[less, equal, greater]`. This approach is O(n) time and space, and maintains order.
+
+**Alternative**: This is similar to a stable partition with three parts. Since constraint is only on rearrangement (not in-place), extra space is perfectly acceptable.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-/**
- * Definition for a binary tree node.
- * struct TreeNode {
- *     int val;
- *     TreeNode *left;
- *     TreeNode *right;
- *     TreeNode() : val(0), left(nullptr), right(nullptr) {}
- *     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
- *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
- * };
- */
-class Solution {
-public:
-    TreeNode* createBinaryTree(vector<vector<int>>& descriptions) {
-        unordered_map<int, TreeNode*> nodes;
-        unordered_set<int> childSet;
+#include <vector>
+using namespace std;
 
-        // 1. Create all nodes and build the tree
-        for (const auto& desc : descriptions) {
-            int parent = desc[0];
-            int child = desc[1];
-            int isLeft = desc[2];
-
-            // Create parent and child node if it doesn't exist yet
-            if (!nodes.count(parent)) 
-                nodes[parent] = new TreeNode(parent);
-            if (!nodes.count(child)) 
-                nodes[child] = new TreeNode(child);
-
-            // Link the child to parent
-            if (isLeft)
-                nodes[parent]->left = nodes[child];
-            else
-                nodes[parent]->right = nodes[child];
-
-            // Mark child
-            childSet.insert(child);
+vector<int> pivotArray(vector<int>& nums, int pivot) {
+    vector<int> less, equal, greater;
+    for (int num : nums) {
+        if (num < pivot) {
+            less.push_back(num);
+        } else if (num == pivot) {
+            equal.push_back(num);
+        } else {
+            greater.push_back(num);
         }
-
-        // 2. The root is the node never seen as child
-        for (const auto& entry : nodes) {
-            if (!childSet.count(entry.first))
-                return entry.second;
-        }
-        return nullptr; // Shouldn't happen for valid input
     }
-};
+    // Concatenate results
+    vector<int> result;
+    result.reserve(nums.size());
+    result.insert(result.end(), less.begin(), less.end());
+    result.insert(result.end(), equal.begin(), equal.end());
+    result.insert(result.end(), greater.begin(), greater.end());
+    return result;
+}
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explanation**
 
-**Input:**  
-`descriptions = [[1,2,1],[2,3,0],[3,4,1]]`
+**Example:**  
+`nums = [9,12,5,10,14,3,10]`, `pivot = 10`
 
-**Step-by-step Build:**
-1. First, create nodes for all values as needed.
-2. Process [1,2,1]:  
-   - `1` is parent, `2` is left child.
-3. Process [2,3,0]:  
-   - `2` is parent, `3` is right child.
-4. Process [3,4,1]:  
-   - `3` is parent, `4` is left child.
+**Step 1:** Separate into three lists:
+- `< pivot`: `[9,5,3]`  
+- `== pivot`: `[10,10]`  
+- `> pivot`: `[12,14]`  
 
-**Child Set:** `{2, 3, 4}`  
-**Node map:** `{1, 2, 3, 4}`
+**Step 2:** Concatenate: 
 
-**Find root:**  
-Node in map but not in child set is `1`.
+`[9,5,3,10,10,12,14]`
 
-**Resulting tree:**  
-```
-     1
-    /
-   2
-    \
-     3
-    /
-   4
-```
-Which matches the diagram/example.
+- `[9,5,3]` **(order preserved)**
+- `[10,10]`
+- `[12,14]` **(order preserved)**
+
+**Thus the output is:**  
+`[9,5,3,10,10,12,14]`
 
 ---
 
-**Summary:**  
-We map each value to a `TreeNode`, connect them as described, and deduce the root by elimination. The method is efficient and simple.
+### **Conclusion**
+
+- Traverse the array once, putting numbers in three separate vectors according to their relation with `pivot`.
+- Concatenate the vectors for the final result.
+- This is stable, O(n) time/space.
