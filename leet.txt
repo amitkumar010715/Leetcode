@@ -1,73 +1,68 @@
-Certainly! Let's break down the solution step by step.
+Let's go step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums` and a `pivot`, we must **rearrange** `nums` so that:
-
-- All elements **less than `pivot`** come first,
-- then all elements **equal to `pivot`**,
-- and finally, all elements **greater than `pivot`** at the end.
-
-We **must maintain** the **relative order** of elements *within* each group.
+Given an array `nums` and integer `k`, pick exactly `k` non-empty (possibly overlapping, even repeated) subarrays. For each subarray, its "value" is `max(subarray) - min(subarray)`. Maximize the total sum of these `k` chosen subarray values.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= nums.length <= 10^5` ⇒ Efficient, linear (O(n)) solution required.
-- `-10^6 <= nums[i] <= 10^6` ⇒ All values reasonable for array processing.
-- `pivot` is guaranteed to be in the array.
-- **Edge Cases:**
-  - All elements are the same as `pivot`.
-  - No elements less than or greater than `pivot`.
-  - Only one element.
-  - Multiple occurrences of `pivot`.
+- `1 <= n <= 5*10^4` (Array is large, so O(n^2) is likely not feasible.)
+- `0 <= nums[i] <= 10^9` (Large values, but easy min/max calculation.)
+- `1 <= k <= 10^5` (Up to 10^5 subarrays — but can pick the same subarray multiple times.)
+- Subarrays may overlap, and the *same* subarray can be chosen multiple times.
+- Edge Cases:
+    - All elements are equal ⇒ max(subarray) - min(subarray) = 0 for any subarray.
+    - k > n — legal, because you can repeat subarrays.
+    - n = 1 — only one subarray: [nums[0]] ⇒ value 0.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Approach: **Three Lists (Stable Partition)**
+### **Key Observation**
 
-Since we need to partition by *three* groups (less than, equal to, greater than) and maintain relative order, an efficient way is to traverse `nums` **once** and store numbers in three separate vectors:
+You can pick the *same* subarray multiple times. To maximize the total, just pick the highest-value subarray *k* times.
 
-1. `less`: elements `< pivot`
-2. `equal`: elements `== pivot`
-3. `greater`: elements `> pivot`
+The value for subarray `[l, r]` is `max(nums[l..r]) - min(nums[l..r])`.  
+Thus, the maximum possible subarray value is for the subarray where `max(nums[l..r]) - min(nums[l..r])` is maximized.
 
-After the traversal, **concatenate** the vectors in the order `[less, equal, greater]`. This approach is O(n) time and space, and maintains order.
+- The highest possible difference is `max(nums) - min(nums)` for the full array, which exists as `nums[0..n-1]`.
+- Subarrays [l, r] with this value may exist for smaller l, r.
 
-**Alternative**: This is similar to a stable partition with three parts. Since constraint is only on rearrangement (not in-place), extra space is perfectly acceptable.
+But since we can *repeat* subarrays, it's always optimal to pick the subarray with the highest value `k` times.
+
+Therefore:
+
+**Algorithm:**
+1. Find `mx = max(nums)`
+2. Find `mn = min(nums)`
+3. Their difference `d = mx - mn` is the max possible subarray value.
+4. Total is `d * k`.
 
 ---
 
-## 4. **C++ Solution**
+### **Time Complexity**
+
+O(n) — just 2 passes through the array (to find max and min).
+
+---
+
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-using namespace std;
-
-vector<int> pivotArray(vector<int>& nums, int pivot) {
-    vector<int> less, equal, greater;
-    for (int num : nums) {
-        if (num < pivot) {
-            less.push_back(num);
-        } else if (num == pivot) {
-            equal.push_back(num);
-        } else {
-            greater.push_back(num);
-        }
+class Solution {
+public:
+    long long maxTotalValue(vector<int>& nums, int k) {
+        int mx = *max_element(nums.begin(), nums.end());
+        int mn = *min_element(nums.begin(), nums.end());
+        long long val = (long long)(mx - mn) * k;
+        return val;
     }
-    // Concatenate results
-    vector<int> result;
-    result.reserve(nums.size());
-    result.insert(result.end(), less.begin(), less.end());
-    result.insert(result.end(), equal.begin(), equal.end());
-    result.insert(result.end(), greater.begin(), greater.end());
-    return result;
-}
+};
 ```
 
 ---
@@ -75,28 +70,21 @@ vector<int> pivotArray(vector<int>& nums, int pivot) {
 ## 5. **Example Explanation**
 
 **Example:**  
-`nums = [9,12,5,10,14,3,10]`, `pivot = 10`
+nums = [4,2,5,1], k = 3
 
-**Step 1:** Separate into three lists:
-- `< pivot`: `[9,5,3]`  
-- `== pivot`: `[10,10]`  
-- `> pivot`: `[12,14]`  
+1. Maximum: 5 (at index 2)
+2. Minimum: 1 (at index 3)
+3. Value: 5 - 1 = 4
+4. Total value: 4 * 3 = 12
 
-**Step 2:** Concatenate: 
-
-`[9,5,3,10,10,12,14]`
-
-- `[9,5,3]` **(order preserved)**
-- `[10,10]`
-- `[12,14]` **(order preserved)**
-
-**Thus the output is:**  
-`[9,5,3,10,10,12,14]`
+Choose the subarray [4,2,5,1] three times (or any other subarray that features 5 & 1 as its max and min), sum their values, answer is **12**.
 
 ---
 
-### **Conclusion**
+### **Final Summary**
 
-- Traverse the array once, putting numbers in three separate vectors according to their relation with `pivot`.
-- Concatenate the vectors for the final result.
-- This is stable, O(n) time/space.
+- Find `max(nums)` and `min(nums)`
+- Answer is `(max - min) * k`
+- O(n) time, O(1) space
+
+Ready for interview or contest use!
