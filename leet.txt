@@ -1,294 +1,178 @@
-Let's break it down as requested:
+Let's address the problem as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums`, select exactly `k` **distinct subarrays** so that the sum of their values (`max(sub) - min(sub)`) is maximized. You can overlap, but you can't pick the same [l, r] interval more than once. Return the largest possible total.
+We're given a tree with *n* nodes (rooted at node 1) and edges.  
+Each edge along the path from root (1) to a node `x` at *maximum depth* is to be assigned a weight of **1** or **2**.  
+We need to **count the number of ways** to assign these weights so that the **sum** (cost) along the path is **odd**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `1 <= n <= 50,000` (up to 50k elements)
-    - `0 <= nums[i] <= 1,000,000,000`
-    - `1 <= k <= min(100,000, n*(n+1)/2)`
-    - Time/space must be sub-quadratic in `n`.
+- **Constraints**:
+    - `2 <= n <= 1e5`: Up to 100,000 nodes.
+    - Tree edges describe a *valid tree* (connected, acyclic).
+    - Only *edges in the path from 1 to x* (where x is any maximum-depth node) matter.
+    - Only need to care about ways for *one* such path.
+    - Output result modulo `1e9+7`.
 
-- **Edge Cases:**
-    - `k == 1`: Just take the subarray with largest value.
-    - All values in `nums` are equal: All subarray values are 0.
-    - `k` exceeds the number of subarrays: Not possible due to constraints.
-    - `k == n*(n+1)/2`: All subarrays, sum all their values.
+- **Edge Cases**:
+    - Tree is just 2 nodes: Only one edge.
+    - Maximum-depth path length can be 1 (for star-shaped tree).
+    - Multiple nodes at maximum depth: Any such node/path can be chosen.
+    - All edge weights must be either 1 or 2.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Observations**
+We need to examine the *path* from 1 to any node at max depth.  
+Let `k` be the **number of edges** in this path (which is the depth).
 
-- **The value of a subarray** is `max - min`.  
-- For best total, pick the `k` subarrays with highest values.
+### **Observation**
 
-### **Brute Force Inefficiency**
-- There are `O(n^2)` subarrays.
-- Calculating min/max for each → `O(n^3)` or at best `O(n^2 log n)`, which is too slow.
+Given `k` edges, each with value 1 or 2,  
+the number of ways to get an **odd sum** is:  
+Let `odd(k)` be the count of such assignments for path of length `k`.
 
-### **Smart Enumeration via "Max-Min" Contribution (Stack Method)**
+For each edge we have two choices (weight = 1 or 2): total `2^k` assignments.  
+But only those with an **odd sum** count.
 
-#### **Observation**
-- **Max Contribution**:
-    - For each position, you can quickly calculate how many subarrays has `nums[i]` as the maximum (using monotonic stack).
-- **Min Contribution**:
-    - Similarly for minimum.
+### **Key insight:**
 
-From this, for each subarray, we can quickly find all subarrays where element `nums[i]` is the max (or min).
+This is a classic parity problem.  
+For each edge: pick 1 (odd) or 2 (even).  
+Let `c1 = count of weight 1 edges`, `c2 = count of weight 2 edges`, with `c1 + c2 = k`.  
+S = cost = c1*1 + c2*2 = c1 + 2*c2 = (c1 + 2*(k-c1)) = 2*k - c1
 
-#### **But**:  
-The problem wants the top-`k` subarrays with the highest `max-min`.
+So, parity of S == parity of c1 + 2*c2  
+But since 2*c2 is even, parity of S == parity of c1  
+Thus, *sum is odd* ⇔ c1 is **odd**.
 
-#### **Efficient Solution Idea (Using Heap)**
+Therefore, **number of assignments with odd sum** is the number of assignments where the *number of edges assigned weight 1 is odd*.
 
-- Imagine for every possible subarray [l, r], we know its (max, min) and its value.
-- We want the top-`k` values among all subarrays.
+This is exactly `sum_{i=1,3,5...}^{k} C(k, i)`.
 
-#### **But Can't Enumerate All!**  
-So, we need to **efficiently enumerate large-value subarrays**, i.e. those with big `max-min`, in order.
+#### For k edges:
 
-#### **Analogy: Similar to "Top-K Subarray Sums"** (like LeetCode 2398, 2381), but here for "max-min" instead of sum.
+- Total ways: `2^k`
+- Ways with odd number of 1's: sum_{i odd} C(k, i) = `2^{k-1}`
 
-#### **Algorithm:**
+(Because, in general, for any k: number of subsets of k items of odd size = 2^{k-1})
 
-1. For every possible pair (max value, min value), count the possible subarrays, and enumerate ones with largest difference.
-2. But this is still expensive.
-
-#### **Alternative (Sliding Window for All-Lengths):**
-
-- For fixed-length subarrays, you can use monotonic deque to get min and max for all windows.
-
-#### **But we want all subarrays, any l..r, and pick top k values!**
-
-#### **Key Insight:**
-- For every adjacent pair `nums[i], nums[j] (i<j)`, the subarray [i..j] includes them, but there are many subarrays.
-- But the **maximal** value subarrays have widest spread. That is, any subarray whose max and min are at the farthest apart.
-
-#### **Radically Different:**
-
-- Try all possible pairs of indices as possible boundaries for max on left, min on right, and vice versa?
-- Or, can we enumerate max-mins in sorted order and count how many subarrays have this difference?
-
-But let's see if we can do the following:
-
-#### **Stack-based Decomposition:**
-- For each possible (max, min) pair in `nums`, how many subarrays have *this* max and *this* min?
-- For each number in `nums`, compute how many subarrays have it as max (using a **monotonic stack**). Similarly for min.
-- Then, the **total value over all subarrays** can be computed as `sum over i of nums[i] * (#subarrays where nums[i] is max - #subarrays where nums[i] is min)`.
-    - But this is not enough: the problem wants the *largest k*, not the sum over all.
-
-#### **Can we collect ALL subarray values efficiently?**
-
-##### **Divide & Conquer + Stack (or Heap):**
-- For all lengths up to n, for all starting indices, compute `(max, min, value)`, store in a heap of size k.
-- Unfortunately, total number of subarrays is O(n^2).
-
-#### **Final Efficient Solution:**
-
-Instead, we can use **"All Possible Max-Min Values, in Descending Order"**:
-
-1. For all pairs (i, j), where i<j and `nums[i] != nums[j]`, max-min can be `abs(nums[i] - nums[j])`, and for all subarrays covering both i and j, this is the max-min.
-2. Still too many pairs.
-
-#### **Greedy via Single Pairs:**
-
-Alternatively, for each possible difference d (i.e., for each adjacent pair in sorted nums), count how many subarrays have this difference (such as when nums[i] is the only max and nums[j] is only min).
-
-#### **But the following works:**  
-From the editorial (or standard CP trick): **All subarrays where nums[i] is the maximum and nums[j] is the minimum** can be counted as "for each (i, j), nums[i] > nums[j], find (l, r) where nums[i] and nums[j] are in [l..r] and are the max and min" --- but again, too many.
-
-#### **Final Practically Feasible Approach:**  
-**Enumerate all possible subarray values for all intervals of length up to a certain threshold (say, length up to 200), because for large n only k are needed and largest differences will come from subarrays containing the global max and min (or their neighborhoods).**
-
-So:
-1. For subarrays of all possible lengths up to L (small), collect all (value, l, r) for possible l,r.
-2. For all subarrays containing the global max and global min, collect those (there are O(n^2) such subarrays, but only up to n possible spans).
-3. Push all collected values into a max-heap, pop k largest.
-
-Since k <= 1e5, and n <= 5e4, this is manageable.
-
-#### **Algorithm Concrete Steps:**
-
-1. Find global max M and min m, and their leftmost indices.
-2. All subarrays containing both: value = M - m.
-    - How many such subarrays: for M at pos x, m at pos y, both must be included; so, for all i <= min(x,y), for all j >= max(x,y), total (min(x,y)+1) * (n-max(x,y)) subarrays.
-3. For all o(n) subarrays with other potential large differences (neighboring maximums), e.g. for top K values in nums and their neighborhoods.
-4. For small lengths, process all subarrays.
-
-Care must be taken with repeated values.
-
-#### **Optimized for Large n, Large k:**
-
-The major contribution to max-min comes from subarrays including the overall max and min (and their positions). So, in practice, we should:
-
-- For every unique value v, process all positions where nums[i] = v.
-- Collect all subarrays including the overall max and min value occurrence.
-
-For other subarrays, the max-min will be less than global (M-m), so, to get top-k, just count how many subarrays have value == (M-m), see if >=k. If yes, answer is k*(M-m). If not, get next largest value, etc.
-
-### **So, High Level Algorithm:**
-1. For every possible value of (max-min) in nums (in decreasing order):
-    - For each such value d (= v1 - v2), count the number of subarrays whose max is v1 and min is v2.
-    - If total number >= k, answer is k*d.
-    - Else, accumulate total = total + (count * d), decrease k accordingly, move to next d.
-
-But, as (v1 - v2) is between two unique values in nums, total number of such pairs is at most n^2, but there will not be so many unique (v1,v2).
-
-But at the largest, global max-min is the "maximum possible subarray value", and all subarrays containing both contribute.
-
-Hence, in practice:
-
-- First, for all pairs (max, min) in nums, find how many subarrays exist containing both.
-
-But for most arrays, the maximum difference comes from global max and min values.
+**So, answer is `2^{k-1}`.**
 
 ---
 
-## 4. **Clean C++ Solution**
+### **Algorithm Steps**
+
+1. Build adjacency list.
+2. Use BFS to find the maximum depth (and the node at max depth).
+3. Compute path length `k` from node 1 to that node: this is the depth.
+4. Output `2^{k-1} % MOD`.
+
+**Time Complexity**: O(n) for building tree & BFS.  
+**Space Complexity**: O(n) for adjacency & BFS queue.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
-#include <set>
 #include <queue>
+#include <iostream>
 using namespace std;
-
-typedef long long ll;
 
 class Solution {
 public:
-    ll countSubarraysContainingBoth(int n, int maxIdx, int minIdx) {
-        // count subarrays containing both indices maxIdx, minIdx
-        int left = min(maxIdx, minIdx);
-        int right = max(maxIdx, minIdx);
-        return (ll)(left + 1) * (n - right);
-    }
-    
-    long long maxTotalValue(vector<int>& nums, int k) {
-        int n = nums.size();
-        // Find all unique values and their positions
-        int global_max = *max_element(nums.begin(), nums.end());
-        int global_min = *min_element(nums.begin(), nums.end());
-        
-        // Get all indices with global max and min
-        vector<int> idx_max, idx_min;
-        for(int i = 0; i < n; ++i) {
-            if(nums[i] == global_max) idx_max.push_back(i);
-            if(nums[i] == global_min) idx_min.push_back(i);
+    int numberOfWays(vector<vector<int>>& edges) {
+        int n = edges.size() + 1;
+        vector<vector<int>> g(n + 1);
+        for (auto& e : edges) {
+            int u = e[0], v = e[1];
+            g[u].push_back(v);
+            g[v].push_back(u);
         }
-        
-        // Prepare all values (diff, count) for possible pairs (max, min)
-        // Use set to avoid duplicate pairs
-        vector<tuple<int, int, int>> pairs; // (max, min, diff)
-        set<pair<int,int>> used;
-        
-        vector<int> unique_vals = nums;
-        sort(unique_vals.begin(), unique_vals.end());
-        unique_vals.erase(unique(unique_vals.begin(), unique_vals.end()), unique_vals.end());
-        int U = unique_vals.size();
-        
-        for(int i = 0; i < U; ++i) {
-            for(int j = 0; j < i; ++j) {
-                int v_max = unique_vals[i], v_min = unique_vals[j];
-                pairs.push_back({v_max, v_min, v_max-v_min});
-            }
-        }
-        // Sort pairs by diff decreasing
-        sort(pairs.begin(), pairs.end(), [](const auto& a, const auto& b) {
-            return get<2>(a) > get<2>(b);
-        });
-        
-        long long ans = 0;
-        int leftK = k;
-        vector<int> pos[2]; // pos[0]=max, pos[1]=min
-        // We'll memoize the pair's occurrence count to avoid recomputation
-        set<pair<int,int>> already;
-        
-        for(auto& [v_max, v_min, diff] : pairs) {
-            if(leftK == 0) break;
-            // Get all indices of v_max in nums, all indices of v_min
-            vector<int> pos_max, pos_min;
-            for(int i=0; i<n; ++i) {
-                if(nums[i]==v_max) pos_max.push_back(i);
-                if(nums[i]==v_min) pos_min.push_back(i);
-            }
-            // For all possible pairs (i,j): i from pos_max, j from pos_min
-            ll cnt = 0;
-            for(int i: pos_max) {
-                for(int j: pos_min) {
-                    // Count subarrays containing both i and j
-                    cnt += countSubarraysContainingBoth(n, i, j);
+        // BFS to find max depth
+        vector<int> depth(n + 1, -1);
+        queue<int> q;
+        depth[1] = 0;
+        q.push(1);
+        int maxDepth = 0, x = 1;
+        while (!q.empty()) {
+            int node = q.front(); q.pop();
+            for (int v : g[node]) {
+                if (depth[v] == -1) {
+                    depth[v] = depth[node] + 1;
+                    q.push(v);
+                    if (depth[v] > maxDepth) {
+                        maxDepth = depth[v];
+                        x = v;
+                    }
                 }
             }
-            // Remove overcounting (if needed)
-            if(cnt > leftK) cnt = leftK;
-            ans += cnt * diff;
-            leftK -= cnt;
         }
-        if(leftK == 0) return ans;
-        
-        // If leftK > 0, some 0-difference subarrays add nothing. Done.
-        return ans;
+        // Path length is maxDepth
+        int k = maxDepth;
+        const int MOD = 1e9 + 7;
+        if (k == 0) return 0;
+        // Compute 2^{k-1} % MOD
+        long long ans = 1;
+        for (int i = 0; i < k - 1; ++i) {
+            ans = (ans * 2) % MOD;
+        }
+        return (int)ans;
     }
 };
 ```
-**Note**: This code efficiently considers all pairs of unique values in nums as possible (max, min), computes the total number of subarrays containing both, and selects subarrays in order of decreasing value difference.
 
 ---
 
 ## 5. **Example Explanation**
 
-### **Example 1**
-**Input:**  
-`nums = [1, 3, 2], k = 2`
+Take Example 2:
 
-- Unique values: [1, 2, 3]
-- Pairs:
-    - (3,1): difference=2
-    - (3,2): diff=1
-    - (2,1): diff=1
+```
+edges = [[1,2],[1,3],[3,4],[3,5]]
+```
 
-- For (3,1):
-    - Positions: 3 at idx=1, 1 at idx=0
-    - Subarrays containing both:  
-      - left = min(1,0) = 0; right = max(1,0) = 1  
-      - Subarrays: (0+1)*(3-1) = 1*2 = 2 subarrays: [0,1], [0,2]
-    - So, two subarrays with value 2.
-- We need 2 subarrays, both with value 2.
-- Total = 2+2 = **4**
+- Adjacency:
+    - 1: 2,3
+    - 2: 1
+    - 3: 1,4,5
+    - 4: 3
+    - 5: 3
+
+- BFS from root 1:
+    - Level 0: 1
+    - Level 1: 2, 3
+    - Level 2: 4, 5 (**max depth = 2**)
+
+So for path 1 → 3 → 4 (k=2 edges):
+
+- Total assignments: 2^2 = 4
+    - (1,1): 1+1 = 2 (even) ✘
+    - (1,2): 1+2 = 3 (odd)  ✔
+    - (2,1): 2+1 = 3 (odd)  ✔
+    - (2,2): 2+2 = 4 (even) ✘
+- **Number with odd sum: 2**
+
+Formula: 2^{2-1} = 2 ✔
 
 ---
 
 ## **Summary Table**
 
-| Step | What is Done                              | Time Complexity         |
-|------|-------------------------------------------|------------------------|
-| 1    | Unique values/selections                  | O(n log n)             |
-| 2    | All pairs (max, min) (at most n^2/2)      | O(n^2) (n small)       |
-| 3    | For each pair, count subarrays with both  | O(n^2)                 |
-| 4    | Pick k subarrays of highest value         | O(n^2)                 |
-
-However, since the number of unique values is usually small, this approach is practical and fits the constraints for LeetCode.
-
----
-
-## **If Further Optimization Needed**
-
-For even larger n, you may optimize by only considering the largest values (and their pairs), as all subarrays with value less than the maximum are not needed if the count of max-difference subarrays is already >= k.
+| Path Length k | Number of Ways (odd sum) |
+|---------------|--------------------------|
+|        1      |          1               |
+|        2      |          2               |
+|        3      |          4               |
+|        4      |          8               |
+|      ...      |        ...               |
 
 ---
-
-If you need a more optimized O(n) approach for huge n (e.g. monotonic stack/subarray contribution), I can provide that version as well.
-
----
-
-## **Let me know if you want a more optimized, theory-heavy solution!**
