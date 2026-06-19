@@ -1,53 +1,40 @@
-Let's break down and solve the problem step-by-step:
+Let's tackle the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given the hour and minute on a clock, compute the **smaller angle (in degrees)** between the hour hand and minute hand. Return the answer as a floating-point number.
+The problem asks to compute the **highest altitude** reached by a biker, who starts at altitude **0**. Each value in the `gain` array represents the **change in altitude** to reach the next point. The goal is to simulate this journey and return the highest reached altitude.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= hour <= 12`
-  - `0 <= minutes <= 59`
-- **Edge Cases:**
-  - At `12:00`, both hands overlap (`angle = 0`).
-  - If the computed angle is greater than `180°`, subtract it from `360°` to get the **smaller** angle.
-  - `hour == 12` should be treated as `0` (modulo 12 arithmetic, but problem guarantees 1 to 12).
-  - Minutes at `0` or `59` (careful, hour hand partially moves when minutes are non-zero).
+**Constraints:**
+- `1 <= n <= 100`: The gain array will have at least 1 and at most 100 elements.
+- `-100 <= gain[i] <= 100`: The gain at each step can be negative (descend), zero, or positive (ascend).
+- The biker always starts at 0.
+
+**Edge Cases:**
+- All negative gains: Altitude will only decrease (the answer will be 0, since the start is the highest).
+- All positive gains: Altitude will only increase (the answer is the cumulative sum).
+- Mixed positive and negative.
+- Single element in gain array (`n=1`): just compare 0 and gain[0].
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Plan/Observation**
+### Intuition & Steps:
 
-- **Minute Hand:**  
-  - 360 degrees → 60 minutes ⇒ 1 minute = 6 degrees.
-  - So, minute hand angle from 12 is: `minutes * 6`.
-- **Hour Hand:**
-  - 360 degrees → 12 hours ⇒ 1 hour = 30 degrees.
-  - Plus, it moves between hours as minutes progress:
-    - 1 minute = 0.5 degrees (`30/60`).
-    - So, hour hand angle is: `hour * 30 + minutes * 0.5`.
-    - But for 12 o'clock, use `hour % 12` to treat 12 as 0.
-- **Angle between hands:**
-  - `angle = abs(hour_angle - minute_angle)`
-  - If angle > 180, use `360 - angle`
-- **Floating Point:**
-  - Do calculations in double for precision.
+- Start with `altitude=0` and `maxAltitude=0`
+- For each value in `gain`:
+    - Add it to the current `altitude`
+    - If `altitude > maxAltitude`, update `maxAltitude`
+- After processing all gains, return `maxAltitude`.
 
-### **Pseudocode**
-
-```cpp
-minute_angle = minutes * 6
-hour_angle = (hour % 12) * 30 + minutes * 0.5
-angle = abs(hour_angle - minute_angle)
-if angle > 180: angle = 360 - angle
-```
+**Time Complexity:** O(n)  
+**Space Complexity:** O(1)
 
 ---
 
@@ -56,14 +43,15 @@ if angle > 180: angle = 360 - angle
 ```cpp
 class Solution {
 public:
-    double angleClock(int hour, int minutes) {
-        // Calculate angles for the hands
-        double minute_angle = minutes * 6.0;
-        double hour_angle = (hour % 12) * 30.0 + minutes * 0.5;
-        // Find their angle difference
-        double angle = fabs(hour_angle - minute_angle);
-        // Always take the smaller angle
-        return angle > 180.0 ? 360.0 - angle : angle;
+    int largestAltitude(vector<int>& gain) {
+        int altitude = 0;
+        int maxAltitude = 0;
+        for (int g : gain) {
+            altitude += g;
+            if (altitude > maxAltitude)
+                maxAltitude = altitude;
+        }
+        return maxAltitude;
     }
 };
 ```
@@ -72,30 +60,24 @@ public:
 
 ## 5. **Example Explanation**
 
-**Example:**  
-`hour = 3, minutes = 15`
+### Example 1
 
-- Minute hand: `15 * 6 = 90°` (i.e., points at 3)
-- Hour hand: `(3 % 12)*30 + 15*0.5 = 90 + 7.5 = 97.5°`
-- Difference: `|97.5 - 90| = 7.5°`
-- Smaller angle is `7.5°` (since it's less than 180)
-- **Return:** `7.5`
+**Input:**  
+`gain = [-5, 1, 5, 0, -7]`
+
+Let's compute the cumulative altitudes:
+- Start: 0
+- After -5: 0 + (-5) = **-5**
+- After 1:  -5 + 1   = **-4**
+- After 5:  -4 + 5   = **1**
+- After 0:   1 + 0   = **1**
+- After -7: 1 + (-7) = **-6**
+
+So, the altitudes at each point are: `[0, -5, -4, 1, 1, -6]`
+
+**The highest is 1.**  
+**Output:** `1`
 
 ---
 
-### **Summary Table**
-
-| Input         | Minute Angle | Hour Angle | Difference | Output   |
-|---------------|-------------|------------|------------|----------|
-| 12, 30        |   180       |    15      |   165      |  165     |
-| 3, 30         |   180       |    105     |   75       |   75     |
-| 3, 15         |    90       |    97.5    |   7.5      |  7.5     |
-
----
-
-## ✔️ **In Short**
-
-- Compute positions of hour and minute hands in degrees.
-- Take absolute difference.
-- If >180, subtract from 360.
-- Return as double.
+Let me know if you'd like a Python version or further details!
