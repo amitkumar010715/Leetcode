@@ -1,83 +1,162 @@
-Let's tackle the problem step by step:
+Let's solve **Maximum Building Height**.
 
 ---
 
 ## 1. **Short Summary**
 
-The problem asks to compute the **highest altitude** reached by a biker, who starts at altitude **0**. Each value in the `gain` array represents the **change in altitude** to reach the next point. The goal is to simulate this journey and return the highest reached altitude.
+Given `n` buildings in a line, each adjacent building's heights can differ by at most 1, starting with building 1 at height 0. Some buildings have extra height limits. Find the maximum possible height you could achieve for any building.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- `1 <= n <= 100`: The gain array will have at least 1 and at most 100 elements.
-- `-100 <= gain[i] <= 100`: The gain at each step can be negative (descend), zero, or positive (ascend).
-- The biker always starts at 0.
-
-**Edge Cases:**
-- All negative gains: Altitude will only decrease (the answer will be 0, since the start is the highest).
-- All positive gains: Altitude will only increase (the answer is the cumulative sum).
-- Mixed positive and negative.
-- Single element in gain array (`n=1`): just compare 0 and gain[0].
+- **Building 1:** Always has height 0; is **never** in restrictions.
+- **Restrictions Length:** Up to `min(n-1, 100,000)`. So even for `n` up to 1e9, there are at most 1e5 restricted positions.
+- **Restriction Uniqueness:** Each building in restrictions is unique, always in range 2 to n.
+- **No Restrictions:** If no restrictions, heights increase from 0 to n-1 (max height is n-1).
+- **Edge Cases:**
+  - Distantly separated restrictions, so intermediate positions not restricted.
+  - Restrictions sometimes allow more than the natural slope—should be clamped.
+  - Need to handle large `n`, so O(restrictions) solution required.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Intuition & Steps:
+We use only the **restricted buildings**, plus building 1 (as [1, 0]), and we can imagine a restriction at building n (if not provided, maxHeight = n-1). For sparse restrictions, we interpolate the maximum possible between restrictions.
 
-- Start with `altitude=0` and `maxAltitude=0`
-- For each value in `gain`:
-    - Add it to the current `altitude`
-    - If `altitude > maxAltitude`, update `maxAltitude`
-- After processing all gains, return `maxAltitude`.
+**Steps:**
 
-**Time Complexity:** O(n)  
-**Space Complexity:** O(1)
+1. **Add Additional Restrictions:**
+   - Add [1, 0] to the restrictions list.
+   - If building n is not in restrictions, add [n, n-1] (the maximum possible by slope alone).
+
+2. **Sort Restrictions:** by building id.
+
+3. **Forward Pass:** For each restriction from left to right, update its maxHeight so it can't be more than previous + distance.
+   - `restrictions[i].maxHeight = min(restrictions[i].maxHeight, restrictions[i-1].maxHeight + (restrictions[i].id - restrictions[i-1].id))`
+
+4. **Backward Pass:** From right to left, do the same in reverse.
+   - `restrictions[i-1].maxHeight = min(restrictions[i-1].maxHeight, restrictions[i].maxHeight + (restrictions[i].id - restrictions[i-1].id))`
+
+5. **Maximum Between Restrictions:**
+    - For each consecutive pair of restriction points [id1, h1], [id2, h2], the maximum possible height between them is:
+      - `k = id2 - id1`
+      - Best peak is at the center.
+      - Maximum is: floor((h1 + h2 + k) / 2)
+        - (Because heights increase by 1 each step from h1 until meeting the path down from h2).
+    - Update global maximum.
+
+6. **Return the maximum found.**
+
+### **Why this is optimal?**
+- Only O(restrictions) operations. For any gap, it's always optimal to go up by +1 each step until you must go down to reach the next peak cap.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    int largestAltitude(vector<int>& gain) {
-        int altitude = 0;
-        int maxAltitude = 0;
-        for (int g : gain) {
-            altitude += g;
-            if (altitude > maxAltitude)
-                maxAltitude = altitude;
+    int maxBuilding(int n, vector<vector<int>>& restrictions) {
+        // Add building 1 with height 0 if not already there
+        restrictions.push_back({1, 0});
+        // Add building n if not present (default max height possible is n-1)
+        bool n_present = false;
+        for (auto& r : restrictions) {
+            if (r[0] == n) {
+                n_present = true;
+                break;
+            }
         }
-        return maxAltitude;
+        if (!n_present)
+            restrictions.push_back({n, n - 1});
+
+        // Sort restrictions by building index
+        sort(restrictions.begin(), restrictions.end());
+
+        int m = restrictions.size();
+
+        // Forward
+        for (int i = 1; i < m; ++i) {
+            int dist = restrictions[i][0] - restrictions[i-1][0];
+            restrictions[i][1] = min(restrictions[i][1], restrictions[i-1][1] + dist);
+        }
+        // Backward
+        for (int i = m - 2; i >= 0; --i) {
+            int dist = restrictions[i+1][0] - restrictions[i][0];
+            restrictions[i][1] = min(restrictions[i][1], restrictions[i+1][1] + dist);
+        }
+
+        // Find max
+        int ans = 0;
+        for (int i = 1; i < m; ++i) {
+            int id1 = restrictions[i-1][0], h1 = restrictions[i-1][1];
+            int id2 = restrictions[i][0], h2 = restrictions[i][1];
+            int gap = id2 - id1;
+            // The max possible at the peak between h1 (left) and h2 (right):
+            // You go up +1 per step from h1, down -1 to reach h2. 
+            // The peak is at step x where h1 + x == h2 + (gap - x)
+            // That's at x = (gap + h2 - h1) / 2, max height is h1 + x
+            // The maximum is integer (floored).
+            int peak = (h1 + h2 + gap) / 2;
+            ans = max(ans, peak);
+        }
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-### Example 1
+**Example 1:**  
+`n = 5, restrictions = [[2,1],[4,1]]`
 
-**Input:**  
-`gain = [-5, 1, 5, 0, -7]`
+**Algorithm Steps:**
+- Add [1,0] and [5,4] (since n=5 and not restricted yet).
+- So: restrictions = [[1,0],[2,1],[4,1],[5,4]]
+- Sort: [[1,0],[2,1],[4,1],[5,4]]
 
-Let's compute the cumulative altitudes:
-- Start: 0
-- After -5: 0 + (-5) = **-5**
-- After 1:  -5 + 1   = **-4**
-- After 5:  -4 + 5   = **1**
-- After 0:   1 + 0   = **1**
-- After -7: 1 + (-7) = **-6**
+**Forward Pass:**
+- [2,1] already OK (prev = [1,0], dist=1, prev.max+dist = 1, h=1)
+- [4,1] prev=[2,1], dist=2, prev.max+dist = 3 => h=min(1,3)=1
+- [5,4] prev=[4,1], dist=1, prev.max+dist = 2 => h=min(4,2)=2
 
-So, the altitudes at each point are: `[0, -5, -4, 1, 1, -6]`
+Now: [[1,0], [2,1], [4,1], [5,2]]
 
-**The highest is 1.**  
-**Output:** `1`
+**Backward Pass:**
+- [4,1] next=[5,2], dist=1, next.max+dist = 3 => h=min(1,3)=1
+- [2,1] next=[4,1], dist=2, next.max+dist = 3 => h=min(1,3)=1
+- [1,0] next=[2,1], dist=1, next.max+dist = 2 => h=min(0,2)=0
+
+Final: [[1,0], [2,1], [4,1], [5,2]]
+
+**Peak Calculation:**
+- Between 1 and 2: gap=1, h1=0, h2=1 ⇒ peak=(0+1+1)/2=1.
+- Between 2 and 4: gap=2, h1=1, h2=1 ⇒ peak=(1+1+2)/2=2.
+- Between 4 and 5: gap=1, h1=1, h2=2 ⇒ peak=(1+2+1)/2=2.
+
+Overall maximum is **2**.
+
+**This matches the provided sample output!**
 
 ---
 
-Let me know if you'd like a Python version or further details!
+### **Summary Table**
+
+| Segment         | h1 | h2 | gap | max in segment         |
+|-----------------|----|----|-----|-----------------------|
+| [1,0] - [2,1]   | 0  | 1  | 1   | (0+1+1)//2 = 1        |
+| [2,1] - [4,1]   | 1  | 1  | 2   | (1+1+2)//2 = 2        |
+| [4,1] - [5,2]   | 1  | 2  | 1   | (1+2+1)//2 = 2        |
+
+---
+
+Let me know if you'd like alternate explanations or code in another language!
