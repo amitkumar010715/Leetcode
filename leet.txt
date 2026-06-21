@@ -1,60 +1,42 @@
-Let's solve **Maximum Building Height**.
+Let's address your requirements step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given `n` buildings in a line, each adjacent building's heights can differ by at most 1, starting with building 1 at height 0. Some buildings have extra height limits. Find the maximum possible height you could achieve for any building.
+Given a list of ice cream bar costs and a certain number of coins, the goal is to **buy as many bars as possible** without exceeding the coins. To maximize, you should buy the cheapest bars first.  
+**Constraint**: *You must use counting sort to solve the problem.*
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Building 1:** Always has height 0; is **never** in restrictions.
-- **Restrictions Length:** Up to `min(n-1, 100,000)`. So even for `n` up to 1e9, there are at most 1e5 restricted positions.
-- **Restriction Uniqueness:** Each building in restrictions is unique, always in range 2 to n.
-- **No Restrictions:** If no restrictions, heights increase from 0 to n-1 (max height is n-1).
-- **Edge Cases:**
-  - Distantly separated restrictions, so intermediate positions not restricted.
-  - Restrictions sometimes allow more than the natural slope—should be clamped.
-  - Need to handle large `n`, so O(restrictions) solution required.
+- `1 <= n <= 10^5`: Up to 100,000 ice cream bars.
+- `1 <= costs[i] <= 10^5`: Each bar's cost range.
+- `1 <= coins <= 10^8`: Up to 100,000,000 coins.
+- There could be many cheap bars or very expensive ones.
+- **Edge cases**:
+    - All costs exceed `coins`: Output should be `0`.
+    - All bars cost `1`, and `coins >= n`: Output should be `n`.
+    - `coins` is less than the cheapest bar: Output is `0`.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm (Counting Sort Approach)**
 
-We use only the **restricted buildings**, plus building 1 (as [1, 0]), and we can imagine a restriction at building n (if not provided, maxHeight = n-1). For sparse restrictions, we interpolate the maximum possible between restrictions.
+**Why?**  
+Sorting costs directly is O(N log N), but since costs are all in `[1, 10^5]`, **counting sort** is possible in O(N + maxCost).
 
 **Steps:**
-
-1. **Add Additional Restrictions:**
-   - Add [1, 0] to the restrictions list.
-   - If building n is not in restrictions, add [n, n-1] (the maximum possible by slope alone).
-
-2. **Sort Restrictions:** by building id.
-
-3. **Forward Pass:** For each restriction from left to right, update its maxHeight so it can't be more than previous + distance.
-   - `restrictions[i].maxHeight = min(restrictions[i].maxHeight, restrictions[i-1].maxHeight + (restrictions[i].id - restrictions[i-1].id))`
-
-4. **Backward Pass:** From right to left, do the same in reverse.
-   - `restrictions[i-1].maxHeight = min(restrictions[i-1].maxHeight, restrictions[i].maxHeight + (restrictions[i].id - restrictions[i-1].id))`
-
-5. **Maximum Between Restrictions:**
-    - For each consecutive pair of restriction points [id1, h1], [id2, h2], the maximum possible height between them is:
-      - `k = id2 - id1`
-      - Best peak is at the center.
-      - Maximum is: floor((h1 + h2 + k) / 2)
-        - (Because heights increase by 1 each step from h1 until meeting the path down from h2).
-    - Update global maximum.
-
-6. **Return the maximum found.**
-
-### **Why this is optimal?**
-- Only O(restrictions) operations. For any gap, it's always optimal to go up by +1 each step until you must go down to reach the next peak cap.
+1. Create a frequency array (`count`) where `count[cost]` = number of bars with that cost.
+2. Iterate costs in increasing order:
+    - For each cost, buy as many as possible (either all at that price or as many as the leftover coins can buy).
+    - Deduct the cost from coins and increment the answer.
+3. Stop immediately if you can't afford that price.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
@@ -63,100 +45,54 @@ using namespace std;
 
 class Solution {
 public:
-    int maxBuilding(int n, vector<vector<int>>& restrictions) {
-        // Add building 1 with height 0 if not already there
-        restrictions.push_back({1, 0});
-        // Add building n if not present (default max height possible is n-1)
-        bool n_present = false;
-        for (auto& r : restrictions) {
-            if (r[0] == n) {
-                n_present = true;
-                break;
-            }
+    int maxIceCream(vector<int>& costs, int coins) {
+        int maxCost = *max_element(costs.begin(), costs.end());
+        vector<int> count(maxCost + 1, 0);
+        // Build counting sort array
+        for (int cost : costs) {
+            count[cost]++;
         }
-        if (!n_present)
-            restrictions.push_back({n, n - 1});
-
-        // Sort restrictions by building index
-        sort(restrictions.begin(), restrictions.end());
-
-        int m = restrictions.size();
-
-        // Forward
-        for (int i = 1; i < m; ++i) {
-            int dist = restrictions[i][0] - restrictions[i-1][0];
-            restrictions[i][1] = min(restrictions[i][1], restrictions[i-1][1] + dist);
+        int bars = 0;
+        // Buy in order of cheapest to most expensive
+        for (int price = 1; price <= maxCost; ++price) {
+            if (count[price] == 0) continue;
+            int canBuy = min(count[price], coins / price);
+            bars += canBuy;
+            coins -= canBuy * price;
+            if (coins < price) break; // Can't afford any more
         }
-        // Backward
-        for (int i = m - 2; i >= 0; --i) {
-            int dist = restrictions[i+1][0] - restrictions[i][0];
-            restrictions[i][1] = min(restrictions[i][1], restrictions[i+1][1] + dist);
-        }
-
-        // Find max
-        int ans = 0;
-        for (int i = 1; i < m; ++i) {
-            int id1 = restrictions[i-1][0], h1 = restrictions[i-1][1];
-            int id2 = restrictions[i][0], h2 = restrictions[i][1];
-            int gap = id2 - id1;
-            // The max possible at the peak between h1 (left) and h2 (right):
-            // You go up +1 per step from h1, down -1 to reach h2. 
-            // The peak is at step x where h1 + x == h2 + (gap - x)
-            // That's at x = (gap + h2 - h1) / 2, max height is h1 + x
-            // The maximum is integer (floored).
-            int peak = (h1 + h2 + gap) / 2;
-            ans = max(ans, peak);
-        }
-        return ans;
+        return bars;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Walkthrough**
 
 **Example 1:**  
-`n = 5, restrictions = [[2,1],[4,1]]`
+`costs = [1,3,2,4,1]`, `coins = 7`
 
-**Algorithm Steps:**
-- Add [1,0] and [5,4] (since n=5 and not restricted yet).
-- So: restrictions = [[1,0],[2,1],[4,1],[5,4]]
-- Sort: [[1,0],[2,1],[4,1],[5,4]]
-
-**Forward Pass:**
-- [2,1] already OK (prev = [1,0], dist=1, prev.max+dist = 1, h=1)
-- [4,1] prev=[2,1], dist=2, prev.max+dist = 3 => h=min(1,3)=1
-- [5,4] prev=[4,1], dist=1, prev.max+dist = 2 => h=min(4,2)=2
-
-Now: [[1,0], [2,1], [4,1], [5,2]]
-
-**Backward Pass:**
-- [4,1] next=[5,2], dist=1, next.max+dist = 3 => h=min(1,3)=1
-- [2,1] next=[4,1], dist=2, next.max+dist = 3 => h=min(1,3)=1
-- [1,0] next=[2,1], dist=1, next.max+dist = 2 => h=min(0,2)=0
-
-Final: [[1,0], [2,1], [4,1], [5,2]]
-
-**Peak Calculation:**
-- Between 1 and 2: gap=1, h1=0, h2=1 ⇒ peak=(0+1+1)/2=1.
-- Between 2 and 4: gap=2, h1=1, h2=1 ⇒ peak=(1+1+2)/2=2.
-- Between 4 and 5: gap=1, h1=1, h2=2 ⇒ peak=(1+2+1)/2=2.
-
-Overall maximum is **2**.
-
-**This matches the provided sample output!**
+- Frequency of costs:
+    - `count[1] = 2`, `count[2] = 1`, `count[3] = 1`, `count[4] = 1`
+- Now, buy as many as possible:
+    1. Cost 1: can buy min(2,7/1)=2, coins left: 7-2*1=5, bars: 2
+    2. Cost 2: can buy min(1,5/2)=1, coins left: 5-1*2=3, bars: 3
+    3. Cost 3: can buy min(1,3/3)=1, coins left: 3-1*3=0, bars: 4
+    4. Cost 4: can't buy (coins < 4)
+- **Output:** `4`
 
 ---
 
-### **Summary Table**
+## **Summary Table**
 
-| Segment         | h1 | h2 | gap | max in segment         |
-|-----------------|----|----|-----|-----------------------|
-| [1,0] - [2,1]   | 0  | 1  | 1   | (0+1+1)//2 = 1        |
-| [2,1] - [4,1]   | 1  | 1  | 2   | (1+1+2)//2 = 2        |
-| [4,1] - [5,2]   | 1  | 2  | 1   | (1+2+1)//2 = 2        |
+| Step  | Cost   | # Available | # Buy | Coins Left | Bars |
+|-------|--------|-------------|-------|------------|------|
+| 1     | 1      | 2           | 2     | 5          | 2    |
+| 2     | 2      | 1           | 1     | 3          | 3    |
+| 3     | 3      | 1           | 1     | 0          | 4    |
+| 4     | 4      | 1           | 0     | 0          | 4    |
 
 ---
 
-Let me know if you'd like alternate explanations or code in another language!
+**This algorithm is fast and safe for large inputs, thanks to counting sort!**
