@@ -1,98 +1,87 @@
-Let's address your requirements step by step.
+Certainly! Let's break down the problem:
 
 ---
 
-## 1. **Short Summary**
+### 1. **Short Summary**
 
-Given a list of ice cream bar costs and a certain number of coins, the goal is to **buy as many bars as possible** without exceeding the coins. To maximize, you should buy the cheapest bars first.  
-**Constraint**: *You must use counting sort to solve the problem.*
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- `1 <= n <= 10^5`: Up to 100,000 ice cream bars.
-- `1 <= costs[i] <= 10^5`: Each bar's cost range.
-- `1 <= coins <= 10^8`: Up to 100,000,000 coins.
-- There could be many cheap bars or very expensive ones.
-- **Edge cases**:
-    - All costs exceed `coins`: Output should be `0`.
-    - All bars cost `1`, and `coins >= n`: Output should be `n`.
-    - `coins` is less than the cheapest bar: Output is `0`.
+Given a string `text`, we need to determine the **maximum number of times** we can use its characters to form the word `"balloon"`. Each character in `text` can be used **at most once**. Return the greatest number of non-overlapping `"balloon"`s that can be formed.
 
 ---
 
-## 3. **Optimal Algorithm (Counting Sort Approach)**
+### 2. **Constraints & Edge Cases**
 
-**Why?**  
-Sorting costs directly is O(N log N), but since costs are all in `[1, 10^5]`, **counting sort** is possible in O(N + maxCost).
-
-**Steps:**
-1. Create a frequency array (`count`) where `count[cost]` = number of bars with that cost.
-2. Iterate costs in increasing order:
-    - For each cost, buy as many as possible (either all at that price or as many as the leftover coins can buy).
-    - Deduct the cost from coins and increment the answer.
-3. Stop immediately if you can't afford that price.
+- **Constraints**:
+    - `1 <= text.length <= 10^4`
+    - Input contains only lowercase English letters.
+- **Edge Cases**:
+    - If `text` doesn't have all the letters needed for `"balloon"`, output is `0`.
+    - Letters `'l'` and `'o'` are needed **twice** for each `"balloon"`; others only once.
+    - Very short `text` may not contain enough letters.
 
 ---
 
-## 4. **Clean C++ Solution**
+### 3. **Optimal Algorithm**
+
+**Main Idea**:  
+Count how many times each character in `"balloon"` appears in `text`. For `'l'` and `'o'`, since each appears **twice** in `"balloon"`, their count must be halved (integer division) before comparing. The final answer is the **minimum** such count across all required characters.
+
+**Steps**:
+1. Create a frequency map (array or hash map) of letters in `text`.
+2. For each character in `"balloon"`, calculate how many times it can be taken from `text`, accounting for multiplicity (`l`, `o` need 2 each).
+3. The answer is the *minimum* number of `"balloon"`s we can construct by available letters.
+
+**Time Complexity**: **O(n)**  
+Where `n` is the length of `text`. Just one pass to count, and one pass over `"balloon"`'s unique letters.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
+#include <string>
 #include <vector>
 #include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int maxIceCream(vector<int>& costs, int coins) {
-        int maxCost = *max_element(costs.begin(), costs.end());
-        vector<int> count(maxCost + 1, 0);
-        // Build counting sort array
-        for (int cost : costs) {
-            count[cost]++;
-        }
-        int bars = 0;
-        // Buy in order of cheapest to most expensive
-        for (int price = 1; price <= maxCost; ++price) {
-            if (count[price] == 0) continue;
-            int canBuy = min(count[price], coins / price);
-            bars += canBuy;
-            coins -= canBuy * price;
-            if (coins < price) break; // Can't afford any more
-        }
-        return bars;
+    int maxNumberOfBalloons(string text) {
+        vector<int> freq(26, 0);
+        for(char c : text)
+            freq[c - 'a']++;
+        
+        // 'b','a','l','o','n' are needed. 'l' and 'o' are needed twice.
+        int count_b = freq['b' - 'a'];
+        int count_a = freq['a' - 'a'];
+        int count_l = freq['l' - 'a'] / 2;
+        int count_o = freq['o' - 'a'] / 2;
+        int count_n = freq['n' - 'a'];
+        
+        return min({count_b, count_a, count_l, count_o, count_n});
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+### 5. **Example Explanation**
 
-**Example 1:**  
-`costs = [1,3,2,4,1]`, `coins = 7`
+#### Input: `"loonbalxballpoon"`
 
-- Frequency of costs:
-    - `count[1] = 2`, `count[2] = 1`, `count[3] = 1`, `count[4] = 1`
-- Now, buy as many as possible:
-    1. Cost 1: can buy min(2,7/1)=2, coins left: 7-2*1=5, bars: 2
-    2. Cost 2: can buy min(1,5/2)=1, coins left: 5-1*2=3, bars: 3
-    3. Cost 3: can buy min(1,3/3)=1, coins left: 3-1*3=0, bars: 4
-    4. Cost 4: can't buy (coins < 4)
-- **Output:** `4`
+- Letter frequency breakdown:
+    - b: 2, a: 2, l: 4, o: 4, n: 2
+- For `"balloon"` we need:
+    - b: 1, a: 1, l: 2, o: 2, n: 1
+- Calculating per word:
+    - b: 2 // 1 = 2
+    - a: 2 // 1 = 2
+    - l: 4 // 2 = 2
+    - o: 4 // 2 = 2
+    - n: 2 // 1 = 2
+- **Answer**: `min(2,2,2,2,2) = 2`
 
----
-
-## **Summary Table**
-
-| Step  | Cost   | # Available | # Buy | Coins Left | Bars |
-|-------|--------|-------------|-------|------------|------|
-| 1     | 1      | 2           | 2     | 5          | 2    |
-| 2     | 2      | 1           | 1     | 3          | 3    |
-| 3     | 3      | 1           | 1     | 0          | 4    |
-| 4     | 4      | 1           | 0     | 0          | 4    |
+So, we can make `"balloon"` **2 times** with the letters in this input.
 
 ---
 
-**This algorithm is fast and safe for large inputs, thanks to counting sort!**
+Let me know if you want any more examples or explanations!
