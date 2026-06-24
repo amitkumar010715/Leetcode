@@ -1,174 +1,217 @@
-Let's break down your requirements step by step:
+Let's break down the problem and walk you through to the optimal solution.
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-We are to count the number of arrays of length `n` whose values are within `[l, r]`, such that:
-- No two adjacent elements are equal.
-- No three consecutive elements are strictly increasing or decreasing.
+Given a range of numbers \([l, r]\) and an array length \(n\), count how many arrays of size \(n\) (ZigZag arrays) can be formed such that:
+1. Each number is in \([l, r]\).
+2. No two adjacent elements are equal.
+3. No three consecutive elements are strictly increasing or decreasing.
 
-This is a classic **Dynamic Programming** problem where the state depends on the previous two elements (to prevent both repeats and monotonic runs).
+Return the count modulo \(10^9+7\).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `3 ≤ n ≤ 2000`
-  - `1 ≤ l < r ≤ 2000` (So up to 2000 values for each position)
-  - The answer must be computed modulo \(10^9 + 7\).
-- **Edge cases:**
-  - Only 2 different possible values: arrays must alternate.
-  - Large n: O(nk²) is feasible, but O(nk³) is not.
-  - Every sequence must check both increasing and decreasing runs of length 3.
-  - The minimum value of `n` is 3.
+- **Large n**: Up to \(10^9\) -- cannot brute force or simulate all possibilities.
+- **Small r-l+1** (values domain): At most 75.
+- **l < r**: at least 2 available distinct values.
+- **n ≥ 3**: The minimum to check for ZigZag condition.
+- **Edge Cases**:
+    - Only two values: Only possible pattern is alternating (e.g., \(a, b, a, b, ...\)).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **DP State:**
-Let’s define  
-`dp[pos][last][second_last]` := number of arrays of length `pos+1`, ending at `last` (current value), with `second_last` as the element before that.
+### **Observation**
 
-- **pos**: current index (0-based).
-- **last**: The value at `pos`
-- **second_last**: Value at `pos-1`
+Since \(n\) is huge, and the value domain is small, focus on possible previous states. This is a classic DP with fixed state, where we can use matrix exponentiation.
 
-#### **Base case:**
-For position 1 (`pos=1`), for all valid `last` and `second_last`, set `dp[1][last][second_last] = 1` if last != second_last.
+### **DP State**
 
-#### **Transition:**
-For pos from 2 to n-1:
-- For all `x = l..r`: current value (will be a[pos])
-    - For all `y = l..r`: previous value (will be a[pos-1])
-        - For all `z = l..r`: value before previous (a[pos-2])
-            - **Valid only if**:
-                - x != y (no same adjacent)
-                - y != z (ensured by previous transitions)
-                - (z, y, x) is **not** strictly increasing: !(z < y && y < x)
-                - (z, y, x) is **not** strictly decreasing: !(z > y && y > x)
-            - Then:
-              ```
-              dp[pos][x][y] += dp[pos-1][y][z]
-              ```
+Let \(dp[i][a][b]\) = number of ZigZag arrays of length \(i\) ending with last two numbers \(a, b\).
 
-#### **Optimization:**
-- At each step, keep only two layers (`cur`, `prev`), reducing memory to O(k²).
-- As k can be up to 2000, and n up to 2000, total DP states: O(n k²), which is feasible.
+But to reduce size:
+- Only consider the last two numbers. Since no consecutive equal and the third number can't make a strictly monotonic triple, this suffices.
+
+### **Transition**
+
+To build arrays of length \(i+1\) from \(i\):
+
+For all possible previous two values \((a, b)\):
+
+- For the next value \(c\), it must satisfy:
+    - \(c \neq b\) (no adjacent equals)
+    - \(a, b, c\) is **not** strictly increasing: not \(a < b < c\)
+    - \(a, b, c\) is **not** strictly decreasing: not \(a > b > c\)
+
+So, for each valid pair \((a, b)\), generate all possible \(c\).
+
+### **Matrix Representation**
+
+For all possible states \((a, b)\), maintain DP.
+
+- Number of states: \(m = r-l+1\).
+- State space: \(m \times m\) (all ordered pairs \((a, b)\)).
+
+Let \(S\) be the state index: state \((a, b)\) maps to \(idx = (a-l) * m + (b-l)\)
+- State vector: \(F\) of size \(m^2\), representing count of each state at current position.
+- Transition Matrix: \(T\) of size \(m^2 \times m^2\)
+
+**F(2)**: For position 2, \(F\) is initialized for all possible valid \((a,b)\) (\(a \neq b\)), set to 1.
+
+For each step, \(F_{next} = T \cdot F\)
+
+After \(n-2\) transitions, total = sum of all values in \(F\).
+
+### **Time Complexity**
+
+- Build Transition: \(O(m^3)\), \(m \leq 75\).
+- Matrix exponentiation: \(O(\log n)\) matrix multiplications, each is \(O(m^3)\), so total: \(O(m^3 \cdot \log n)\)
+
+This is feasible since \(m^3 = 75^3 = 421,875\).
 
 ---
 
-### **Implementation Plan**
-- Initialize dp for size 2 ("arrays of length 2").
-- For pos = 2..n-1, transition as above.
-- Finally, sum all `dp[n-1][last][second_last]`.
+## 4. **C++ Solution**
 
----
-
-## 4. **C++ Code**
+Here's a clean, efficient solution:
 
 ```cpp
-#include <bits/stdc++.h>
+#include <vector>
 using namespace std;
 
-const int MOD = 1'000'000'007;
+typedef long long ll;
+const int MOD = 1e9+7;
 
 int numberOfZigZag(int n, int l, int r) {
-    int k = r - l + 1;
-    // Compress value range to [0..k-1]
-    // dp[cur][last][second_last]
-    vector<vector<int>> prev(k, vector<int>(k, 0));
-    // Initialize base: sequences of length 2
-    for (int a = 0; a < k; ++a) {
-        for (int b = 0; b < k; ++b) {
-            if (a != b) {
-                prev[b][a] = 1;
+    int m = r - l + 1;
+    int sz = m * m; // For all pairs (a,b)
+    
+    // Map (a,b) to an index
+    auto getIdx = [=](int a, int b) { return (a - l)*m + (b - l); };
+
+    // Build the transition matrix T[size][size]
+    vector<vector<int>> T(sz, vector<int>(sz, 0));
+    for(int a = l; a <= r; ++a) {
+        for(int b = l; b <= r; ++b) if(a != b) {
+            int idx1 = getIdx(a,b);
+            // Try to put c at next position
+            for(int c = l; c <= r; ++c) {
+                if(c == b) continue; // No adjacent equals
+                // No strictly increasing or decreasing
+                if((a < b && b < c) || (a > b && b > c)) continue;
+                int idx2 = getIdx(b,c); // Next state
+                T[idx2][idx1] = (T[idx2][idx1]+1) % MOD;
             }
         }
     }
 
-    for (int pos = 2; pos < n; ++pos) {
-        vector<vector<int>> cur(k, vector<int>(k, 0));
-        for (int x = 0; x < k; ++x) {         // current
-            for (int y = 0; y < k; ++y) {     // previous
-                if (x == y) continue;
-                for (int z = 0; z < k; ++z) { // second last
-                    // Prevent strictly inc/dec run
-                    if (z < y && y < x) continue;
-                    if (z > y && y > x) continue;
-                    cur[x][y] = (cur[x][y] + prev[y][z]) % MOD;
-                }
+    // Fast exponentiation of matrix
+    auto mat_mult = [&](const vector<vector<int>>& A, const vector<vector<int>>& B) {
+        vector<vector<int>> C(sz, vector<int>(sz, 0));
+        for(int i=0; i < sz; ++i)
+            for(int k=0; k < sz; ++k) if(A[i][k])
+                for(int j=0; j < sz; ++j)
+                    C[i][j] = (C[i][j] + 1LL * A[i][k] * B[k][j]) % MOD;
+        return C;
+    };
+
+    auto mat_pow = [&](vector<vector<int>> A, int p) {
+        vector<vector<int>> res(sz, vector<int>(sz, 0));
+        for(int i=0; i < sz; ++i) res[i][i] = 1; // identity
+        while(p) {
+            if(p & 1) res = mat_mult(res, A);
+            A = mat_mult(A, A);
+            p >>= 1;
+        }
+        return res;
+    };
+
+    // Initial vector F: all valid (a,b) with a != b
+    vector<int> F(sz, 0);
+    for(int a = l; a <= r; ++a)
+        for(int b = l; b <= r; ++b)
+            if(a != b) F[getIdx(a,b)] = 1;
+
+    // Exponentiate transition matrix to power (n-2)
+    vector<vector<int>> Tpow;
+    if(n == 2) Tpow = vector<vector<int>>(sz, vector<int>(sz, 0));
+    else Tpow = mat_pow(T, n-2);
+
+    // Multiply Tpow by F to get resulting vector
+    vector<ll> res(sz, 0);
+    if(n == 2) {
+        // Special case: length=2, answer is just number of a!=b
+        ll ans = 0;
+        for(int a = l; a <= r; ++a)
+            for(int b = l; b <= r; ++b)
+                if(a != b) ans++;
+        return (int)(ans % MOD);
+    } else {
+        // V = T^{n-2} * F
+        for(int i = 0; i < sz; ++i) {
+            for(int j = 0; j < sz; ++j) {
+                res[i] = (res[i] + 1LL * Tpow[i][j] * F[j]) % MOD;
             }
         }
-        prev.swap(cur);
+        ll total = 0;
+        for(int i = 0; i < sz; ++i) total = (total + res[i]) % MOD;
+        return (int)total;
     }
-
-    // Sum over possible last two elements
-    int ans = 0;
-    for (int x = 0; x < k; ++x) {
-        for (int y = 0; y < k; ++y) {
-            ans = (ans + prev[x][y]) % MOD;
-        }
-    }
-    return ans;
 }
+```
+
+**API:**
+```cpp
+int numberOfZigZag(int n, int l, int r);
 ```
 
 ---
 
 ## 5. **Example Explanation**
 
-### Example: `n = 3, l = 1, r = 3`
+### Example 2
 
-So, k = 3 (possible values: 1, 2, 3):
+`n = 3, l = 1, r = 3`
 
-- All arrays of length 3 using 1,2,3, such that:
-    1. Adjacent elements are different.
-    2. No three consecutive numbers are strictly increasing/decreasing.
+So the available values: 1, 2, 3
 
-Let's list possible arrays:
-- [1,2,1], [1,2,3] (**[1,2,3]** is strictly increasing: not allowed), so invalid.
-- [1,3,1], [1,3,2]
-- [2,1,2], [2,1,3]
-- [2,3,1], [2,3,2]
-- [3,1,2], [3,1,3]
-- [3,2,1], [3,2,3]
+All arrays of length 3, where:
+- Every value in [1,3]
+- No two adjacent equal
+- No three in a row strictly increasing or strictly decreasing
 
-But let's check for strictly inc/dec runs (`a < b < c` or `a > b > c`):
+Let's enumerate valid arrays:
+- [1,2,1]
+- [1,3,1]
+- [1,3,2]
+- [2,1,2]
+- [2,1,3]
+- [2,3,1]
+- [2,3,2]
+- [3,1,2]
+- [3,1,3]
+- [3,2,3]
 
-Listing only **valid**:
-- [1,2,1] ✅
-- [1,3,1] ✅
-- [1,3,2] ✅
-- [2,1,2] ✅
-- [2,1,3] ✅
-- [2,3,1] ✅
-- [2,3,2] ✅
-- [3,1,2] ✅
-- [3,1,3] ✅
-- [3,2,3] ✅
-
-That's 10, as required.
+Total = **10**, matching expected output.
 
 ---
 
 ## **Summary Table**
 
-| `n` | `l` | `r` | answer |
-|-----|-----|-----|--------|
-|  3  |  4  |  5  |    2   |
-|  3  |  1  |  3  |   10   |
+| Step           | Approach     | Details                                                         |
+|----------------|-------------|-----------------------------------------------------------------|
+| Problem Type   | DP/Matrix Exponentiation | State space is feasible, length too large for DP by n.          |
+| DP State       | 2 last values | Only last two values matter given the constraints.              |
+| Transition     | Based on triplet| No adjacent equals, and no strictly increasing/decreasing triplet  |
+| Matrix Size    | Max \(75^2\) | Makes exponentiation practical!                                 |
+| Complexity     | \(O(m^3 \log n)\) | Efficient for tight constraints.                               |
+| Implementation | Matrix pow   | With states as pairs of values.                                 |
 
 ---
 
-## **Conclusion**
-
-- The DP is O(n k²) and fits in the constraints.
-- At every step, you only need the last two values.
-- The solution is efficient and covers all given and edge cases.
-
----
-
-**Let me know if you need further clarifications or Python code!**
+**If you have follow-up optimization questions or want a Python version, let me know!**
