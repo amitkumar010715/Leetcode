@@ -1,217 +1,106 @@
-Let's break down the problem and walk you through to the optimal solution.
+Sure! Let's go through the LeetCode problem step by step:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-Given a range of numbers \([l, r]\) and an array length \(n\), count how many arrays of size \(n\) (ZigZag arrays) can be formed such that:
-1. Each number is in \([l, r]\).
-2. No two adjacent elements are equal.
-3. No three consecutive elements are strictly increasing or decreasing.
-
-Return the count modulo \(10^9+7\).
+Given an array `nums` and an integer `target`, return the number of subarrays where `target` is the **majority element** (appears **more than half** the time in the subarray).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Large n**: Up to \(10^9\) -- cannot brute force or simulate all possibilities.
-- **Small r-l+1** (values domain): At most 75.
-- **l < r**: at least 2 available distinct values.
-- **n ≥ 3**: The minimum to check for ZigZag condition.
-- **Edge Cases**:
-    - Only two values: Only possible pattern is alternating (e.g., \(a, b, a, b, ...\)).
+**Constraints:**
+- `1 <= nums.length <= 1000` (array is small/medium sized; O(n²) is acceptable)
+- `1 <= nums[i], target <= 10⁹` (Value ranges are large, so we cannot use value-indexed arrays)
+
+**Edge Cases:**
+- `target` does **not appear** in `nums` ⇒ answer is 0.
+- Every element is `target` ⇒ all subarrays work (answer = n * (n+1) / 2).
+- Each element occurs once but `target` only occurs in a few spots.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Observation**
+Because n ≤ 1000, an O(n²) solution is feasible.
 
-Since \(n\) is huge, and the value domain is small, focus on possible previous states. This is a classic DP with fixed state, where we can use matrix exponentiation.
+### **Plan**
+- For every starting index `l`, move rightwards to every ending index `r` (`l <= r < n`)
+- For each subarray, count how many times `target` occurs.
+- For subarray `nums[l..r]` (length = r-l+1): target is majority ⇔ count_target > (r-l+1)//2
 
-### **DP State**
+#### **Optimizations**
+Instead of recounting target every time for a subarray, we can:
+- For each `l`, maintain a running count as we expand `r`. This is very efficient for 1000 elements.
 
-Let \(dp[i][a][b]\) = number of ZigZag arrays of length \(i\) ending with last two numbers \(a, b\).
-
-But to reduce size:
-- Only consider the last two numbers. Since no consecutive equal and the third number can't make a strictly monotonic triple, this suffices.
-
-### **Transition**
-
-To build arrays of length \(i+1\) from \(i\):
-
-For all possible previous two values \((a, b)\):
-
-- For the next value \(c\), it must satisfy:
-    - \(c \neq b\) (no adjacent equals)
-    - \(a, b, c\) is **not** strictly increasing: not \(a < b < c\)
-    - \(a, b, c\) is **not** strictly decreasing: not \(a > b > c\)
-
-So, for each valid pair \((a, b)\), generate all possible \(c\).
-
-### **Matrix Representation**
-
-For all possible states \((a, b)\), maintain DP.
-
-- Number of states: \(m = r-l+1\).
-- State space: \(m \times m\) (all ordered pairs \((a, b)\)).
-
-Let \(S\) be the state index: state \((a, b)\) maps to \(idx = (a-l) * m + (b-l)\)
-- State vector: \(F\) of size \(m^2\), representing count of each state at current position.
-- Transition Matrix: \(T\) of size \(m^2 \times m^2\)
-
-**F(2)**: For position 2, \(F\) is initialized for all possible valid \((a,b)\) (\(a \neq b\)), set to 1.
-
-For each step, \(F_{next} = T \cdot F\)
-
-After \(n-2\) transitions, total = sum of all values in \(F\).
-
-### **Time Complexity**
-
-- Build Transition: \(O(m^3)\), \(m \leq 75\).
-- Matrix exponentiation: \(O(\log n)\) matrix multiplications, each is \(O(m^3)\), so total: \(O(m^3 \cdot \log n)\)
-
-This is feasible since \(m^3 = 75^3 = 421,875\).
+#### **Time Complexity**:  
+O(n²) — as we check all subarrays, but are careful not to recount for each new subarray.
 
 ---
 
 ## 4. **C++ Solution**
 
-Here's a clean, efficient solution:
-
 ```cpp
 #include <vector>
 using namespace std;
 
-typedef long long ll;
-const int MOD = 1e9+7;
-
-int numberOfZigZag(int n, int l, int r) {
-    int m = r - l + 1;
-    int sz = m * m; // For all pairs (a,b)
-    
-    // Map (a,b) to an index
-    auto getIdx = [=](int a, int b) { return (a - l)*m + (b - l); };
-
-    // Build the transition matrix T[size][size]
-    vector<vector<int>> T(sz, vector<int>(sz, 0));
-    for(int a = l; a <= r; ++a) {
-        for(int b = l; b <= r; ++b) if(a != b) {
-            int idx1 = getIdx(a,b);
-            // Try to put c at next position
-            for(int c = l; c <= r; ++c) {
-                if(c == b) continue; // No adjacent equals
-                // No strictly increasing or decreasing
-                if((a < b && b < c) || (a > b && b > c)) continue;
-                int idx2 = getIdx(b,c); // Next state
-                T[idx2][idx1] = (T[idx2][idx1]+1) % MOD;
+class Solution {
+public:
+    int countSubarrays(vector<int>& nums, int target) {
+        int n = nums.size();
+        int ans = 0;
+        for (int l = 0; l < n; ++l) {
+            int count = 0;
+            for (int r = l; r < n; ++r) {
+                if (nums[r] == target)
+                    ++count;
+                int length = r - l + 1;
+                if (count > length / 2)
+                    ++ans;
             }
         }
+        return ans;
     }
-
-    // Fast exponentiation of matrix
-    auto mat_mult = [&](const vector<vector<int>>& A, const vector<vector<int>>& B) {
-        vector<vector<int>> C(sz, vector<int>(sz, 0));
-        for(int i=0; i < sz; ++i)
-            for(int k=0; k < sz; ++k) if(A[i][k])
-                for(int j=0; j < sz; ++j)
-                    C[i][j] = (C[i][j] + 1LL * A[i][k] * B[k][j]) % MOD;
-        return C;
-    };
-
-    auto mat_pow = [&](vector<vector<int>> A, int p) {
-        vector<vector<int>> res(sz, vector<int>(sz, 0));
-        for(int i=0; i < sz; ++i) res[i][i] = 1; // identity
-        while(p) {
-            if(p & 1) res = mat_mult(res, A);
-            A = mat_mult(A, A);
-            p >>= 1;
-        }
-        return res;
-    };
-
-    // Initial vector F: all valid (a,b) with a != b
-    vector<int> F(sz, 0);
-    for(int a = l; a <= r; ++a)
-        for(int b = l; b <= r; ++b)
-            if(a != b) F[getIdx(a,b)] = 1;
-
-    // Exponentiate transition matrix to power (n-2)
-    vector<vector<int>> Tpow;
-    if(n == 2) Tpow = vector<vector<int>>(sz, vector<int>(sz, 0));
-    else Tpow = mat_pow(T, n-2);
-
-    // Multiply Tpow by F to get resulting vector
-    vector<ll> res(sz, 0);
-    if(n == 2) {
-        // Special case: length=2, answer is just number of a!=b
-        ll ans = 0;
-        for(int a = l; a <= r; ++a)
-            for(int b = l; b <= r; ++b)
-                if(a != b) ans++;
-        return (int)(ans % MOD);
-    } else {
-        // V = T^{n-2} * F
-        for(int i = 0; i < sz; ++i) {
-            for(int j = 0; j < sz; ++j) {
-                res[i] = (res[i] + 1LL * Tpow[i][j] * F[j]) % MOD;
-            }
-        }
-        ll total = 0;
-        for(int i = 0; i < sz; ++i) total = (total + res[i]) % MOD;
-        return (int)total;
-    }
-}
-```
-
-**API:**
-```cpp
-int numberOfZigZag(int n, int l, int r);
+};
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-### Example 2
+Let's take **Example 1:**
+- **Input**: `nums = [1,2,2,3], target = 2`
 
-`n = 3, l = 1, r = 3`
+**All subarrays & majorities:**
 
-So the available values: 1, 2, 3
+| Subarray      | Elements   | count of 2 | Length | Majority?   |
+|---------------|------------|:----------:|:------:|-------------|
+| [1]           | 1          | 0          | 1      | No          |
+| [1,2]         | 1 2        | 1          | 2      | No (not >1) |
+| [1,2,2]       | 1 2 2      | 2          | 3      | Yes (2 > 1.5)|
+| [1,2,2,3]     | 1 2 2 3    | 2          | 4      | No (2 = 2)  |
+| [2]           | 2          | 1          | 1      | Yes         |
+| [2,2]         | 2 2        | 2          | 2      | Yes (2>1)   |
+| [2,2,3]       | 2 2 3      | 2          | 3      | Yes (2>1.5) |
+| [2]           | 2          | 1          | 1      | Yes         |
+| [2,3]         | 2 3        | 1          | 2      | No          |
+| [3]           | 3          | 0          | 1      | No          |
 
-All arrays of length 3, where:
-- Every value in [1,3]
-- No two adjacent equal
-- No three in a row strictly increasing or strictly decreasing
+Counting the "Yes", we have **5** subarrays:
+- [1,2,2]
+- [2]
+- [2,2]
+- [2,2,3]
+- [2] (the second single-2 at position 2)
 
-Let's enumerate valid arrays:
-- [1,2,1]
-- [1,3,1]
-- [1,3,2]
-- [2,1,2]
-- [2,1,3]
-- [2,3,1]
-- [2,3,2]
-- [3,1,2]
-- [3,1,3]
-- [3,2,3]
-
-Total = **10**, matching expected output.
-
----
-
-## **Summary Table**
-
-| Step           | Approach     | Details                                                         |
-|----------------|-------------|-----------------------------------------------------------------|
-| Problem Type   | DP/Matrix Exponentiation | State space is feasible, length too large for DP by n.          |
-| DP State       | 2 last values | Only last two values matter given the constraints.              |
-| Transition     | Based on triplet| No adjacent equals, and no strictly increasing/decreasing triplet  |
-| Matrix Size    | Max \(75^2\) | Makes exponentiation practical!                                 |
-| Complexity     | \(O(m^3 \log n)\) | Efficient for tight constraints.                               |
-| Implementation | Matrix pow   | With states as pairs of values.                                 |
+**Answer is `5`.**
 
 ---
 
-**If you have follow-up optimization questions or want a Python version, let me know!**
+### **In summary:**
+- Iterate all subarrays using two loops, and for each, keep a running count of `target`.
+- Check if it is a majority, update answer.
+- C++ solution provided above.
+
+Let me know if you want an even more optimized (but more complex) O(n²) approach using prefix sums!
