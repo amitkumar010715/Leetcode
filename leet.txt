@@ -1,123 +1,87 @@
-Let's break down the problem as requested:
+Let's address your requirements step by step:
 
 ---
 
-## 1. Summary
+## 1. **Short Summary**
 
-Given a list of positive integers, you can **decrease** any element and **rearrange** freely. The goal is to maximize the largest element **after** forcing:
-
-- The first element is 1
-- Any two adjacent elements differ by at most 1
-
-You must find the maximum possible value of any element in the resulting array.
+Given a list of strings `patterns` and a string `word`, count how many of the patterns appear as substrings within `word`.
 
 ---
 
-## 2. Constraints & Edge Cases
+## 2. **Constraints & Edge Cases**
 
-#### Constraints
+- **Constraints:**
+  - `1 <= patterns.length <= 100`
+  - `1 <= patterns[i].length <= 100`
+  - `1 <= word.length <= 100`
+  - All characters are lowercase English letters.
 
-- `1 <= arr.length <= 1e5`
-- `1 <= arr[i] <= 1e9`
-
-#### Edge Cases
-
-- All elements are 1: output is 1.
-- The array is already a contiguous sequence starting from 1, e.g. `[1,2,3,4]`: output is the last element.
-- Large values will be forced to become smaller due to the difference constraint.
-- The input array may not be sorted.
-- Duplicates are allowed.
-- Array of length 1: always 1.
+- **Edge Cases:**
+  - **Duplicate Patterns:** The same string may appear multiple times in `patterns` and should be counted each time it matches as a substring.
+  - **Whole Word Match:** If a pattern equals the entire `word`, it counts.
+  - **Pattern Longer Than Word:** Impossible for such pattern to be a substring; none will match.
+  - **All Patterns Match / None Match:** Both situations possible.
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-### **Observation**
+- For each `pattern` in `patterns`:
+  - Use the `find` function (or equivalent) to check if `pattern` appears anywhere in `word`.
+  - If found, increment a counter.
+- Return the counter.
 
-- You can always rearrange the array.
-- You can only DECREASE elements (to any *smaller* positive integer).
-- Since the difference constraint is tight, the *best* you can do is: `[1,2,3,...,k]` for as long as you have enough numbers in the input (possibly decreasing).
-- The *first* element has to be 1. The *higher* you can go, the better.
-
-### **Method**
-
-1. **Sort the input array**.
-2. **Greedily build** `[1,2,3,...]` using the sorted values:
-    - Start with `prev = 0`.
-    - For each `x` in sorted array:
-        - Let `cur = min(x, prev+1)`. (You can decrease `x` down to `prev+1` if needed. But must be >= 1)
-        - Replace x with cur.
-        - Update `prev = cur`.
-3. The largest value assigned is your result.
-
-#### **Time Complexity:**  
-- Sorting: O(n log n)
-- Loop: O(n)
-- Total: O(n log n)
+**Why This Is Optimal?**
+- `patterns.size()` and `word.size()` are both small (≤ 100).
+- Checking for substring using `find` runs in O(N*M) where N is length of `pattern` and M is length of `word`, but with low constraints, this is efficient.
 
 ---
 
-## 4. Clean C++ Solution
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-using namespace std;
-
 class Solution {
 public:
-    int maximumElementAfterDecrementingAndRearranging(vector<int>& arr) {
-        sort(arr.begin(), arr.end());
-        int res = 1;
-        for (int i = 1; i < arr.size(); ++i) {
-            if (arr[i] > res)
-                ++res;
-            // else leave res unchanged (cannot go below res)
+    int numOfStrings(vector<string>& patterns, string word) {
+        int count = 0;
+        for (const string& pattern : patterns) {
+            if (word.find(pattern) != string::npos) {
+                count++;
+            }
         }
-        return res;
+        return count;
     }
 };
 ```
 
-- After sorting, first element is set to 1 (so `res = 1`).
-- For each next element, if it’s `> res`, increase `res` by 1 (since you can decrease `arr[i]` to at most `res+1`).
-- Otherwise, leave as is.
+---
+
+## 5. **Example Explanation**
+
+**Example 1:**
+
+> patterns = ["a","abc","bc","d"], word = "abc"
+
+- `"a"` appears in `"abc"` (at index 0).
+- `"abc"` appears in `"abc"` (at index 0, the whole word).
+- `"bc"` appears in `"abc"` (at index 1).
+- `"d"` does **not** appear in `"abc"`.
+
+**So the output is `3`.**
 
 ---
 
-## 5. Example Explained
+### **Summary Table**
 
-### Example: `arr = [100, 1, 1000]`
+| Pattern | Appears in "abc"? | Reason                |
+|---------|------------------|-----------------------|
+| "a"     | Yes (index 0)    | substring exists      |
+| "abc"   | Yes (index 0)    | equals whole word     |
+| "bc"    | Yes (index 1)    | substring exists      |
+| "d"     | No               | not in the word       |
 
-1. **Sort:** `[1, 100, 1000]`
-2. Assign `res = 1` (first element must be 1).
-3. For `i=1` (100):
-   - Since `100 > 1`, set `res = 2`
-4. For `i=2` (1000):
-   - Since `1000 > 2`, set `res = 3`
-5. Done. Maximum element is **3**.
-
-#### **Transformed Array:** `[1, 2, 3]`  
-- Starts at 1.
-- All adjacent differences ≤ 1.
-- Maximum = **3**.
+**Final answer: 3**
 
 ---
 
-## **Summary Table**
-
-| Step            | Sorted Array | Current res | Action                      |
-|-----------------|-------------|------------|-----------------------------|
-| Initial         | [1,100,1000]| 1          | Set first element to 1      |
-| i=1, arr[1]=100 | [1,100,...] | 2          | arr[1] can be at most 2     |
-| i=2, arr[2]=1000| [1,2,1000]  | 3          | arr[2] can be at most 3     |
-| **Result**      | -           | **3**      | **Return 3**                |
-
----
-
-### **In Summary**
-
-- **Sort**
-- **Start from 1, incrementally build up by at most +1 at each step**
-- **Result is the last "res" value**
+Let me know if you'd like alternative approaches or more detailed explanations!
