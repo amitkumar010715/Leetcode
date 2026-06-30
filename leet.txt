@@ -1,87 +1,92 @@
-Let's address your requirements step by step:
+Let's tackle the problem as requested:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given a list of strings `patterns` and a string `word`, count how many of the patterns appear as substrings within `word`.
+Given a string `s` consisting of only `'a'`, `'b'`, and `'c'`, count the number of substrings that **contain at least one occurrence of all three characters**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= patterns.length <= 100`
-  - `1 <= patterns[i].length <= 100`
-  - `1 <= word.length <= 100`
-  - All characters are lowercase English letters.
-
-- **Edge Cases:**
-  - **Duplicate Patterns:** The same string may appear multiple times in `patterns` and should be counted each time it matches as a substring.
-  - **Whole Word Match:** If a pattern equals the entire `word`, it counts.
-  - **Pattern Longer Than Word:** Impossible for such pattern to be a substring; none will match.
-  - **All Patterns Match / None Match:** Both situations possible.
+- **Length**: `3 <= s.length <= 5 * 10^4` — requires an efficient algorithm, O(n).
+- **Characters**: Only `'a'`, `'b'`, `'c'`.
+- **Edge Cases**:
+  - Substrings of length less than 3 can *never* meet the criteria.
+  - Repeated characters, e.g. `"aaa"`, mean there may be `0` valid substrings.
+  - Multiple valid substrings can overlap.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- For each `pattern` in `patterns`:
-  - Use the `find` function (or equivalent) to check if `pattern` appears anywhere in `word`.
-  - If found, increment a counter.
-- Return the counter.
+### **Sliding Window (Two Pointers + Counting)**
 
-**Why This Is Optimal?**
-- `patterns.size()` and `word.size()` are both small (≤ 100).
-- Checking for substring using `find` runs in O(N*M) where N is length of `pattern` and M is length of `word`, but with low constraints, this is efficient.
+**Idea**:
+- For each possible *ending index* `right`, track the *window's leftmost start* `left` such that the substring from `left` to `right` contains at least one `'a'`, `'b'`, and `'c'`.
+- For each `right`, if substring `[left, right]` is valid, then all substrings ending at `right` and starting at indices `[0, left]` are also valid (since more prefix doesn't remove any letter).
+- Thus, for current `right`, the count increases by `left + 1`.
+
+**Steps**:
+1. Use a count map for `'a'`, `'b'`, `'c'`.
+2. Move `right` from 0 to n-1.
+3. For each new `right`, update char count.
+4. While all three counts ≥ 1, *shrink from left* and decrement the count for `s[left]`.
+5. For each `right`, add `left` (number of starting positions) to result.
+
+**Complexity**: O(n).
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 class Solution {
 public:
-    int numOfStrings(vector<string>& patterns, string word) {
-        int count = 0;
-        for (const string& pattern : patterns) {
-            if (word.find(pattern) != string::npos) {
-                count++;
+    int numberOfSubstrings(string s) {
+        int n = s.size();
+        int count[3] = {0, 0, 0}; // a=0, b=1, c=2
+        int res = 0;
+        int left = 0;
+        for(int right = 0; right < n; ++right) {
+            count[s[right] - 'a']++;
+            // Move left up so that s[left, right] still contains all 3 characters
+            while(count[0] > 0 && count[1] > 0 && count[2] > 0) {
+                count[s[left] - 'a']--;
+                left++;
             }
+            // For this right, all substrings starting at 0..left-1 and ending at right are valid
+            res += left;
         }
-        return count;
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-**Example 1:**
+Let's use `s = "abcabc"`:
 
-> patterns = ["a","abc","bc","d"], word = "abc"
+| right | s[right] | counts    | left | res increment (left) | cumulative res |
+|-------|----------|-----------|------|----------------------|---------------|
+| 0     |   a      | 1 0 0     | 0    | 0                   | 0             |
+| 1     |   b      | 1 1 0     | 0    | 0                   | 0             |
+| 2     |   c      | 1 1 1     | 1    | 1                   | 1             |
+| 3     |   a      | 2 1 1     | 2    | 2                   | 3             |
+| 4     |   b      | 2 2 1     | 3    | 3                   | 6             |
+| 5     |   c      | 2 2 2     | 4    | 4                   | 10            |
 
-- `"a"` appears in `"abc"` (at index 0).
-- `"abc"` appears in `"abc"` (at index 0, the whole word).
-- `"bc"` appears in `"abc"` (at index 1).
-- `"d"` does **not** appear in `"abc"`.
-
-**So the output is `3`.**
-
----
-
-### **Summary Table**
-
-| Pattern | Appears in "abc"? | Reason                |
-|---------|------------------|-----------------------|
-| "a"     | Yes (index 0)    | substring exists      |
-| "abc"   | Yes (index 0)    | equals whole word     |
-| "bc"    | Yes (index 1)    | substring exists      |
-| "d"     | No               | not in the word       |
-
-**Final answer: 3**
+- At `right = 2`, first valid window `[0,2]` is found (`"abc"`).
+- Left increments as we move right, finding more valid starting windows for each right.
+- Total is **10**.
 
 ---
 
-Let me know if you'd like alternative approaches or more detailed explanations!
+### **In summary:**
+- Use sliding window on `s`, move left when all characters present, count number of valid windows for each right, and sum up for result.
+- Clean O(n) solution.
+
+Let me know if you want a version with full comments, or if any step needs more clarity!
