@@ -1,39 +1,41 @@
-Let's tackle the "Find the Safest Path in a Grid" problem step by step:
+Let's address your request step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an `n x n` grid with cells marked as thieves (1) or empty (0), you start at the top-left and want to reach the bottom-right. A "safeness factor" of a path is the **minimum** Manhattan distance from any cell on the path to any thief. You must find the **maximum possible safeness factor** achievable by any path from start to end.
+Given a binary grid and a starting health value, you can move in 4 directions; entering a cell with grid value 1 reduces your health by 1. You must find if you can reach the bottom-right cell with **health ≥ 1** throughout the journey.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Grid size**: Up to 400 × 400 ⇒ solutions slower than O(N² logN) may TLE.
-- **Multiple thieves possible**: Must handle >1 start points for BFS.
-- **Start & End on thieves**: If either (0,0) or (n-1, n-1) is a thief, max safeness factor is 0.
-- **No thieves**: Not possible, per constraints.
-- **Movement**: 4 directions only.
+### Constraints
+- `m, n <= 50` (grid size is manageable)
+- `health <= m + n` (health is at most the perimeter)
+- `2 <= m * n` (at least a 2-cell grid)
+
+### Edge Cases
+- **Start or End Unsafe:** If starting or ending cell is `1` and initial health is 1, you can't even move/stay.
+- **Minimum Health:** If path needs more unsafe cells than starting health allows, answer is false.
+- **Multiple Paths:** Need the *safest* (least unsafe) path.
+- **Cycles:** Avoid revisiting for lower unsafe counts; use DP/visited grid.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-A **two-stage approach**:
-1. **Preprocessing**:  
-   For every cell, compute its **minimum distance to any thief** using **multi-source BFS** from all thieves. Let's call this safeness map `safe[r][c]`.
+This problem reduces to finding if there exists a path from `(0, 0)` to `(m-1, n-1)` such that the number of unsafe cells (`1`'s stepped on, including start and finish if needed) is at most `health-1` (**since health must be ≥ 1 at end**).
 
-2. **Maximize Minimum Safeness Path**:  
-   Now, find a path from (0,0) to (n-1,n-1) such that the **minimum** safeness (from above) along the path is **maximized**.  
-   This is a classic **"Maximum of Minimum"** path, sometimes called the **Widest Path** or **Bottleneck Path**.  
-   Use **binary search** over possible safeness factors (from 0 up to max in `safe`), and for each candidate safeness factor, use BFS or DFS to check if there's a path only through cells whose safeness factor ≥ candidate.
+Thus, **BFS (0-1 BFS)** is optimal, where state = (x, y), and track *minimal number of unsafe cells* used to reach each cell. Only revisit if you found a strictly better (less unsafe steps) path.
 
-   Alternatively, use a **priority queue / max-heap** Dijkstra style, where at each step, you move to adjacent cells and keep track of the minimum safeness factor so far.
-
-   **Optimal approach**:  
-   - Preprocess `safe` via BFS from all thieves (O(N²)).
-   - Use Dijkstra's Algorithm with max-heap to always try to get to a cell with **the largest minimum safeness so far**.
+### Steps:
+1. Use BFS (since grid is small).
+2. State: (i, j, unsafe_steps_so_far)
+3. At each move, increment unsafe_steps if grid[i][j] == 1.
+4. For each cell, keep record of **least** unsafe steps to reach there.
+5. If reaching (m-1, n-1) with `unsafe_steps <= health-1`, return true.
+6. Else, false.
 
 ---
 
@@ -42,88 +44,77 @@ A **two-stage approach**:
 ```cpp
 #include <vector>
 #include <queue>
+#include <tuple>
 #include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int maximumSafenessFactor(vector<vector<int>>& grid) {
-        int n = grid.size();
-        vector<vector<int>> safeness(n, vector<int>(n, -1));
-        queue<pair<int,int>> q;
-        // Step 1: Multi-source BFS from all thieves
-        for(int r=0; r<n; ++r)
-            for(int c=0; c<n; ++c)
-                if(grid[r][c]==1) {
-                    safeness[r][c] = 0;
-                    q.emplace(r, c);
-                }
-        vector<pair<int,int>> dirs{{0,1},{1,0},{0,-1},{-1,0}};
-        while(!q.empty()) {
-            auto [r, c] = q.front(); q.pop();
-            for(auto [dr, dc] : dirs) {
-                int nr = r + dr, nc = c + dc;
-                if(nr>=0 && nr<n && nc>=0 && nc<n && safeness[nr][nc]==-1) {
-                    safeness[nr][nc] = safeness[r][c] + 1;
-                    q.emplace(nr, nc);
-                }
-            }
-        }
-        // Step 2: Dijkstra's algorithm for widest path (max below min on path)
-        priority_queue<tuple<int, int, int>> pq; // (safeness, r, c)
-        vector<vector<int>> vis(n, vector<int>(n, -1));
-        pq.emplace(safeness[0][0], 0, 0);
-        vis[0][0] = safeness[0][0];
-        while(!pq.empty()) {
-            auto [cur_safe, r, c] = pq.top(); pq.pop();
-            if(r == n-1 && c == n-1) return cur_safe;
-            for(auto [dr, dc] : dirs) {
-                int nr = r+dr, nc = c+dc;
-                if(nr>=0 && nr<n && nc>=0 && nc<n) {
-                    int next_safe = min(cur_safe, safeness[nr][nc]);
-                    // If we can offer a bigger minimum along path to (nr, nc), continue
-                    if(next_safe > vis[nr][nc]){
-                        vis[nr][nc] = next_safe;
-                        pq.emplace(next_safe, nr, nc);
+    bool isSafe(int x, int y, int m, int n) {
+        return (x >= 0 && x < m && y >= 0 && y < n);
+    }
+
+    bool isPossibleToReach(vector<vector<int>>& grid, int health) {
+        int m = grid.size();
+        int n = grid[0].size();
+
+        // [i][j] = minimal # of unsafe stepped to reach (i,j)
+        vector<vector<int>> unsafeSteps(m, vector<int>(n, INT_MAX));
+
+        queue<tuple<int,int,int>> q; // (i, j, unsafe_count)
+
+        int start_unsafe = grid[0][0]; // Include starting cell!
+        unsafeSteps[0][0] = start_unsafe;
+
+        q.emplace(0, 0, start_unsafe);
+
+        int dirs[4][2] = {{0,1},{1,0},{0,-1},{-1,0}};
+
+        while (!q.empty()) {
+            auto [x, y, used] = q.front();
+            q.pop();
+
+            for (auto& d : dirs) {
+                int nx = x + d[0], ny = y + d[1];
+                if (isSafe(nx, ny, m, n)) {
+                    int next_used = used + grid[nx][ny];
+                    // only proceed if we improve upon previous trace, AND don't exceed health
+                    // Need to reach with at least 1 health, so unsafe_steps ≤ health-1
+                    if (next_used < unsafeSteps[nx][ny] && next_used <= health-1) {
+                        unsafeSteps[nx][ny] = next_used;
+                        q.emplace(nx, ny, next_used);
                     }
                 }
             }
         }
-        // Should not reach here
-        return 0;
+
+        return unsafeSteps[m-1][n-1] <= health-1;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-**Let's explain Example 2:**
-```txt
-grid = [[0,0,1],
-        [0,0,0],
-        [0,0,0]]
+**Example:**  
+```
+grid  = [[0,1,0,0,0],
+         [0,1,0,1,0],
+         [0,0,0,1,0]]
+health = 1
 ```
 
-- Thief at (0,2).
-- Safeness map after BFS:
-    - (0,2): 0 (thief)
-    - (0,1): 1 (distance to thief)
-    - (0,0): 2
-    - (1,2): 1
-    - (2,2): 2
-    - (1,1), (1,0), (2,0), (2,1): distances 2 or 3
-
-Now, starting from (0,0) (safeness 2), the path tries to keep the lowest safeness along the path as large as possible.  
-One possible path: (0,0)→(1,0)→(2,0)→(2,1)→(2,2)  
-The **minimum safeness** along this path is 2.
-
-Thus, the answer is **2**.
+- You start with 1 health, so **you cannot step on any cell with a 1** (since it would drop your health to 0).
+- There **exists a path** (along only `0` cells) from (0,0) to (2,4).
+- The algorithm tracks that you reach each cell with `used=0`.
+- On reaching the final cell (2,4), `unsafeSteps[2][4] = 0 <= health-1 (=0)`, which is true.
 
 ---
 
-### **Summary**
-- **Two steps**: BFS for grid distances; Dijkstra for widest path.
-- **Time complexity** is efficient: O(N² logN).
-- Handles large grids and all edge cases efficiently.
+**Summary:**  
+- Track minimal number of `unsafe` (1's) squares visited to each cell with BFS.
+- If you can reach the end with `unsafe_steps ≤ health-1` return true.
+- Simple BFS is efficient for `m,n ≤ 50` grids.
+
+Let me know if you want a code walkthrough or solution in another language!
