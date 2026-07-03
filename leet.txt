@@ -1,41 +1,64 @@
-Let's address your request step by step.
+Let's break down the problem and provide an optimal solution.
 
 ---
 
 ## 1. **Short Summary**
 
-Given a binary grid and a starting health value, you can move in 4 directions; entering a cell with grid value 1 reduces your health by 1. You must find if you can reach the bottom-right cell with **health ≥ 1** throughout the journey.
+You are given a DAG (Directed Acyclic Graph) where some nodes are *offline*, except the start (0) and end (\( n-1 \)). Each edge has a "recovery cost". A path is *valid* if:
+- All intermediate nodes are online.
+- The total cost on the path does not exceed \( k \).
+
+The **score** of a path is the *minimum* edge cost along the path.
+
+Your task: **Return the largest possible path-score over all valid 0-to-\( n-1 \) paths** (that is, maximize the minimal edge cost), or -1 if impossible.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### Constraints
-- `m, n <= 50` (grid size is manageable)
-- `health <= m + n` (health is at most the perimeter)
-- `2 <= m * n` (at least a 2-cell grid)
+- \( n \) can be up to 50,000, \( m \) up to 100,000.
+- Costs can be up to \( 10^9 \), \( k \) up to \( 5 \times 10^{13} \).
+- Offline intermediate nodes make all paths through them invalid.
+- Always a DAG (so topological ordering is possible).
+- Multiple edges from node \( u \) to \( v \) are possible.
 
-### Edge Cases
-- **Start or End Unsafe:** If starting or ending cell is `1` and initial health is 1, you can't even move/stay.
-- **Minimum Health:** If path needs more unsafe cells than starting health allows, answer is false.
-- **Multiple Paths:** Need the *safest* (least unsafe) path.
-- **Cycles:** Avoid revisiting for lower unsafe counts; use DP/visited grid.
+**Edge Cases:**
+- All paths exceed \( k \).
+- All intermediate nodes offline.
+- All edges have cost 0.
+- Multiple valid paths, different scores.
+- No valid path at all (\(-1\) should be returned).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This problem reduces to finding if there exists a path from `(0, 0)` to `(m-1, n-1)` such that the number of unsafe cells (`1`'s stepped on, including start and finish if needed) is at most `health-1` (**since health must be ≥ 1 at end**).
+### **Step 1: Binary Search on Answer (Path Score)**
 
-Thus, **BFS (0-1 BFS)** is optimal, where state = (x, y), and track *minimal number of unsafe cells* used to reach each cell. Only revisit if you found a strictly better (less unsafe steps) path.
+- The minimum edge cost along a path is exactly the "bottleneck" for the score.
+- If we fix a candidate minimum edge cost \( x \), can we find a path from 0 to \( n-1 \) using only edges with cost \(\geq x\), with total path cost \(\leq k\) and only online nodes?
+- This is a **monotonic predicate**: if we can do it for \( x \), we can do it for all smaller \( x \), but maybe not for bigger.
 
-### Steps:
-1. Use BFS (since grid is small).
-2. State: (i, j, unsafe_steps_so_far)
-3. At each move, increment unsafe_steps if grid[i][j] == 1.
-4. For each cell, keep record of **least** unsafe steps to reach there.
-5. If reaching (m-1, n-1) with `unsafe_steps <= health-1`, return true.
-6. Else, false.
+### **Step 2: For Given \( x \), Check Path Existence**
+
+- Build a graph using only edges with cost \(\geq x\), and only online intermediate nodes.
+- Find the **minimum path cost** from 0 to \( n-1 \) (classic shortest path / DP on DAG), skipping offline nodes (besides start/end).
+- If minimum total path cost \(\leq k\), this \( x \) is feasible.
+
+### **Step 3: Implement**
+
+- Binary search \( x \) in [0, \( 10^9 \)].
+- For each \( x \), run DP on DAG (efficient given constraints).
+
+- **Topological sort** for dynamic programming.
+- For each node, keep the minimum total cost to reach it.
+- If \( n-1 \) is reachable and cost \(\leq k\), answer \( x \) is possible.
+
+### **Complexity**
+
+- Binary search on edge costs: \( O(\log M) \), with \( M \) = max possible edge cost (\(10^9\)), at most 30-40 steps.
+- Each check is a DP over the DAG: \( O(n + m) \).
+- Total: \( O((n + m) \cdot \log M) \), efficient under constraints.
 
 ---
 
@@ -44,77 +67,92 @@ Thus, **BFS (0-1 BFS)** is optimal, where state = (x, y), and track *minimal num
 ```cpp
 #include <vector>
 #include <queue>
-#include <tuple>
-#include <algorithm>
+#include <limits>
 using namespace std;
 
 class Solution {
 public:
-    bool isSafe(int x, int y, int m, int n) {
-        return (x >= 0 && x < m && y >= 0 && y < n);
+    long long maxPathScore(int n, vector<vector<int>>& edges, vector<bool>& online, long long k) {
+        // Build adjacency list
+        vector<vector<pair<int, int>>> graph(n);
+        for (auto& e : edges) {
+            graph[e[0]].emplace_back(e[1], e[2]);
+        }
+
+        // Find all unique edge costs for binary search or simply search in [0, 1e9]
+        int low = 0, high = 1000000000;
+        int answer = -1;
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (canReach(n, graph, online, k, mid)) {
+                answer = mid;
+                low = mid + 1; // Try to find larger possible minimal edge
+            } else {
+                high = mid - 1;
+            }
+        }
+        return answer;
     }
 
-    bool isPossibleToReach(vector<vector<int>>& grid, int health) {
-        int m = grid.size();
-        int n = grid[0].size();
+    bool canReach(int n, const vector<vector<pair<int, int>>>& graph, const vector<bool>& online, long long k, int min_edge) {
+        // DP: min cost to each node, direction: topological order
+        // 1. Build filtered graph and in-degree
+        vector<vector<pair<int, int>>> g(n);
+        vector<int> indeg(n, 0);
 
-        // [i][j] = minimal # of unsafe stepped to reach (i,j)
-        vector<vector<int>> unsafeSteps(m, vector<int>(n, INT_MAX));
-
-        queue<tuple<int,int,int>> q; // (i, j, unsafe_count)
-
-        int start_unsafe = grid[0][0]; // Include starting cell!
-        unsafeSteps[0][0] = start_unsafe;
-
-        q.emplace(0, 0, start_unsafe);
-
-        int dirs[4][2] = {{0,1},{1,0},{0,-1},{-1,0}};
-
-        while (!q.empty()) {
-            auto [x, y, used] = q.front();
-            q.pop();
-
-            for (auto& d : dirs) {
-                int nx = x + d[0], ny = y + d[1];
-                if (isSafe(nx, ny, m, n)) {
-                    int next_used = used + grid[nx][ny];
-                    // only proceed if we improve upon previous trace, AND don't exceed health
-                    // Need to reach with at least 1 health, so unsafe_steps ≤ health-1
-                    if (next_used < unsafeSteps[nx][ny] && next_used <= health-1) {
-                        unsafeSteps[nx][ny] = next_used;
-                        q.emplace(nx, ny, next_used);
-                    }
+        for (int u = 0; u < n; ++u) {
+            for (auto& [v, cost] : graph[u]) {
+                if (cost >= min_edge && (v == n-1 || v == 0 || online[v])) {
+                    g[u].emplace_back(v, cost);
+                    indeg[v]++;
                 }
             }
         }
 
-        return unsafeSteps[m-1][n-1] <= health-1;
+        // 2. DP initialization
+        vector<long long> dp(n, /*infinite*/numeric_limits<long long>::max());
+        dp[0] = 0;
+        // 3. Topological sort
+        queue<int> q;
+        for (int i = 0; i < n; ++i) if (indeg[i] == 0) q.push(i);
+
+        while (!q.empty()) {
+            int u = q.front(); q.pop();
+            // If offline and not source/target, skip!
+            if (u != 0 && u != n-1 && !online[u]) continue;
+
+            for (auto& [v, cost] : g[u]) {
+                if (dp[u] + cost < dp[v]) {
+                    dp[v] = dp[u] + cost;
+                }
+                indeg[v]--;
+                if (indeg[v] == 0)
+                    q.push(v);
+            }
+        }
+        return dp[n-1] <= k;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-**Example:**  
+**Example 2:**
 ```
-grid  = [[0,1,0,0,0],
-         [0,1,0,1,0],
-         [0,0,0,1,0]]
-health = 1
+edges = [[0,1,7],[1,4,5],[0,2,6],[2,3,6],[3,4,2],[2,4,6]]
+online = [true,true,true,false,true]
+k = 12
 ```
+- Node 3 is offline, so ignore any path through 3.
+- Paths:
+    1. 0 → 1 → 4: costs 7 + 5 = 12, minimum edge = 5 → valid (score 5)
+    2. 0 → 2 → 4: costs 6 + 6 = 12, minimum edge = 6 → valid (score 6)
+- Maximum path score is **6**.
 
-- You start with 1 health, so **you cannot step on any cell with a 1** (since it would drop your health to 0).
-- There **exists a path** (along only `0` cells) from (0,0) to (2,4).
-- The algorithm tracks that you reach each cell with `used=0`.
-- On reaching the final cell (2,4), `unsafeSteps[2][4] = 0 <= health-1 (=0)`, which is true.
+The algorithm works by binary searching for the largest minimal edge cost that allows a valid path to be constructed with total cost ≤ 12, using DP over the online DAG.
 
 ---
 
-**Summary:**  
-- Track minimal number of `unsafe` (1's) squares visited to each cell with BFS.
-- If you can reach the end with `unsafe_steps ≤ health-1` return true.
-- Simple BFS is efficient for `m,n ≤ 50` grids.
-
-Let me know if you want a code walkthrough or solution in another language!
+**Let me know if you want a pure C implementation, or further explanation!**
