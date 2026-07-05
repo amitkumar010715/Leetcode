@@ -1,105 +1,141 @@
-Let's break down the solution:
+Let's address the problem step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given an undirected graph of `n` cities (numbered 1..n) and bidirectional roads (with weights), return the **minimum possible score** (the *minimum edge weight* along any path) between city 1 and city n. A path may revisit cities or roads. The solution is to find the minimum edge in the **connected component** containing both 1 and n (since you can always traverse any edge multiple times if needed).
+Given an `n x n` square board, start at 'S' (bottom right), reach 'E' (top left), moving only **up**, **left**, or **up-left(diagonal)**, avoiding obstacles ('X'). On the way, collect numeric values from the cells you step on (excluding 'S' and 'E'). Find:
+- The **maximum possible sum** of numbers collected along any path from 'S' to 'E'
+- The **number of different paths** that yield **that maximum sum** (modulo 1e9+7).
+
+If there's no path, return `[0, 0]`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- Up to `10^5` nodes, `10^5` edges: *linear or near-linear solution required*.
-- There may be loops or repeated cities/roads on a path.
-- There is *guaranteed* to be a path from 1 to n.
-- Our goal: Among all paths from 1 to n, **maximize the "bottleneck"**, i.e., the *minimum* edge on the path.
-
-### Key Observations
-
-- **Any edge in the component containing 1 can be used as part of some path from 1 to n.**
-- **The answer is simply the minimum weight of any edge in the connected component containing node 1.** (Since cycles/loops are allowed, you can always detour to use any edge you like within the connected component!)
+- `2 <= n <= 100` (`n` is the board's side length)
+- Movements: **up**, **left**, **diagonal up-left**
+- Cells can be 'S', 'E', digits '1'..'9', or 'X' (obstacle).
+- **'S'**: start (bottom-right), **'E'**: end (top-left)
+- Can't move into or through obstacles.
+- Paths can't revisit cells.
+- Path **can** skip numeric cells if blocked.
+- **Edge Cases:**
+    - Blocked start or end.
+    - All possible paths blocked.
+    - Multiple paths giving same maximum sum.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Steps
+We use **dynamic programming**:
 
-1. **Build the graph as adjacency list**.
-2. **BFS/DFS from node 1** to find all nodes in its connected component and *collect all edge weights in this component*, keeping track of the minimum weight found.
-3. Since 1 and n are guaranteed connected, and the answer is the minimum edge in this component — output the recorded minimum.
+Let `dp[i][j] = {maxSum, numPaths}`, representing from `(i,j)` to 'E':
+- **maxSum**: Maximum sum achievable from current position to 'E'
+- **numPaths**: Number of such paths with this sum
 
-- **Complexity:** O(n + m) where m = number of roads.
+**We process from bottom-right (`S`) to top-left (`E`), moving only up/left/diagonal.**
+
+Steps:
+
+1. **Initialization:**  
+    - For all cells, if 'X', set dp to `{ -1, 0 }`.
+    - At 'S', set `{ 0, 1 }` (since at 'S' we haven't collected any score yet).
+2. **Transitions:**  
+    - For each cell `(i, j)` (from bottom-right to top-left), consider three previous positions:
+        - From below: `dp[i+1][j]`
+        - From right: `dp[i][j+1]`
+        - From diagonal lower-right: `dp[i+1][j+1]`
+    - For the three, pick the maximum `maxSum`, and sum up the paths achieving it.
+    - Add cell value (if not 'S' or 'E') to `maxSum` appropriately.
+    - If cell is 'X', continue.
+3. **Notes:**
+    - Modulo `1e9+7` for number of paths.
+    - At 'E', we don't add its value.
+
+**Time Complexity:** `O(n^2)`, as each cell is processed once.
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <queue>
-#include <algorithm>
-using namespace std;
-
 class Solution {
 public:
-    int minScore(int n, vector<vector<int>>& roads) {
-        vector<vector<pair<int, int>>> adj(n + 1);   // (neighbor, edge weight)
-        for (const auto& r : roads) {
-            adj[r[0]].emplace_back(r[1], r[2]);
-            adj[r[1]].emplace_back(r[0], r[2]);
-        }
+    vector<int> pathsWithMaxScore(vector<string>& board) {
+        int n = board.size();
+        const int MOD = 1e9 + 7;
+        // dp[i][j]: pair of {maxScore, pathCount} from cell (i, j) to 'S'
+        vector<vector<pair<int, int>>> dp(n, vector<pair<int, int>>(n, {-1, 0}));
         
-        vector<bool> visited(n + 1, false);
-        queue<int> q;
-        q.push(1);
-        visited[1] = true;
-        int minEdge = INT_MAX;
+        // Start position is at bottom-right
+        dp[n-1][n-1] = {0, 1};
         
-        while (!q.empty()) {
-            int u = q.front(); q.pop();
-            for (auto& [v, w] : adj[u]) {
-                minEdge = min(minEdge, w);
-                if (!visited[v]) {
-                    visited[v] = true;
-                    q.push(v);
+        // From bottom-right to top-left
+        for (int i = n-1; i >= 0; --i) {
+            for (int j = n-1; j >= 0; --j) {
+                if (board[i][j] == 'X' || dp[i][j].second == 0) continue;
+                if (i == 0 && j == 0) continue; // Don't process 'E' yet
+
+                int value = (board[i][j] == 'S') ? 0 : (board[i][j] - '0');
+                // Try to move up, left, and diagonal
+                for (auto [di, dj] : vector<pair<int,int>>{ {-1,0}, {0,-1}, {-1,-1} }) {
+                    int ni = i + di, nj = j + dj;
+                    if (ni < 0 || nj < 0) continue;
+                    if (board[ni][nj] == 'X') continue;
+                    int newScore = dp[i][j].first + value;
+                    // If no previous path or found better score
+                    if (dp[ni][nj].first < newScore) {
+                        dp[ni][nj].first = newScore;
+                        dp[ni][nj].second = dp[i][j].second;
+                    } else if (dp[ni][nj].first == newScore) {
+                        dp[ni][nj].second = (dp[ni][nj].second + dp[i][j].second) % MOD;
+                    }
                 }
             }
         }
-        return minEdge;
+        int maxScore = dp[0][0].first;
+        int pathCount = dp[0][0].second;
+        if (maxScore < 0 || pathCount == 0) return {0, 0};
+        return {maxScore, pathCount};
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-**Example 1:**
+Let's use **Example 1**:
 
+**Input:**  
+`board = ["E23","2X2","12S"]`
+
+Indices:
 ```
-n = 4, roads = [[1,2,9], [2,3,6], [2,4,5], [1,4,7]]
+  0      1      2
+0 E      2      3
+1 2      X      2
+2 1      2      S
 ```
-- Graph:
-  - 1-2 (9)
-  - 2-3 (6)
-  - 2-4 (5)
-  - 1-4 (7)
 
-**All cities (1..4) are connected.**
+- Start at `(2,2)` (`S`), need to reach `(0,0)` (`E`).
+- Can only move **up**, **left**, **diagonally up-left**.
 
-Traversing edges from node 1 (via BFS/DFS), we encounter these edge weights: 9 (1-2), 6 (2-3), 5 (2-4), 7 (1-4).
+**Find maximum sum path & number of such paths:**
 
-- **Minimum edge = 5 (2-4).**
-- Any path from 1 to 4 can take (1-2-4); path's minimum edge = min(9,5) = 5.
-- *But regardless of path, you can't get a path with less than 5 as the "bottleneck".*
+- Path: (2,2)->(2,1)->(1,0)->(0,0)
+    - 2 + 2 + (E) = 4
+- Path: (2,2)->(1,2)->(0,2)->(0,1)->(0,0)
+    - 2 + 3 + 2 + (E) = 7
 
-**Return:** `5`.
+None other yield higher score.
+
+- Maximum sum is **7**.
+- Only **1** path yields this sum.
+
+**Output**: `[7, 1]`
 
 ---
-
-## **Conclusion**
-
-- The solution simply computes the minimum edge weight in the connected component containing node 1.
-- Works in linear (O(n + m)) time and space.
