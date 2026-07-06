@@ -1,141 +1,118 @@
-Let's address the problem step by step:
+Sure! Let's go through step by step:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-Given an `n x n` square board, start at 'S' (bottom right), reach 'E' (top left), moving only **up**, **left**, or **up-left(diagonal)**, avoiding obstacles ('X'). On the way, collect numeric values from the cells you step on (excluding 'S' and 'E'). Find:
-- The **maximum possible sum** of numbers collected along any path from 'S' to 'E'
-- The **number of different paths** that yield **that maximum sum** (modulo 1e9+7).
-
-If there's no path, return `[0, 0]`.
+Given a list of intervals, we must remove all intervals that are *covered* by another interval, where an interval `[a, b)` is covered by `[c, d)` if `c <= a` and `b <= d`. The task is to return how many intervals are left after all covered ones are removed.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `2 <= n <= 100` (`n` is the board's side length)
-- Movements: **up**, **left**, **diagonal up-left**
-- Cells can be 'S', 'E', digits '1'..'9', or 'X' (obstacle).
-- **'S'**: start (bottom-right), **'E'**: end (top-left)
-- Can't move into or through obstacles.
-- Paths can't revisit cells.
-- Path **can** skip numeric cells if blocked.
+- **Constraints:**
+  - `1 <= intervals.length <= 1000`
+  - `intervals[i].length == 2`
+  - `0 <= l_i < r_i <= 10^5`
+  - Intervals are all unique.
 - **Edge Cases:**
-    - Blocked start or end.
-    - All possible paths blocked.
-    - Multiple paths giving same maximum sum.
+  - Only one interval: can't be covered.
+  - All intervals identical: all unique, still only one stays.
+  - Interval completely inside another: should be covered.
+  - Intervals that *touch* but do not overlap: not covered unless contain completely inside.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-We use **dynamic programming**:
+**Idea:**
 
-Let `dp[i][j] = {maxSum, numPaths}`, representing from `(i,j)` to 'E':
-- **maxSum**: Maximum sum achievable from current position to 'E'
-- **numPaths**: Number of such paths with this sum
+- **Sort** the intervals:
+    - First by starting point (`l_i`) in ascending order.
+    - If two intervals have same starting point, put the longer (rightmost) first (`r_i` descending).
+- **Iterate** through sorted intervals, keeping track of the farthest right boundary (`max_right`) seen so far.
+    - If current interval's end (`r_i`) is less than or equal to `max_right`, it's covered.
+    - Otherwise, it is not covered, so increment a counter, and update `max_right`.
 
-**We process from bottom-right (`S`) to top-left (`E`), moving only up/left/diagonal.**
+**Why this works?**
+- By sorting this way, all possible covering intervals come before possible covered ones.
+- We only need to check current right endpoint to know if it's covered.
 
-Steps:
-
-1. **Initialization:**  
-    - For all cells, if 'X', set dp to `{ -1, 0 }`.
-    - At 'S', set `{ 0, 1 }` (since at 'S' we haven't collected any score yet).
-2. **Transitions:**  
-    - For each cell `(i, j)` (from bottom-right to top-left), consider three previous positions:
-        - From below: `dp[i+1][j]`
-        - From right: `dp[i][j+1]`
-        - From diagonal lower-right: `dp[i+1][j+1]`
-    - For the three, pick the maximum `maxSum`, and sum up the paths achieving it.
-    - Add cell value (if not 'S' or 'E') to `maxSum` appropriately.
-    - If cell is 'X', continue.
-3. **Notes:**
-    - Modulo `1e9+7` for number of paths.
-    - At 'E', we don't add its value.
-
-**Time Complexity:** `O(n^2)`, as each cell is processed once.
+**Time Complexity:**
+- Sorting: `O(N log N)`
+- One pass: `O(N)`
+- Total: `O(N log N)`
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    vector<int> pathsWithMaxScore(vector<string>& board) {
-        int n = board.size();
-        const int MOD = 1e9 + 7;
-        // dp[i][j]: pair of {maxScore, pathCount} from cell (i, j) to 'S'
-        vector<vector<pair<int, int>>> dp(n, vector<pair<int, int>>(n, {-1, 0}));
-        
-        // Start position is at bottom-right
-        dp[n-1][n-1] = {0, 1};
-        
-        // From bottom-right to top-left
-        for (int i = n-1; i >= 0; --i) {
-            for (int j = n-1; j >= 0; --j) {
-                if (board[i][j] == 'X' || dp[i][j].second == 0) continue;
-                if (i == 0 && j == 0) continue; // Don't process 'E' yet
+    int removeCoveredIntervals(vector<vector<int>>& intervals) {
+        // Sort by start asc. If same start, by end desc.
+        sort(intervals.begin(), intervals.end(), [](const vector<int>& a, const vector<int>& b) {
+            if (a[0] == b[0]) return a[1] > b[1];
+            return a[0] < b[0];
+        });
 
-                int value = (board[i][j] == 'S') ? 0 : (board[i][j] - '0');
-                // Try to move up, left, and diagonal
-                for (auto [di, dj] : vector<pair<int,int>>{ {-1,0}, {0,-1}, {-1,-1} }) {
-                    int ni = i + di, nj = j + dj;
-                    if (ni < 0 || nj < 0) continue;
-                    if (board[ni][nj] == 'X') continue;
-                    int newScore = dp[i][j].first + value;
-                    // If no previous path or found better score
-                    if (dp[ni][nj].first < newScore) {
-                        dp[ni][nj].first = newScore;
-                        dp[ni][nj].second = dp[i][j].second;
-                    } else if (dp[ni][nj].first == newScore) {
-                        dp[ni][nj].second = (dp[ni][nj].second + dp[i][j].second) % MOD;
-                    }
-                }
+        int res = 0;
+        int max_right = 0;  // the furthest right endpoint we've seen
+
+        for (const auto& interval : intervals) {
+            if (interval[1] > max_right) {
+                // Not covered, count it
+                res++;
+                max_right = interval[1];
             }
+            // else: covered by previous interval(s), do not count
         }
-        int maxScore = dp[0][0].first;
-        int pathCount = dp[0][0].second;
-        if (maxScore < 0 || pathCount == 0) return {0, 0};
-        return {maxScore, pathCount};
+
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Explain One Example**
 
 Let's use **Example 1**:
 
-**Input:**  
-`board = ["E23","2X2","12S"]`
+**Input:** `intervals = [[1,4], [3,6], [2,8]]`
 
-Indices:
-```
-  0      1      2
-0 E      2      3
-1 2      X      2
-2 1      2      S
-```
+1. **Sort:**
+    - By start ascending, tie by end descending:
+    - Sorted: `[[1,4], [2,8], [3,6]]`
 
-- Start at `(2,2)` (`S`), need to reach `(0,0)` (`E`).
-- Can only move **up**, **left**, **diagonally up-left**.
+2. **Iterate:**
+    - `max_right = 0`; `res = 0`
+    - Interval `[1,4]`: `4 > 0` --> **not covered**, so `res=1`, `max_right=4`
+    - Interval `[2,8]`: `8 > 4` --> **not covered**, so `res=2`, `max_right=8`
+    - Interval `[3,6]`: `6 <= 8` --> **is covered** by `[2,8]`, **do not count**
 
-**Find maximum sum path & number of such paths:**
-
-- Path: (2,2)->(2,1)->(1,0)->(0,0)
-    - 2 + 2 + (E) = 4
-- Path: (2,2)->(1,2)->(0,2)->(0,1)->(0,0)
-    - 2 + 3 + 2 + (E) = 7
-
-None other yield higher score.
-
-- Maximum sum is **7**.
-- Only **1** path yields this sum.
-
-**Output**: `[7, 1]`
+**Output:** `2`
 
 ---
+
+**Summary Table:**
+
+| Interval | Is Covered? | Count So Far | max_right |
+|----------|-------------|-------------|-----------|
+| [1,4]    | No          | 1           | 4         |
+| [2,8]    | No          | 2           | 8         |
+| [3,6]    | Yes         | 2           | 8         |
+
+---
+
+## **In summary:**
+- **Sort** intervals as described.
+- **One pass** with a max right tracker.
+- **Count** intervals not covered.
+
+**This is optimal for the given constraints.**
