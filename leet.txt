@@ -1,177 +1,126 @@
-Let's go through the LeetCode daily challenge step by step.
+Let's walk through your requirements:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a string `s` consisting of digits, for each range query `[l, r]`, we:
-- Take substring `s[l..r]`.
-- Extract all **non-zero digits** in order to form an integer `x` (or set `x = 0` if there is none).
-- Let `sum` be the **sum of the digits** in `x`.
-- Return `x * sum` **modulo** \( 10^9 + 7 \) for each query.
+Given a sorted array `nums`, we connect indices `i` and `j` **iff** `|nums[i] - nums[j]| <= maxDiff`. For multiple queries `[u, v]`, determine if there's any path between `u` and `v` (i.e., if they are in the same connected component of the undirected graph).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **String Length:** Up to \( 10^5 \).
-- **Queries:** Up to \( 10^5 \), indices inside [0, m-1].
-- **Digits:** Only '0'-'9'.
-- **Edge Cases:**
-  - No non-zero digits: answer is 0.
-  - Substring of length 1: '0' should give 0, 'k' gives `k*k`.
+- **n, queries up to 1e5**: Need a linear or almost-linear solution.
+- **nums sorted**: Use this to efficiently identify connections.
+- **maxDiff = 0**: Only identical values are connected.
+- **All nodes are their own component except when consecutive `nums` are close enough.**
+- **Only need to check if `u` and `v` are in the same component.**
+- **Queries can include `u == v` (should always be true).**
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Bruteforce** approach is O(Q·N), **NOT efficient**.
+**Key Observations:**
 
-### Efficient Approach (**O(N + Q log N)**, even O(N + Q))
-Since we only care about **non-zero digits and their positions**, we can **preprocess**:
+- Graph is constructed by connecting nodes where their nums' values differ by at most `maxDiff`.
+- Since `nums` is sorted, all direct (edge) connections can only occur *between neighboring elements* (otherwise, the diff is too large).
+    - If `nums[i+1] - nums[i] <= maxDiff`, then there is an edge between `i` and `i+1`.
+- The graph's connected components are contiguous blocks (intervals) in `nums`.
+- **Our goal:** For each query, check if `u, v` are in the same block.
 
-1. **Scan `s` once**:
-   - Record prefix sums over non-zero digits.
-   - Record positions of non-zero digits.
+**Steps:**
 
-2. **Build a list** with for all non-zero positions:
-   - `pos`: position in `s`.
-   - `digit`: its value.
+1. **Preprocessing:**
+    - Build an array `component_id` for each node, indicating its connected component.
+    - For each index `i` from 1 to `n-1`:
+        - If `nums[i] - nums[i-1] <= maxDiff`, then in the same component as previous node.
+    - Else, a new component starts at `i`.
+2. **Answer queries:**
+    - For each query `[u, v]`, answer **true** if `component_id[u] == component_id[v]`, else **false**.
 
-3. **For each query:**
-   - Use binary search to get range of non-zero digits **fully contained in `[l, r]`**.
-   - For that sublist:
-     - Concatenate digits to build `x` (careful, concatenate, not sum).
-     - Sum digits to get `sum`.
-     - Answer is `x * sum`.
-
-**Step-by-step:**
-
-- Let vector `nz_pos` contain positions of non-zero digits in `s` (sorted).
-- Let vector `nz_digits` contain those digit values.
-- Let prefix sum `pre_sum[i]` = sum of first `i` digits of `nz_digits`.
-- Let prefix powers `pre_pow10[i]` = 10<sup>i</sup> for fast computation.
-
-For query `[l,r]`:
-- Find the first position in `nz_pos >= l` → call it `startIdx`.
-- Find the last position in `nz_pos <= r` → call it `endIdx`.
-- Let the number of non-zero digits in this range be `len = endIdx - startIdx + 1`.
-- If `len <= 0`, answer is 0.
-- Else, build x:
-    - Loop through positions `startIdx` to `endIdx`, build x by:  
-      `x = x * 10 + digit`
-    - Or, get `nz_digits[startIdx..endIdx]` as the sequence.
-- Get sum as `pre_sum[endIdx+1] - pre_sum[startIdx]`.
-- Return `(x * sum) % MOD`.
-
-Since maximal number of non-zero digits per query is O(len), but len is overall O(N). If a query is very long (`nqz` close to N), it's still O(N) for all queries in total, which is acceptable.
-
-But even more efficiently, **use string streaming and caching** for x, as even 1e5 digits can be a large number (but in practice, not a concern due to MOD and type limits).
+**Time Complexity:**
+- Preprocessing: O(n)
+- Queries: O(queries)
+- Total: O(n + queries) (`n`, queries both up to 1e5 is acceptable)
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <bits/stdc++.h>
+#include <vector>
 using namespace std;
-typedef long long ll;
-const int MOD = 1e9 + 7;
 
-vector<int> concatenateAndMultiply(string s, vector<vector<int>>& queries) {
-    int n = s.size();
-    // Preprocess non-zero positions and their digit values
-    vector<int> nz_pos, nz_val;
-    for (int i = 0; i < n; ++i) {
-        if (s[i] != '0') {
-            nz_pos.push_back(i);
-            nz_val.push_back(s[i] - '0');
+class Solution {
+public:
+    vector<bool> areConnected(int n, vector<int>& nums, int maxDiff, vector<vector<int>>& queries) {
+        vector<int> component(n, 0);
+        int comp_id = 0;
+        component[0] = 0;
+
+        // Assign component ids
+        for (int i = 1; i < n; ++i) {
+            if (nums[i] - nums[i-1] <= maxDiff) {
+                component[i] = comp_id;
+            } else {
+                comp_id++;
+                component[i] = comp_id;
+            }
         }
+
+        vector<bool> answer;
+        answer.reserve(queries.size());
+        for (const auto& q : queries) {
+            answer.push_back(component[q[0]] == component[q[1]]);
+        }
+
+        return answer;
     }
-    int k = nz_pos.size();
-
-    // Precompute prefix sum of digits
-    vector<int> digit_sum(k + 1, 0);
-    for (int i = 0; i < k; ++i)
-        digit_sum[i + 1] = digit_sum[i] + nz_val[i];
-
-    // Precompute prefix powers of 10 (for at most 1e5 digits)
-    vector<ll> pow10(k + 1, 1);
-    for (int i = 1; i <= k; ++i)
-        pow10[i] = (pow10[i - 1] * 10) % MOD;
-
-    vector<int> ans;
-    for (auto& q : queries) {
-        int l = q[0], r = q[1];
-        // Find leftmost non-zero at >= l
-        auto itl = lower_bound(nz_pos.begin(), nz_pos.end(), l);
-        // Find rightmost non-zero at <= r
-        auto itr = upper_bound(nz_pos.begin(), nz_pos.end(), r);
-        int start = itl - nz_pos.begin();
-        int end = itr - nz_pos.begin() - 1;
-        if (start > end) { // no non-zero digit in range
-            ans.push_back(0);
-            continue;
-        }
-        int len = end - start + 1;
-        ll x = 0;
-        for (int i = start; i <= end; ++i) {
-            x = (x * 10 + nz_val[i]) % MOD;
-        }
-        int sum = digit_sum[end + 1] - digit_sum[start];
-        ans.push_back((x * 1LL * sum) % MOD);
-    }
-    return ans;
-}
+};
 ```
 
 ---
 
 ## 5. **Example Explanation**
 
-Take **Example 1**:
+### Example 2
+```
+n = 4
+nums = [2, 5, 6, 8]
+maxDiff = 2
+queries = [[0,1],[0,2],[1,3],[2,3]]
+```
 
-- `s = "10203004", queries = [[0,7],[1,3],[4,6]]`
+**Step 1:** Identify component blocks:
+- Between 2 and 5: `5 - 2 = 3 > 2` => new component at 5.
+- Between 5 and 6: `6 - 5 = 1 <= 2` => same component as 5.
+- Between 6 and 8: `8 - 6 = 2 <= 2` => same component.
 
-Step by step:
+So, `component_id` will be:  
+- component[0] = 0
+- component[1] = 1
+- component[2] = 1
+- component[3] = 1
 
-**a. Query 0: [0,7]:**
-- Substring is "10203004"
-- Non-zero digits: 1 2 3 4 (`nz_pos = [0,2,4,6]`, `nz_val = [1,2,3,4]`)
-- Concatenate: 1234
-- Sum: 1+2+3+4 = 10
-- 1234 * 10 = **12340**
+**Queries:**
+- [0,1] → component[0]=0, component[1]=1 → false
+- [0,2] → component[0]=0, component[2]=1 → false
+- [1,3] → component[1]=1, component[3]=1 → true
+- [2,3] → component[2]=1, component[3]=1 → true
 
-**b. Query 1: [1,3]:**
-- Substring "020"
-- Only non-zero: 2 (at pos 2)
-- concat: 2; sum: 2; 2*2 = **4**
-
-**c. Query 2: [4,6]:**
-- Substring "300"
-- Only non-zero: 3 (at pos 4)
-- concat: 3; sum: 3; 3*3 = **9**
-
-So, final answer is `[12340, 4, 9]`.
-
----
-
-### **Summary Table**
-
-| Query  | Non-zero digits         | x    | sum | Answer           |
-|--------|------------------------|------|-----|------------------|
-| [0,7]  | [1,2,3,4]              | 1234 | 10  | 12340            |
-| [1,3]  | [2]                    | 2    | 2   | 4                |
-| [4,6]  | [3]                    | 3    | 3   | 9                |
+**Output:** `[false, false, true, true]`
 
 ---
 
-## **Conclusion**
+## **Summary Table**
 
-- **Time Complexity:** O(n) preprocess + O(log n) per query + O(max digits per query) <br>
-  For practical purposes, it's efficient for input constraints.
-- **Space Complexity:** O(n) for preprocessed arrays. 
+| Step | Action                                 | Complexity |
+|------|----------------------------------------|------------|
+| 1    | Build component ids (scan once)        | O(n)       |
+| 2    | Answer queries (compare ids)           | O(Q)       |
+|      | **Total**                              | O(n + Q)   |
 
 ---
 
-**Let me know if you need the code as a LeetCode function or with input/output code!**
+Let me know if you need union-find or any extra explanation – but for this problem, the one-pass component assignment is the cleanest & fastest!
