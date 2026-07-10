@@ -1,48 +1,88 @@
-Let's walk through your requirements:
+Let's tackle the problem step by step!
 
 ---
 
 ## 1. **Short Summary**
 
-Given a sorted array `nums`, we connect indices `i` and `j` **iff** `|nums[i] - nums[j]| <= maxDiff`. For multiple queries `[u, v]`, determine if there's any path between `u` and `v` (i.e., if they are in the same connected component of the undirected graph).
+Given a graph of `n` nodes where an undirected edge exists between nodes `i` and `j` if `|nums[i] - nums[j]| <= maxDiff`, efficiently answer multiple queries asking for the **minimum distance** (number of edges) between two given nodes, or return `-1` if no such path exists.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **n, queries up to 1e5**: Need a linear or almost-linear solution.
-- **nums sorted**: Use this to efficiently identify connections.
-- **maxDiff = 0**: Only identical values are connected.
-- **All nodes are their own component except when consecutive `nums` are close enough.**
-- **Only need to check if `u` and `v` are in the same component.**
-- **Queries can include `u == v` (should always be true).**
+- `n` up to `1e5` (100,000): Cannot build/store the full adjacency matrix or even all adjacency lists.
+- `queries` up to `1e5`: Each query needs to be answered quickly, e.g., much faster than O(n).
+- Edge exists for all pairs whose nums differ by at most `maxDiff`, which can lead to huge cliques if all nums are close.
+- `maxDiff = 0`: Only equal-numbered nodes are adjacent.
+- If all numbers are very far apart, the graph can be totally disconnected.
+- If multiple nodes map to the same `nums[i]` value, those nodes are connected.
+- Some queries may be of the form `[u, u]` (same node): answer should be `0`.
+- Need to **avoid explicit construction** of the graph: too costly.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Key Observations:**
+To answer min-distance queries efficiently, let's analyze the graph's structure:
 
-- Graph is constructed by connecting nodes where their nums' values differ by at most `maxDiff`.
-- Since `nums` is sorted, all direct (edge) connections can only occur *between neighboring elements* (otherwise, the diff is too large).
-    - If `nums[i+1] - nums[i] <= maxDiff`, then there is an edge between `i` and `i+1`.
-- The graph's connected components are contiguous blocks (intervals) in `nums`.
-- **Our goal:** For each query, check if `u, v` are in the same block.
+### **Key Observations**
 
-**Steps:**
+- Nodes are labeled with `nums[i]`.
+- Edges depend **only on the numerical values**, not their positions.
+- All nodes whose labels fall within a `maxDiff` window are connected.
+- **Graph can be seen as a union of clusters** (connected components), where each component is a set of indices whose `nums[i]` values are all "close enough" to reach each other.
 
-1. **Preprocessing:**
-    - Build an array `component_id` for each node, indicating its connected component.
-    - For each index `i` from 1 to `n-1`:
-        - If `nums[i] - nums[i-1] <= maxDiff`, then in the same component as previous node.
-    - Else, a new component starts at `i`.
-2. **Answer queries:**
-    - For each query `[u, v]`, answer **true** if `component_id[u] == component_id[v]`, else **false**.
+### **Step 1: Build Connected Components**
 
-**Time Complexity:**
-- Preprocessing: O(n)
-- Queries: O(queries)
-- Total: O(n + queries) (`n`, queries both up to 1e5 is acceptable)
+Because every pair (i, j) with |nums[i]-nums[j]| <= maxDiff are connected **directly or indirectly**, all nodes in a "cluster" of consecutive sorted nums within maxDiff of each other are in the same component.
+
+**How to find clusters efficiently?**
+
+- Sort nodes by their `nums[i]` value, keeping track of their original index.
+- Process in sorted order; for each node, connect to all following nodes whose value is within `maxDiff`.
+- But instead of explicitly making edges, perform **Union-Find (DSU)** on adjacent elements in the sorted array if their values are close enough (`<= maxDiff`).
+    - For consecutive sorted nodes (i, j), if `nums[j] - nums[i] <= maxDiff`, union them.
+
+**After processing, all nodes in the same DSU component are reachable from one another.**
+
+### **Step 2: Answer Queries**
+
+For a query `[u, v]`:
+
+- If `u == v`, return 0.
+- If `u` and `v` are not in the same component, return -1.
+- If `nums[u]` and `nums[v]` differ by at most `maxDiff`, answer is 1 (direct edge, per the graph).
+- **Otherwise:** Need to find the shortest path **using only allowed edges**.
+
+Recall, any path can be built hopping across sorted nums, since edge exists from node i to j if |nums[i]-nums[j]|<= maxDiff.
+
+But let's note that, after DSU, the component contains all nodes with nums within a consecutive range, with pairwise distances at most `maxDiff`. The number of "hops" is basically **the minimum number of steps to cover |nums[u] - nums[v]|, stepping with maximum of maxDiff per hop**; i.e.:
+
+    min_distance = ceil(|nums[u] - nums[v]| / maxDiff)
+
+But, this is **true only if u and v are in the same component**.
+
+#### Why?
+
+Within any component:
+- There's a path between any two nodes.
+- The "distance" is minimal if we walk along the sorted ordering, always jumping to the closest value within maxDiff, i.e., using the largest possible step at each hop.
+
+Thus,
+
+    - If |nums[u]-nums[v]| == 0: distance = 0 (same node or same value)
+    - If |nums[u]-nums[v]| <= maxDiff: distance = 1 (direct edge)
+    - Else: distance = ceil(|nums[u]-nums[v]| / maxDiff)
+
+#### **Summary of Steps**
+1. Build sorted array of (nums[i], i).
+2. Use Union-Find to join adjacent nodes if their values are within maxDiff.
+3. For each query, if u and v are:
+    - Not in the same component: -1
+    - Else, in same component:
+        - If u == v: 0
+        - Else if |nums[u]-nums[v]| <= maxDiff: 1
+        - Else: ceil(|nums[u]-nums[v]| / maxDiff)
 
 ---
 
@@ -50,31 +90,68 @@ Given a sorted array `nums`, we connect indices `i` and `j` **iff** `|nums[i] - 
 
 ```cpp
 #include <vector>
+#include <algorithm>
+#include <cmath>
+
 using namespace std;
 
 class Solution {
 public:
-    vector<bool> areConnected(int n, vector<int>& nums, int maxDiff, vector<vector<int>>& queries) {
-        vector<int> component(n, 0);
-        int comp_id = 0;
-        component[0] = 0;
+    vector<int> minimumDistance(int n, vector<int>& nums, int maxDiff, vector<vector<int>>& queries) {
+        // DSU / Union Find
+        vector<int> parent(n), rank(n, 0);
+        for (int i = 0; i < n; ++i) parent[i] = i;
 
-        // Assign component ids
+        auto find = [&](int x) {
+            while (x != parent[x]) {
+                parent[x] = parent[parent[x]];
+                x = parent[x];
+            }
+            return x;
+        };
+
+        auto unite = [&](int x, int y) {
+            int fx = find(x), fy = find(y);
+            if (fx == fy) return;
+            if (rank[fx] < rank[fy]) parent[fx] = fy;
+            else if (rank[fx] > rank[fy]) parent[fy] = fx;
+            else {
+                parent[fx] = fy;
+                rank[fy]++;
+            }
+        };
+
+        // Build sorted (value, index) array
+        vector<pair<int, int>> v;
+        for (int i = 0; i < n; ++i) v.emplace_back(nums[i], i);
+        sort(v.begin(), v.end());
+
+        // Union consecutive elements within maxDiff
         for (int i = 1; i < n; ++i) {
-            if (nums[i] - nums[i-1] <= maxDiff) {
-                component[i] = comp_id;
-            } else {
-                comp_id++;
-                component[i] = comp_id;
+            if (v[i].first - v[i-1].first <= maxDiff)
+                unite(v[i].second, v[i-1].second);
+        }
+
+        vector<int> answer;
+        for (auto& q : queries) {
+            int u = q[0], v = q[1];
+            if (u == v) {
+                answer.push_back(0);
+                continue;
+            }
+            if (find(u) != find(v)) {
+                answer.push_back(-1);
+                continue;
+            }
+            int diff = abs(nums[u] - nums[v]);
+            if (diff <= maxDiff)
+                answer.push_back(1);
+            else {
+                // ceil(diff / maxDiff)
+                int dist = (diff + maxDiff - 1) / maxDiff;
+                answer.push_back(dist);
             }
         }
-
-        vector<bool> answer;
-        answer.reserve(queries.size());
-        for (const auto& q : queries) {
-            answer.push_back(component[q[0]] == component[q[1]]);
-        }
-
         return answer;
     }
 };
@@ -84,43 +161,32 @@ public:
 
 ## 5. **Example Explanation**
 
-### Example 2
-```
-n = 4
-nums = [2, 5, 6, 8]
-maxDiff = 2
-queries = [[0,1],[0,2],[1,3],[2,3]]
-```
+Let's use **Example 2**:
 
-**Step 1:** Identify component blocks:
-- Between 2 and 5: `5 - 2 = 3 > 2` => new component at 5.
-- Between 5 and 6: `6 - 5 = 1 <= 2` => same component as 5.
-- Between 6 and 8: `8 - 6 = 2 <= 2` => same component.
+**Input:**  
+`n = 5, nums = [5,3,1,9,10], maxDiff = 2, queries = [[0,1],[0,2],[2,3],[4,3]]`
 
-So, `component_id` will be:  
-- component[0] = 0
-- component[1] = 1
-- component[2] = 1
-- component[3] = 1
+**Process:**
 
-**Queries:**
-- [0,1] → component[0]=0, component[1]=1 → false
-- [0,2] → component[0]=0, component[2]=1 → false
-- [1,3] → component[1]=1, component[3]=1 → true
-- [2,3] → component[2]=1, component[3]=1 → true
+- Sorted (value, index): [(1,2), (3,1), (5,0), (9,3), (10,4)]
+- Link (1,2) ↔︎ (3,1): 3-1=2 ≤ 2: connect indices 2 and 1
+- Link (3,1) ↔︎ (5,0): 5-3=2 ≤ 2: connect indices 1 and 0
+- Link (5,0) ↔︎ (9,3): 9-5=4 > 2: not connected
+- Link (9,3) ↔︎ (10,4): 10-9=1 ≤ 2: connect indices 3 and 4
 
-**Output:** `[false, false, true, true]`
+Final components:
+- Nodes 0,1,2: all in same component (nums 5,3,1)
+- Nodes 3,4: another component (nums 9,10)
 
----
+Now for the queries:
 
-## **Summary Table**
+- `[0,1]`: Both in same component, |5-3|=2 <= 2 ⇒ answer 1
+- `[0,2]`: Both in same component, |5-1|=4 > 2, so minimal path == ceil(4/2)=2 ⇒ answer 2
+- `[2,3]`: 2 in component 0, 3 in component 1 ⇒ answer -1
+- `[4,3]`: Both in same component, |10-9|=1 ≤2 ⇒ answer 1
 
-| Step | Action                                 | Complexity |
-|------|----------------------------------------|------------|
-| 1    | Build component ids (scan once)        | O(n)       |
-| 2    | Answer queries (compare ids)           | O(Q)       |
-|      | **Total**                              | O(n + Q)   |
+Final output: **[1, 2, -1, 1]**
 
 ---
 
-Let me know if you need union-find or any extra explanation – but for this problem, the one-pass component assignment is the cleanest & fastest!
+### **This solution runs in O(n log n + q) time** (n log n for sorting, practically linear for the rest), which is suitable for all required constraints.
