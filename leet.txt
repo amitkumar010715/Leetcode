@@ -2,87 +2,38 @@ Let's tackle the problem step by step!
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given a graph of `n` nodes where an undirected edge exists between nodes `i` and `j` if `|nums[i] - nums[j]| <= maxDiff`, efficiently answer multiple queries asking for the **minimum distance** (number of edges) between two given nodes, or return `-1` if no such path exists.
+You are given an undirected graph on `n` nodes (labelled `0` to `n-1`) with edges specified as pairs. Your task is to count how many **complete connected components** it has. A component is **complete** if every pair of nodes in it is directly connected by an edge (a clique).
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `n` up to `1e5` (100,000): Cannot build/store the full adjacency matrix or even all adjacency lists.
-- `queries` up to `1e5`: Each query needs to be answered quickly, e.g., much faster than O(n).
-- Edge exists for all pairs whose nums differ by at most `maxDiff`, which can lead to huge cliques if all nums are close.
-- `maxDiff = 0`: Only equal-numbered nodes are adjacent.
-- If all numbers are very far apart, the graph can be totally disconnected.
-- If multiple nodes map to the same `nums[i]` value, those nodes are connected.
-- Some queries may be of the form `[u, u]` (same node): answer should be `0`.
-- Need to **avoid explicit construction** of the graph: too costly.
+- **Constraints:**
+  - `1 <= n <= 50` (small, so `O(n^2)` algorithms are fine!)
+  - Edges are unique, undirected, and nodes are not self-connected.
+
+- **Edge cases:**
+  - No edges (`edges = []`): Each node is its own component, each is trivially complete (single node = clique).
+  - All nodes connected into a single complete graph (clique).
+  - Several disconnected components, possibly of varying sizes, some complete, some not.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-To answer min-distance queries efficiently, let's analyze the graph's structure:
+Given `n` is small, we can:
+- **Step 1:** Build adjacency lists for the graph.
+- **Step 2:** Use BFS/DFS to find all connected components.
+- **Step 3:** For each component, check if it's complete:
+    - For a component with `k` nodes, there must be exactly `k*(k-1)/2` edges among them.
+    - Count the number of edges within the component (avoid double counting).
+    - If yes, increment the answer.
 
-### **Key Observations**
-
-- Nodes are labeled with `nums[i]`.
-- Edges depend **only on the numerical values**, not their positions.
-- All nodes whose labels fall within a `maxDiff` window are connected.
-- **Graph can be seen as a union of clusters** (connected components), where each component is a set of indices whose `nums[i]` values are all "close enough" to reach each other.
-
-### **Step 1: Build Connected Components**
-
-Because every pair (i, j) with |nums[i]-nums[j]| <= maxDiff are connected **directly or indirectly**, all nodes in a "cluster" of consecutive sorted nums within maxDiff of each other are in the same component.
-
-**How to find clusters efficiently?**
-
-- Sort nodes by their `nums[i]` value, keeping track of their original index.
-- Process in sorted order; for each node, connect to all following nodes whose value is within `maxDiff`.
-- But instead of explicitly making edges, perform **Union-Find (DSU)** on adjacent elements in the sorted array if their values are close enough (`<= maxDiff`).
-    - For consecutive sorted nodes (i, j), if `nums[j] - nums[i] <= maxDiff`, union them.
-
-**After processing, all nodes in the same DSU component are reachable from one another.**
-
-### **Step 2: Answer Queries**
-
-For a query `[u, v]`:
-
-- If `u == v`, return 0.
-- If `u` and `v` are not in the same component, return -1.
-- If `nums[u]` and `nums[v]` differ by at most `maxDiff`, answer is 1 (direct edge, per the graph).
-- **Otherwise:** Need to find the shortest path **using only allowed edges**.
-
-Recall, any path can be built hopping across sorted nums, since edge exists from node i to j if |nums[i]-nums[j]|<= maxDiff.
-
-But let's note that, after DSU, the component contains all nodes with nums within a consecutive range, with pairwise distances at most `maxDiff`. The number of "hops" is basically **the minimum number of steps to cover |nums[u] - nums[v]|, stepping with maximum of maxDiff per hop**; i.e.:
-
-    min_distance = ceil(|nums[u] - nums[v]| / maxDiff)
-
-But, this is **true only if u and v are in the same component**.
-
-#### Why?
-
-Within any component:
-- There's a path between any two nodes.
-- The "distance" is minimal if we walk along the sorted ordering, always jumping to the closest value within maxDiff, i.e., using the largest possible step at each hop.
-
-Thus,
-
-    - If |nums[u]-nums[v]| == 0: distance = 0 (same node or same value)
-    - If |nums[u]-nums[v]| <= maxDiff: distance = 1 (direct edge)
-    - Else: distance = ceil(|nums[u]-nums[v]| / maxDiff)
-
-#### **Summary of Steps**
-1. Build sorted array of (nums[i], i).
-2. Use Union-Find to join adjacent nodes if their values are within maxDiff.
-3. For each query, if u and v are:
-    - Not in the same component: -1
-    - Else, in same component:
-        - If u == v: 0
-        - Else if |nums[u]-nums[v]| <= maxDiff: 1
-        - Else: ceil(|nums[u]-nums[v]| / maxDiff)
+### **Why does this work?**
+- In a complete graph, each node is connected to every other node.
+- For a component of size `k`, maximum edges = C(k, 2) = k*(k-1)/2.
 
 ---
 
@@ -90,69 +41,58 @@ Thus,
 
 ```cpp
 #include <vector>
-#include <algorithm>
-#include <cmath>
+#include <queue>
 
 using namespace std;
 
 class Solution {
 public:
-    vector<int> minimumDistance(int n, vector<int>& nums, int maxDiff, vector<vector<int>>& queries) {
-        // DSU / Union Find
-        vector<int> parent(n), rank(n, 0);
-        for (int i = 0; i < n; ++i) parent[i] = i;
-
-        auto find = [&](int x) {
-            while (x != parent[x]) {
-                parent[x] = parent[parent[x]];
-                x = parent[x];
-            }
-            return x;
-        };
-
-        auto unite = [&](int x, int y) {
-            int fx = find(x), fy = find(y);
-            if (fx == fy) return;
-            if (rank[fx] < rank[fy]) parent[fx] = fy;
-            else if (rank[fx] > rank[fy]) parent[fy] = fx;
-            else {
-                parent[fx] = fy;
-                rank[fy]++;
-            }
-        };
-
-        // Build sorted (value, index) array
-        vector<pair<int, int>> v;
-        for (int i = 0; i < n; ++i) v.emplace_back(nums[i], i);
-        sort(v.begin(), v.end());
-
-        // Union consecutive elements within maxDiff
-        for (int i = 1; i < n; ++i) {
-            if (v[i].first - v[i-1].first <= maxDiff)
-                unite(v[i].second, v[i-1].second);
+    int countCompleteComponents(int n, vector<vector<int>>& edges) {
+        // Build the adjacency list.
+        vector<vector<int>> g(n);
+        for (const auto& e : edges) {
+            g[e[0]].push_back(e[1]);
+            g[e[1]].push_back(e[0]);
         }
-
-        vector<int> answer;
-        for (auto& q : queries) {
-            int u = q[0], v = q[1];
-            if (u == v) {
-                answer.push_back(0);
-                continue;
-            }
-            if (find(u) != find(v)) {
-                answer.push_back(-1);
-                continue;
-            }
-            int diff = abs(nums[u] - nums[v]);
-            if (diff <= maxDiff)
-                answer.push_back(1);
-            else {
-                // ceil(diff / maxDiff)
-                int dist = (diff + maxDiff - 1) / maxDiff;
-                answer.push_back(dist);
+        
+        vector<bool> vis(n, false);
+        int ans = 0;
+        
+        for (int i = 0; i < n; ++i) {
+            if (!vis[i]) {
+                // BFS to collect all nodes (vertices) in this component
+                vector<int> comp;
+                queue<int> q;
+                q.push(i);
+                vis[i] = true;
+                while (!q.empty()) {
+                    int u = q.front(); q.pop();
+                    comp.push_back(u);
+                    for (int v : g[u]) {
+                        if (!vis[v]) {
+                            vis[v] = true;
+                            q.push(v);
+                        }
+                    }
+                }
+                // Now, check if 'comp' is a complete component
+                int sz = comp.size();
+                int edgeCnt = 0;
+                for (int u : comp) {
+                    for (int v : g[u]) {
+                        // Only count edges to other nodes in this component
+                        if (u < v && find(comp.begin(), comp.end(), v) != comp.end()) {
+                            edgeCnt++;
+                        }
+                    }
+                }
+                // A complete component of size sz has sz*(sz-1)/2 edges
+                if (edgeCnt == sz * (sz - 1) / 2) {
+                    ans++;
+                }
             }
         }
-        return answer;
+        return ans;
     }
 };
 ```
@@ -161,32 +101,35 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's use **Example 2**:
-
+#### Example 1
 **Input:**  
-`n = 5, nums = [5,3,1,9,10], maxDiff = 2, queries = [[0,1],[0,2],[2,3],[4,3]]`
+`n = 6, edges = [[0,1],[0,2],[1,2],[3,4]]`
 
-**Process:**
+Component breakdown:
+- Component 1: `{0,1,2}` &rarr; edges: 0-1, 0-2, 1-2 ⇒ all pairs connected ⇒ complete.
+- Component 2: `{3,4}` &rarr; edge: 3-4 ⇒ complete.
+- Component 3: `{5}` (no edges) ⇒ single node ⇒ complete.
 
-- Sorted (value, index): [(1,2), (3,1), (5,0), (9,3), (10,4)]
-- Link (1,2) ↔︎ (3,1): 3-1=2 ≤ 2: connect indices 2 and 1
-- Link (3,1) ↔︎ (5,0): 5-3=2 ≤ 2: connect indices 1 and 0
-- Link (5,0) ↔︎ (9,3): 9-5=4 > 2: not connected
-- Link (9,3) ↔︎ (10,4): 10-9=1 ≤ 2: connect indices 3 and 4
-
-Final components:
-- Nodes 0,1,2: all in same component (nums 5,3,1)
-- Nodes 3,4: another component (nums 9,10)
-
-Now for the queries:
-
-- `[0,1]`: Both in same component, |5-3|=2 <= 2 ⇒ answer 1
-- `[0,2]`: Both in same component, |5-1|=4 > 2, so minimal path == ceil(4/2)=2 ⇒ answer 2
-- `[2,3]`: 2 in component 0, 3 in component 1 ⇒ answer -1
-- `[4,3]`: Both in same component, |10-9|=1 ≤2 ⇒ answer 1
-
-Final output: **[1, 2, -1, 1]**
+**Total complete components:** 3
 
 ---
 
-### **This solution runs in O(n log n + q) time** (n log n for sorting, practically linear for the rest), which is suitable for all required constraints.
+## **Summary Table**
+
+| Node(s)    | Edges           | Complete? |
+|------------|-----------------|-----------|
+| 0,1,2      | 0-1, 0-2, 1-2   |   Yes     |
+| 3,4        | 3-4             |   Yes     |
+| 5          | --              |   Yes     |
+| **Total**  |                 |   3       |
+
+---
+
+## 6. **Comments on Efficiency**
+
+- Max `n=50` allows us to do BFS/DFS, and even up to `O(n^3)` is OK for such small inputs.
+- For edge counting in each component, an alternative for faster approach: use a `set` for O(1) lookup (but in practice, current code is fast given constraints).
+
+---
+
+**Let me know if you need further clarifications!**
