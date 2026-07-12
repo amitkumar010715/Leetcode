@@ -1,135 +1,104 @@
-Let's tackle the problem step by step!
+Let's address the problem step by step:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-You are given an undirected graph on `n` nodes (labelled `0` to `n-1`) with edges specified as pairs. Your task is to count how many **complete connected components** it has. A component is **complete** if every pair of nodes in it is directly connected by an edge (a clique).
+Given an integer array, we replace each element with its **rank**. The rank is **1-based** (smallest value has rank 1), **equal elements share the same rank**, and the ranks are as small as possible. Our goal is to efficiently compute and return the resulting array of ranks.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= n <= 50` (small, so `O(n^2)` algorithms are fine!)
-  - Edges are unique, undirected, and nodes are not self-connected.
-
-- **Edge cases:**
-  - No edges (`edges = []`): Each node is its own component, each is trivially complete (single node = clique).
-  - All nodes connected into a single complete graph (clique).
-  - Several disconnected components, possibly of varying sizes, some complete, some not.
+- **Size**: `0 <= arr.length <= 1e5`  
+  (The algorithm needs to be O(n log n) at worst.)
+- **Element values**: `-1e9 <= arr[i] <= 1e9`
+- **Duplicates**: Multiple elements can be the same.
+- **Edge cases**:
+    - **Empty array**: Should return an empty array.
+    - **All elements equal**: All should have rank 1.
+    - **Already sorted**: Should work efficiently.
+    - **Single element**: Rank is 1.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Given `n` is small, we can:
-- **Step 1:** Build adjacency lists for the graph.
-- **Step 2:** Use BFS/DFS to find all connected components.
-- **Step 3:** For each component, check if it's complete:
-    - For a component with `k` nodes, there must be exactly `k*(k-1)/2` edges among them.
-    - Count the number of edges within the component (avoid double counting).
-    - If yes, increment the answer.
+### Step-by-step
 
-### **Why does this work?**
-- In a complete graph, each node is connected to every other node.
-- For a component of size `k`, maximum edges = C(k, 2) = k*(k-1)/2.
+1. **Copy and Sort:**  
+   Copy the array, sort it, and remove duplicates to get the ordered list of unique values. Sorting takes O(n log n).
+
+2. **Assign Ranks:**  
+   Create a hash map (unordered_map) from value to its rank (starting from 1). Assign ranks in sorted order.
+
+3. **Transform Original Array:**  
+   Replace each element in the original array with its rank using the map. This is O(n).
+
+**Time complexity:** O(n log n) (due to sorting)
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <queue>
-
-using namespace std;
+#include <unordered_map>
+#include <algorithm>
 
 class Solution {
 public:
-    int countCompleteComponents(int n, vector<vector<int>>& edges) {
-        // Build the adjacency list.
-        vector<vector<int>> g(n);
-        for (const auto& e : edges) {
-            g[e[0]].push_back(e[1]);
-            g[e[1]].push_back(e[0]);
+    std::vector<int> arrayRankTransform(std::vector<int>& arr) {
+        std::vector<int> sorted = arr;
+        std::sort(sorted.begin(), sorted.end());
+        // Remove duplicates
+        sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
+        
+        std::unordered_map<int, int> valueToRank;
+        for (int i = 0; i < sorted.size(); ++i) {
+            valueToRank[sorted[i]] = i + 1;  // ranks start from 1
         }
         
-        vector<bool> vis(n, false);
-        int ans = 0;
-        
-        for (int i = 0; i < n; ++i) {
-            if (!vis[i]) {
-                // BFS to collect all nodes (vertices) in this component
-                vector<int> comp;
-                queue<int> q;
-                q.push(i);
-                vis[i] = true;
-                while (!q.empty()) {
-                    int u = q.front(); q.pop();
-                    comp.push_back(u);
-                    for (int v : g[u]) {
-                        if (!vis[v]) {
-                            vis[v] = true;
-                            q.push(v);
-                        }
-                    }
-                }
-                // Now, check if 'comp' is a complete component
-                int sz = comp.size();
-                int edgeCnt = 0;
-                for (int u : comp) {
-                    for (int v : g[u]) {
-                        // Only count edges to other nodes in this component
-                        if (u < v && find(comp.begin(), comp.end(), v) != comp.end()) {
-                            edgeCnt++;
-                        }
-                    }
-                }
-                // A complete component of size sz has sz*(sz-1)/2 edges
-                if (edgeCnt == sz * (sz - 1) / 2) {
-                    ans++;
-                }
-            }
+        std::vector<int> result;
+        result.reserve(arr.size());
+        for (int num : arr) {
+            result.push_back(valueToRank[num]);
         }
-        return ans;
+        return result;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-#### Example 1
-**Input:**  
-`n = 6, edges = [[0,1],[0,2],[1,2],[3,4]]`
+**Example:**  
+Input: `[37,12,28,9,100,56,80,5,12]`
 
-Component breakdown:
-- Component 1: `{0,1,2}` &rarr; edges: 0-1, 0-2, 1-2 ⇒ all pairs connected ⇒ complete.
-- Component 2: `{3,4}` &rarr; edge: 3-4 ⇒ complete.
-- Component 3: `{5}` (no edges) ⇒ single node ⇒ complete.
+- **Step 1:** Sort and deduplicate: `[5,9,12,28,37,56,80,100]`
+- **Step 2:** Assign ranks:
+    - `5` → 1
+    - `9` → 2
+    - `12` → 3
+    - `28` → 4
+    - `37` → 5
+    - `56` → 6
+    - `80` → 7
+    - `100` → 8
+- **Step 3:** Transform each element:
+    - 37 → 5
+    - 12 → 3
+    - 28 → 4
+    - 9 → 2
+    - 100 → 8
+    - 56 → 6
+    - 80 → 7
+    - 5 → 1
+    - 12 → 3
 
-**Total complete components:** 3
-
----
-
-## **Summary Table**
-
-| Node(s)    | Edges           | Complete? |
-|------------|-----------------|-----------|
-| 0,1,2      | 0-1, 0-2, 1-2   |   Yes     |
-| 3,4        | 3-4             |   Yes     |
-| 5          | --              |   Yes     |
-| **Total**  |                 |   3       |
-
----
-
-## 6. **Comments on Efficiency**
-
-- Max `n=50` allows us to do BFS/DFS, and even up to `O(n^3)` is OK for such small inputs.
-- For edge counting in each component, an alternative for faster approach: use a `set` for O(1) lookup (but in practice, current code is fast given constraints).
+**Output:** `[5,3,4,2,8,6,7,1,3]`
 
 ---
 
-**Let me know if you need further clarifications!**
+**In summary:** We sort, deduplicate, assign ranks, and map back easily in O(n log n) time, supporting large inputs and all valid integer values.
