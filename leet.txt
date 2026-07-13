@@ -1,68 +1,70 @@
-Let's address the problem step by step:
+Let's break down the problem and solution:
 
 ---
 
-## 1. **Short Summary**
+## 1. Summary
 
-Given an integer array, we replace each element with its **rank**. The rank is **1-based** (smallest value has rank 1), **equal elements share the same rank**, and the ranks are as small as possible. Our goal is to efficiently compute and return the resulting array of ranks.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Size**: `0 <= arr.length <= 1e5`  
-  (The algorithm needs to be O(n log n) at worst.)
-- **Element values**: `-1e9 <= arr[i] <= 1e9`
-- **Duplicates**: Multiple elements can be the same.
-- **Edge cases**:
-    - **Empty array**: Should return an empty array.
-    - **All elements equal**: All should have rank 1.
-    - **Already sorted**: Should work efficiently.
-    - **Single element**: Rank is 1.
+We need to find all numbers within a range \([low, high]\) whose digits are **sequential**, meaning each digit is exactly one more than the previous one (e.g., 1234, 4567). Return these numbers in sorted order.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-### Step-by-step
-
-1. **Copy and Sort:**  
-   Copy the array, sort it, and remove duplicates to get the ordered list of unique values. Sorting takes O(n log n).
-
-2. **Assign Ranks:**  
-   Create a hash map (unordered_map) from value to its rank (starting from 1). Assign ranks in sorted order.
-
-3. **Transform Original Array:**  
-   Replace each element in the original array with its rank using the map. This is O(n).
-
-**Time complexity:** O(n log n) (due to sorting)
+- **Constraints:**
+  - \( 10 \leq \text{low} \leq \text{high} \leq 10^9 \)
+  - All outputs must be *sequential digit* numbers and in the given range.
+- **Edge Cases:**
+  - Input range does **not** overlap any sequential digit numbers.
+  - \(\text{low}\) and/or \(\text{high}\) themselves are sequential digits.
+  - The sequence can be of length 2 up to 9 (e.g., 12, 23456, 123456789).
+  - Smallest possible \(\text{low}\) is 10, largest \(\text{high}\) is \(10^9\).
 
 ---
 
-## 4. **Clean C++ Solution**
+## 3. Optimal Algorithm
+
+### Insights:
+
+- There are only a few possible sequential digit numbers, since the highest one is `123456789`.
+- For each possible starting digit, generate possible sequential numbers until the next digit would exceed 9. For all possible sequence lengths from 2 to 9:
+  - For example, for `length = 3`: try starting from `1` ("123"), `2` ("234"), ..., `7` ("789").
+- If the number falls within \([low, high]\), add it to the output.
+
+### Steps:
+
+1. **For** `length` from 2 to 9 (max digit length):
+   - **For** starting digit `start` from 1 to (10 - length):
+     - Generate the sequential number by repeatedly adding next digits.
+     - If in range, add to results.
+
+**Why is this efficient?**  
+The number of sequential digits is tiny (at most 36), so we can just generate all and filter by the range.
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 #include <vector>
-#include <unordered_map>
-#include <algorithm>
+using namespace std;
 
 class Solution {
 public:
-    std::vector<int> arrayRankTransform(std::vector<int>& arr) {
-        std::vector<int> sorted = arr;
-        std::sort(sorted.begin(), sorted.end());
-        // Remove duplicates
-        sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
-        
-        std::unordered_map<int, int> valueToRank;
-        for (int i = 0; i < sorted.size(); ++i) {
-            valueToRank[sorted[i]] = i + 1;  // ranks start from 1
-        }
-        
-        std::vector<int> result;
-        result.reserve(arr.size());
-        for (int num : arr) {
-            result.push_back(valueToRank[num]);
+    vector<int> sequentialDigits(int low, int high) {
+        vector<int> result;
+        // Sequential digits numbers can be at most 9 digits.
+        for (int length = 2; length <= 9; ++length) {
+            for (int start = 1; start <= 10 - length; ++start) {
+                int num = 0;
+                int digit = start;
+                for (int i = 0; i < length; ++i) {
+                    num = num * 10 + digit;
+                    ++digit;
+                }
+                if (num >= low && num <= high) {
+                    result.push_back(num);
+                }
+            }
         }
         return result;
     }
@@ -71,34 +73,31 @@ public:
 
 ---
 
-## 5. **Example Explained**
+## 5. Example Explanation
 
-**Example:**  
-Input: `[37,12,28,9,100,56,80,5,12]`
-
-- **Step 1:** Sort and deduplicate: `[5,9,12,28,37,56,80,100]`
-- **Step 2:** Assign ranks:
-    - `5` → 1
-    - `9` → 2
-    - `12` → 3
-    - `28` → 4
-    - `37` → 5
-    - `56` → 6
-    - `80` → 7
-    - `100` → 8
-- **Step 3:** Transform each element:
-    - 37 → 5
-    - 12 → 3
-    - 28 → 4
-    - 9 → 2
-    - 100 → 8
-    - 56 → 6
-    - 80 → 7
-    - 5 → 1
-    - 12 → 3
-
-**Output:** `[5,3,4,2,8,6,7,1,3]`
+**Example 2:**
+- **Input:** `low = 1000, high = 13000`
+- **Process:**
+  - Generate sequential numbers of lengths 4 and 5 (since that's the digit range).
+    - 4-digit: 1234, 2345, ..., 6789
+    - 5-digit: 12345 (since 23456 > 13000)
+- **Filter in range \([1000, 13000]\):**
+  - 1234, 2345, 3456, 4567, 5678, 6789, 12345
+- **Output:** `[1234,2345,3456,4567,5678,6789,12345]`
 
 ---
 
-**In summary:** We sort, deduplicate, assign ranks, and map back easily in O(n log n) time, supporting large inputs and all valid integer values.
+### **Summary Table:**
+
+| Length | Start | Generated Numbers       |
+|--------|-------|------------------------|
+| 4      | 1     | 1234                   |
+| 4      | 2     | 2345                   |
+| 4      | 3     | 3456                   |
+| 4      | 4     | 4567                   |
+| 4      | 5     | 5678                   |
+| 4      | 6     | 6789                   |
+| 5      | 1     | 12345                  |
+
+
+All the numbers above within [1000, 13000] are the required result.
