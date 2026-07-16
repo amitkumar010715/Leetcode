@@ -1,114 +1,115 @@
-Let's break down the problem and provide the required information step by step:
+Let's answer each requirement step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an integer `n`, compute the sum of the first `n` positive odd numbers (`sumOdd`) and the first `n` positive even numbers (`sumEven`), then return their GCD (Greatest Common Divisor).
+Given an integer array `nums`, you are to:
+- For each index `i`, compute `prefixGcd[i] = gcd(nums[i], mx_i)`, where `mx_i = max(nums[0..i])`.
+- Sort the `prefixGcd` array.
+- Pair smallest with largest unpaired elements and sum the `gcd` of those pairs (ignore the middle if odd).
+- **Return** the total sum of all such pair gcds.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**  
-  `1 <= n <= 1000`
-- **Edge Cases:**  
-  - Smallest value (`n = 1`): Make sure the function works for the minimum.
-  - The values can get somewhat large but are manageable since the sums grow quadratically, but with `n` as small as 1000, direct computation is fine.
+- `1 <= n == nums.length <= 10^5`
+- `1 <= nums[i] <= 10^9`
+- All operations should be efficient enough for large arrays (`O(n log n)` preferred).
+- **Edge Cases:**
+  - `n == 1`: Only one element, no pairs, sum is 0.
+  - Duplicates in `nums` (handled by the algorithm).
+  - Large values; gcd can handle this efficiently.
+  - Odd/even length (`n`).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Step-by-step:
+### Steps:
 
-#### a) Find formula for sums:
-- The first `n` **odd** numbers: `1, 3, 5, ..., 2n-1`
-   - Their sum = `n^2` (well-known formula)
-- The first `n` **even** numbers: `2, 4, 6, ..., 2n`
-   - Their sum = `n * (n+1)` (also derivable as arithmetic progression)
+1. **Compute `prefixGcd`:**
+    - Track running maximum (`mx`).
+    - For each `i`, set `mx = max(mx, nums[i])` and compute `gcd(nums[i], mx)`.
+    - O(n) time.
 
-#### b) GCD calculation:
-Let `a = n^2` and `b = n*(n+1)`
+2. **Sort `prefixGcd`:**
+    - Sort in non-decreasing order.
+    - O(n log n) time.
 
-- Their GCD is `GCD(n^2, n*(n+1))`
-- Notice:  
-   `GCD(n^2, n*(n+1)) = n * GCD(n, n+1)`  
-   but since `n` and `n+1` are coprime (`GCD(n, n+1)=1`), so  
-   **GCD(n^2, n(n+1)) = n**
+3. **Form Pairs & Sum GCDs:**
+    - Use 2 pointers: `l` at start, `r` at end.
+    - While `l < r`: sum `gcd(prefixGcd[l], prefixGcd[r])`, then increment `l` and decrement `r`.
+    - If odd, middle element is ignored.
+    - O(n) time.
 
-### So the answer for any n is **n**.
+### Time Complexity
+
+- O(n log n) (the sorting dominates).
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-class Solution {
-public:
-    int gcdOfSums(int n) {
-        // As proven above, the answer is always n
-        return n;
-    }
-};
-```
-
-If you want to follow the process and compute the sums, here it is:
-
-```cpp
+#include <vector>
+#include <algorithm>
 #include <numeric>
+using namespace std;
+
 class Solution {
 public:
-    int gcd(int a, int b) {
-        // Standard Euclidean Algorithm
-        return b == 0 ? a : gcd(b, a % b);
-    }
-
-    int gcdOfSums(int n) {
-        int sumOdd = n * n;           // 1 + 3 + ... + (2n-1) = n^2
-        int sumEven = n * (n + 1);    // 2 + 4 + ... + 2n = n*(n+1)
-        return gcd(sumOdd, sumEven);
-        // Simplifies to: return n;
+    int sumOfGcdPairs(vector<int>& nums) {
+        int n = nums.size();
+        vector<int> prefixGcd(n);
+        int mx = 0;
+        for (int i = 0; i < n; ++i) {
+            mx = max(mx, nums[i]);
+            prefixGcd[i] = gcd(nums[i], mx); // std::gcd in C++17 (or __gcd)
+        }
+        sort(prefixGcd.begin(), prefixGcd.end());
+        int sum = 0;
+        int l = 0, r = n - 1;
+        while (l < r) {
+            sum += gcd(prefixGcd[l], prefixGcd[r]);
+            ++l;
+            --r;
+        }
+        return sum;
     }
 };
 ```
-
-But the optimal is just `return n;`.
-
----
-
-## 5. **Example Explained**
-
-### For n = 4:
-- First 4 odd numbers: 1, 3, 5, 7 → sumOdd = 1 + 3 + 5 + 7 = 16
-- First 4 even numbers: 2, 4, 6, 8 → sumEven = 2 + 4 + 6 + 8 = 20
-- GCD(16, 20) = 4
-
-So, for `n = 4`, the answer is **4**.
+*If your platform is pre-C++17, use `__gcd(a, b)` instead of `gcd` from `<numeric>`. For C++17 or later, use `std::gcd`.*
 
 ---
 
-## **Summary Table**
+## 5. **Example Explanation**
 
-| n | sumOdd | sumEven | GCD(sumOdd, sumEven) |
-|---|--------|---------|----------------------|
-| 1 |   1    |    2    |          1           |
-| 2 |   4    |    6    |          2           |
-| 3 |   9    |   12    |          3           |
-| 4 |  16    |   20    |          4           |
-| 5 |  25    |   30    |          5           |
+Let's use **Example 2:**
 
-The answer is always **n**.
+    nums = [3, 6, 2, 8]
+
+Step-by-step:
+
+1. **prefixGcd Construction:**
+   - i=0: mx=3, gcd(3,3)=3
+   - i=1: mx=6, gcd(6,6)=6
+   - i=2: mx=6, gcd(2,6)=2
+   - i=3: mx=8, gcd(8,8)=8
+   - So, prefixGcd = [3, 6, 2, 8]
+
+2. **Sort prefixGcd:** [2, 3, 6, 8]
+
+3. **Pairing:**
+   - Pair 2 (smallest) & 8 (largest): gcd(2, 8) = 2
+   - Pair 3 (next smallest) & 6 (next largest): gcd(3, 6) = 3
+
+   Sum = 2 + 3 = **5**
 
 ---
 
-### **Final Optimal Solution**
-
-```cpp
-class Solution {
-public:
-    int gcdOfSums(int n) {
-        return n;
-    }
-};
-```
+**In summary:**  
+- Compute prefix gcds paired with running maxima.
+- Sort, then pair from ends toward middle and sum gcds.
+- Efficient, direct implementation.
