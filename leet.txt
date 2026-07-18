@@ -1,140 +1,55 @@
-Let's break down the problem and craft an optimal solution:
+Let's proceed step-by-step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums`, for every pair `(i, j)` where `i < j`, compute `gcd(nums[i], nums[j])`. Consider the sorted list of all such GCD values—it is called `gcdPairs`. For each query in `queries`, return the value at the `queries[i]`-th index in the sorted `gcdPairs`.
+Given an integer array `nums`, **find the greatest common divisor (GCD)** of the *minimum* and *maximum* elements of the array. Return that GCD.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- \( n = \text{nums.size()} \leq 10^5 \)
-- Each element \(\leq 5 \times 10^4 \)
-- Number of queries up to \( 10^5 \)
-- \( 0 \leq \text{queries}[i] < n \cdot (n-1)/2 \)
+- **Constraints:**
+  - `2 <= nums.length <= 1000`
+  - `1 <= nums[i] <= 1000`
 
-**Edge Cases:**
-- All nums the same: All pairs same GCD.
-- Very small numbers (e.g., many 1s): Many GCDs will be 1.
-- Duplicates/non-duplicates: Repetition in GCD values.
-- Queries can be at min or max index.
-
-**Note:** Brute force O(n²) is impossible.
+- **Edge Cases:**
+  - All elements are the same (e.g., `[3,3]`): GCD of the same number is itself.
+  - The smallest and largest numbers have a GCD of `1` (i.e., are coprime).
+  - The array is already sorted or unsorted — doesn't affect the approach since only `min` and `max` matter.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Observation**
+- **Step 1:** Get the minimum and maximum values in the array.
+- **Step 2:** Compute the GCD of these two values, using the [Euclidean algorithm](https://en.wikipedia.org/wiki/Euclidean_algorithm).
 
-Each GCD value occurs a certain number of times among all possible pairs. If we can compute, for each possible GCD, the count of pairs that have this GCD, then we can reconstruct the sorted list by decompressing these counts.
-
-We need:
-1. For each value g (from 1 to max(nums)), compute **how many pairs (i, j)** have `gcd(nums[i], nums[j]) = g`.  
-2. For each query (knowing that the sorted list is: [min GCD] * count, ...), answer which GCD sits at a given index.
-
-#### **Step A: Frequency of each number**
-
-- cnt[x] = count of nums[i] == x
-
-#### **Step B: For each g, count pairs with gcd(nums[i], nums[j]) == g**
-
-- For each g from MAX down to 1:
-    1. **How many numbers are multiples of g?** That is, sum cnt[d] for all d = k * g.
-        - Let's call this total `cnt_multiples[g]`.
-    2. The number of unordered pairs among those is \( C(cnt_multiples[g], 2) \).
-    3. But we only want pairs where gcd is *exactly* g, not some multiple.
-    4. **Inclusion-Exclusion:** For each g, subtract the counts for all multiples of g > g.
-    
-In code:
-For g from MAX down to 1:
-- total_pairs[g] = C(cnt_multiples[g], 2)
-- For every multiple k*g (with k>1): total_pairs[g] -= total_pairs[k*g]
-
-#### **Step C: Find answer to queries**
-
-- Build a list of [GCD value, count] where count = total_pairs[g] (for all g where count>0), sorted by GCD value.
-- For all queries, knowing the "compressed" sorted array, answer each query by decompressing/counting the positions.
-
-#### **Efficiency**
-
-- Computing multiples: For each g up to MAX, and each multiple up to MAX, ~MAX * log MAX.
-- Sufficient for constraints.
+Both steps are O(N) for scan and O(logM) for GCD computation (`M` is the max value).
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
 class Solution {
 public:
-    vector<int> gcdSortAnswer(int n, const vector<long long>& prefix, const vector<pair<int,int>>& vals, const vector<int>& queries) {
-        vector<int> ans(queries.size());
-        for(int i = 0; i < queries.size(); ++i) {
-            int idx = lower_bound(prefix.begin(), prefix.end(), queries[i]+1) - prefix.begin();
-            ans[i] = vals[idx].first;
+    // Helper function to compute GCD of two numbers
+    int gcd(int a, int b) {
+        while(b != 0) {
+            int tmp = a % b;
+            a = b;
+            b = tmp;
         }
-        return ans;
+        return a;
     }
-
-    vector<int> gcdQueries(vector<int>& nums, vector<int>& queries) {
-        const int MAXV = 50000;
-        vector<int> cnt(MAXV + 1, 0);
-
-        // Count occurrences
-        for (int x : nums) ++cnt[x];
-
-        // For each g, count of numbers that are multiple of g
-        vector<long long> freq(MAXV + 1, 0);
-        for (int g = 1; g <= MAXV; ++g)
-            for (int k = g; k <= MAXV; k += g)
-                freq[g] += cnt[k];
-
-        // For each g, number of pairs with GCD == g
-        vector<long long> total_pairs(MAXV + 1, 0);
-        for (int g = MAXV; g >= 1; --g) {
-            long long c = freq[g];
-            total_pairs[g] = c * (c - 1) / 2; // number of unordered pairs
-            // Remove pairs counted in multiples of g
-            for (int k = 2 * g; k <= MAXV; k += g)
-                total_pairs[g] -= total_pairs[k];
-        }
-
-        // Extract nonzero (GCD value, count) and build prefix sum
-        vector<pair<int, int>> vals; // (gcd, num_pairs_with_gcd)
-        vector<long long> prefix; // prefix sum of counts
-        long long total = 0;
-
-        for (int g = 1; g <= MAXV; ++g) {
-            if (total_pairs[g] > 0) {
-                vals.emplace_back(g, total_pairs[g]);
-                total += total_pairs[g];
-                prefix.push_back(total);
-            }
-        }
-
-        // Process queries
-        return gcdSortAnswer(nums.size(), prefix, vals, queries);
+    
+    int findGCD(vector<int>& nums) {
+        int mn = *min_element(nums.begin(), nums.end());
+        int mx = *max_element(nums.begin(), nums.end());
+        return gcd(mn, mx);
     }
-};
-```
-
-**Wrapper for LeetCode:**
-```cpp
-// LeetCode expects:
-// vector<int> gcdSort(vector<int>& nums, vector<int>& queries)
-class Solution {
-public:
-    vector<int> gcdSort(vector<int>& nums, vector<int>& queries) {
-        return gcdQueries(nums, queries);
-    }
-
-    // ... (rest as above)
 };
 ```
 
@@ -142,46 +57,17 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's take Example 2:  
-**Input:** nums = [4,4,2,1], queries = [5,3,1,0]
+**Example Input:**  
+`nums = [2,5,6,9,10]`
 
-### Step 1: Count pairs and their GCD.
+- **Smallest:** `2`
+- **Largest:**  `10`
+- **GCD:**  
+  - 10 mod 2 = 0 → GCD(10, 2) = 2
 
-All pairs:
-- (4,4) -> gcd(4,4) = 4
-- (4,2) -> gcd(4,2) = 2
-- (4,1) -> gcd(4,1) = 1
-- (4,2) -> gcd(4,2) = 2
-- (4,1) -> gcd(4,1) = 1
-- (2,1) -> gcd(2,1) = 1
-
-So gcdPairs: [4,2,1,2,1,1]
-
-Sorting: [1,1,1,2,2,4]
-
-### Step 2: queries = [5,3,1,0]
-
-- gcdPairs[5] = 4
-- gcdPairs[3] = 2
-- gcdPairs[1] = 1
-- gcdPairs[0] = 1
-
-So output: **[4,2,1,1]**
+**Output:** `2`
 
 ---
 
-### **Summary Table**
-
-| GCD | Count | Prefix Sum |
-|-----|-------|------------|
-| 1   |   3   |    3       |
-| 2   |   2   |    5       |
-| 4   |   1   |    6       |
-
-For queries, we locate which GCD contains index `queries[i]` in the cumulative prefix.
-
----
-
-## **Conclusion**
-
-This approach is optimal and efficient for the given constraints, using counting/multiples & inclusion-exclusion to enumerate all GCD pairs' counts, and then using binary search to answer arbitrary queries.
+**Recap:**  
+Find `min` and `max` in the array, then return their GCD. This is efficient (O(N)), simple, and leverages the Euclidean algorithm for the GCD.
