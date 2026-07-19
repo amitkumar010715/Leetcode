@@ -1,73 +1,143 @@
-Let's proceed step-by-step:
+Let's address your requests step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given an integer array `nums`, **find the greatest common divisor (GCD)** of the *minimum* and *maximum* elements of the array. Return that GCD.
+Given a string `s`, you are to find the **lexicographically smallest subsequence** of `s` that contains **all distinct characters** of `s` exactly once.  
+- **Subsequence** means you can delete some (or no) characters from `s` to form the result, but you cannot rearrange the order.
+- The answer must contain every unique letter in `s` once, and no more.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-  - `2 <= nums.length <= 1000`
-  - `1 <= nums[i] <= 1000`
+    - `1 <= s.length <= 1000`
+    - `s` contains only lowercase English letters (`a-z`).
 
 - **Edge Cases:**
-  - All elements are the same (e.g., `[3,3]`): GCD of the same number is itself.
-  - The smallest and largest numbers have a GCD of `1` (i.e., are coprime).
-  - The array is already sorted or unsorted — doesn't affect the approach since only `min` and `max` matter.
+    - The string may contain all 26 letters, or a repeated single letter.
+    - If `s` has only one distinct character (e.g., `"aaaaa"`), the answer is `"a"`.
+    - If `s` already consists of the alphabet in sorted order with duplicates (e.g., `"abcabcabc"`), the answer is `"abc"`.
+    - The input may require dropping some characters to achieve the lexicographical order (see `"cbacdcbc"`).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- **Step 1:** Get the minimum and maximum values in the array.
-- **Step 2:** Compute the GCD of these two values, using the [Euclidean algorithm](https://en.wikipedia.org/wiki/Euclidean_algorithm).
+This is a classic greedy "monotonic stack" problem.
 
-Both steps are O(N) for scan and O(logM) for GCD computation (`M` is the max value).
+**Idea:**
+- For each character, we want to decide whether we should:
+    - Add it to our result (if not already done).
+    - Remove previous (top of stack) characters if the current character is lexicographically smaller and the previous character will appear later.
+
+**Steps:**
+1. **Count Last Occurrence:** For each character, record its last occurrence index.
+2. **Stack for Result:** Use a stack (can be a string for easier handling) to maintain the current result.
+3. **Visited Set:** Boolean array/bitset to track if a character has already been added.
+4. **Iterate Over String:**
+    - If the current character is already in result (visited), **skip**.
+    - While:
+        - The stack is **not** empty,
+        - The top of the stack is **lexicographically greater** than the current character,
+        - The top of the stack's character **appears later** in the string (its last occurrence is > current index),
+      -> **Pop** from the stack and mark it as unvisited.
+    - **Push** current character to the stack and mark as visited.
+
+**Complexity:**  
+- Time: O(n), where n is the length of `s` (each character is pushed/popped at most once).
+- Space: O(26) for visited, O(n) for stack in worst case.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
+#include <string>
+#include <vector>
+using namespace std;
+
 class Solution {
 public:
-    // Helper function to compute GCD of two numbers
-    int gcd(int a, int b) {
-        while(b != 0) {
-            int tmp = a % b;
-            a = b;
-            b = tmp;
+    string smallestSubsequence(string s) {
+        vector<int> lastIndex(26, 0);
+        vector<bool> inStack(26, false);
+        int n = s.size();
+
+        // step 1: Find last occurrence of each character
+        for (int i = 0; i < n; ++i) {
+            lastIndex[s[i] - 'a'] = i;
         }
-        return a;
-    }
-    
-    int findGCD(vector<int>& nums) {
-        int mn = *min_element(nums.begin(), nums.end());
-        int mx = *max_element(nums.begin(), nums.end());
-        return gcd(mn, mx);
+
+        string stack;
+        for (int i = 0; i < n; ++i) {
+            char c = s[i];
+            int idx = c - 'a';
+
+            // If already in result, skip
+            if (inStack[idx]) continue;
+
+            // Remove characters that are larger and still have remaining in s
+            while (!stack.empty() && c < stack.back() && lastIndex[stack.back() - 'a'] > i) {
+                inStack[stack.back() - 'a'] = false;
+                stack.pop_back();
+            }
+
+            stack.push_back(c);
+            inStack[idx] = true;
+        }
+        return stack;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained: `s = "cbacdcbc"`**
 
-**Example Input:**  
-`nums = [2,5,6,9,10]`
+**Step-by-step process:**
 
-- **Smallest:** `2`
-- **Largest:**  `10`
-- **GCD:**  
-  - 10 mod 2 = 0 → GCD(10, 2) = 2
+- **Last indices:**
+    - 'a': 2
+    - 'b': 7
+    - 'c': 8
+    - 'd': 6
 
-**Output:** `2`
+**Processing:**
+- i=0, c='c': not seen, push --> stack=`c`
+- i=1, c='b':  
+    - 'b' < 'c' and 'c' appears again (next at i=2, etc), so pop 'c'.  
+    - stack empty, push 'b' --> stack=`b`
+- i=2, c='a':
+    - 'a' < 'b' and 'b' appears again (last at i=7), so pop 'b'.
+    - stack empty, push 'a' --> stack=`a`
+- i=3, c='c': not in stack, push --> stack=`ac`
+- i=4, c='d': not in stack, push --> stack=`acd`
+- i=5, c='c': skip, already in stack
+- i=6, c='b': not in stack, push --> stack=`acdb`
+- i=7, c='c': skip
+- i=8, c='c': skip
+
+**Final result:** `"acdb"`
 
 ---
 
-**Recap:**  
-Find `min` and `max` in the array, then return their GCD. This is efficient (O(N)), simple, and leverages the Euclidean algorithm for the GCD.
+### **Summary Table for `cbacdcbc`:**
+
+| i | c | stack      | action                  |
+|---|---|------------|-------------------------|
+| 0 | c | c          | push                    |
+| 1 | b | b          | pop 'c', push 'b'       |
+| 2 | a | a          | pop 'b', push 'a'       |
+| 3 | c | ac         | push                    |
+| 4 | d | acd        | push                    |
+| 5 | c | acd        | skip (already in stack) |
+| 6 | b | acdb       | push                    |
+| 7 | c | acdb       | skip                    |
+| 8 | c | acdb       | skip                    |
+
+---
+
+Let me know if you'd like explanation for another example or more depth on any step!
