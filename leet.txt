@@ -1,143 +1,111 @@
-Let's address your requests step by step.
+Sure! Let's break it down step-by-step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a string `s`, you are to find the **lexicographically smallest subsequence** of `s` that contains **all distinct characters** of `s` exactly once.  
-- **Subsequence** means you can delete some (or no) characters from `s` to form the result, but you cannot rearrange the order.
-- The answer must contain every unique letter in `s` once, and no more.
+You are given an m x n 2D grid and an integer k. Shift all elements in the grid to the right k times as if the grid were "flattened" row-wise into a 1D array (with wrapping around). After performing k shifts, return the new grid configuration.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-    - `1 <= s.length <= 1000`
-    - `s` contains only lowercase English letters (`a-z`).
-
-- **Edge Cases:**
-    - The string may contain all 26 letters, or a repeated single letter.
-    - If `s` has only one distinct character (e.g., `"aaaaa"`), the answer is `"a"`.
-    - If `s` already consists of the alphabet in sorted order with duplicates (e.g., `"abcabcabc"`), the answer is `"abc"`.
-    - The input may require dropping some characters to achieve the lexicographical order (see `"cbacdcbc"`).
+- **Grid Size**: `1 ≤ m, n ≤ 50` (maximum 2500 elements).
+- **k**: Can be zero (no shift) or larger than `m * n` (in which case, cycles appear).
+- **Values**: Irrelevant for the shifting logic; can be negative/positive.
+- **Edge Cases**:
+  - `k = 0`: Output grid is the same as input.
+  - `k` is a multiple of `m*n`: Grid remains unchanged.
+  - 1x1 grid: Any k will have no visible effect.
+  - Non-square grids.
+- Grid is always rectangular.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This is a classic greedy "monotonic stack" problem.
+Instead of shifting every cell k times (which would be slow), **flatten the grid into a 1D array, perform the shift, then reshape it back**.
 
-**Idea:**
-- For each character, we want to decide whether we should:
-    - Add it to our result (if not already done).
-    - Remove previous (top of stack) characters if the current character is lexicographically smaller and the previous character will appear later.
+### **Algorithm Steps**:
+1. Flatten the 2D grid into a 1D vector.
+2. Rotate the flattened vector to the right by `k % (m * n)`.
+3. Reconstruct the 2D grid from the shifted 1D array.
 
-**Steps:**
-1. **Count Last Occurrence:** For each character, record its last occurrence index.
-2. **Stack for Result:** Use a stack (can be a string for easier handling) to maintain the current result.
-3. **Visited Set:** Boolean array/bitset to track if a character has already been added.
-4. **Iterate Over String:**
-    - If the current character is already in result (visited), **skip**.
-    - While:
-        - The stack is **not** empty,
-        - The top of the stack is **lexicographically greater** than the current character,
-        - The top of the stack's character **appears later** in the string (its last occurrence is > current index),
-      -> **Pop** from the stack and mark it as unvisited.
-    - **Push** current character to the stack and mark as visited.
-
-**Complexity:**  
-- Time: O(n), where n is the length of `s` (each character is pushed/popped at most once).
-- Space: O(26) for visited, O(n) for stack in worst case.
+- **Time Complexity**: O(m*n), since each element is visited a constant number of times.
+- **Space Complexity**: O(m*n) for the flattened grid and the new grid.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <string>
 #include <vector>
 using namespace std;
 
 class Solution {
 public:
-    string smallestSubsequence(string s) {
-        vector<int> lastIndex(26, 0);
-        vector<bool> inStack(26, false);
-        int n = s.size();
+    vector<vector<int>> shiftGrid(vector<vector<int>>& grid, int k) {
+        int m = grid.size(), n = grid[0].size();
+        int size = m * n;
+        k = k % size;
+        if (k == 0) return grid;
 
-        // step 1: Find last occurrence of each character
-        for (int i = 0; i < n; ++i) {
-            lastIndex[s[i] - 'a'] = i;
-        }
-
-        string stack;
-        for (int i = 0; i < n; ++i) {
-            char c = s[i];
-            int idx = c - 'a';
-
-            // If already in result, skip
-            if (inStack[idx]) continue;
-
-            // Remove characters that are larger and still have remaining in s
-            while (!stack.empty() && c < stack.back() && lastIndex[stack.back() - 'a'] > i) {
-                inStack[stack.back() - 'a'] = false;
-                stack.pop_back();
+        vector<int> flat(size);
+        // Flatten the 2D grid
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                flat[i * n + j] = grid[i][j];
             }
-
-            stack.push_back(c);
-            inStack[idx] = true;
         }
-        return stack;
+
+        vector<int> shifted(size);
+        // Shift
+        for (int i = 0; i < size; ++i) {
+            shifted[(i + k) % size] = flat[i];
+        }
+
+        // Reconstruct the 2D grid
+        vector<vector<int>> ans(m, vector<int>(n));
+        for (int i = 0; i < size; ++i) {
+            ans[i / n][i % n] = shifted[i];
+        }
+
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained: `s = "cbacdcbc"`**
+## 5. **Example Explained**
 
-**Step-by-step process:**
+**Input:**  
+```
+grid = [[1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9]]
+k = 1
+```
 
-- **Last indices:**
-    - 'a': 2
-    - 'b': 7
-    - 'c': 8
-    - 'd': 6
+- **Step 1 - Flatten:**  
+  `[1, 2, 3, 4, 5, 6, 7, 8, 9]`
 
-**Processing:**
-- i=0, c='c': not seen, push --> stack=`c`
-- i=1, c='b':  
-    - 'b' < 'c' and 'c' appears again (next at i=2, etc), so pop 'c'.  
-    - stack empty, push 'b' --> stack=`b`
-- i=2, c='a':
-    - 'a' < 'b' and 'b' appears again (last at i=7), so pop 'b'.
-    - stack empty, push 'a' --> stack=`a`
-- i=3, c='c': not in stack, push --> stack=`ac`
-- i=4, c='d': not in stack, push --> stack=`acd`
-- i=5, c='c': skip, already in stack
-- i=6, c='b': not in stack, push --> stack=`acdb`
-- i=7, c='c': skip
-- i=8, c='c': skip
+- **Step 2 - Shift by 1:**  
+  Last element moves to the front.  
+  `[9, 1, 2, 3, 4, 5, 6, 7, 8]`
 
-**Final result:** `"acdb"`
+- **Step 3 - Reshape:**  
+  ```
+  [
+    [9, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8]
+  ]
+  ```
 
----
-
-### **Summary Table for `cbacdcbc`:**
-
-| i | c | stack      | action                  |
-|---|---|------------|-------------------------|
-| 0 | c | c          | push                    |
-| 1 | b | b          | pop 'c', push 'b'       |
-| 2 | a | a          | pop 'b', push 'a'       |
-| 3 | c | ac         | push                    |
-| 4 | d | acd        | push                    |
-| 5 | c | acd        | skip (already in stack) |
-| 6 | b | acdb       | push                    |
-| 7 | c | acdb       | skip                    |
-| 8 | c | acdb       | skip                    |
+**Output:**  
+`[[9,1,2],[3,4,5],[6,7,8]]`
 
 ---
 
-Let me know if you'd like explanation for another example or more depth on any step!
+Let me know if you want any clarification or more sample runs!
