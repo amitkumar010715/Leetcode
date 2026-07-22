@@ -1,69 +1,134 @@
-Let's break it down step by step:
+Let's tackle the problem step by step.
 
 ---
 
 ## 1. **Short Summary**
 
-Given a binary string `s`, you can do **at most one "trade"**, which means:
-
-- **Step 1:** Take a block of `'1'`s **surrounded by `'0'`s** and set it to `'0'`.
-- **Step 2:** Then take a block of `'0'`s **surrounded by `'1'`s** and set it to `'1'`.
-
-Your goal is to maximize the total number of `'1'`s (active sections) **after the trade**.
-
-**Note:** Consider the string as augmented by `'1'` at both ends (but not part of the real output), i.e., augmented string = `'1' + s + '1'`.
+Given a binary string `s` and multiple queries on its substrings, for each query, we can perform **at most one "trade"** (swap a block of internal '1's surrounded by '0's into '0's, then a block of internal '0's surrounded by '1's into '1's, inside the substring) to maximize the count of active ('1') sections. For each substring, augmented by `'1'` at both ends (not counted in the final answer), determine the maximal possible number of active sections after at most one trade.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= n <= 100,000` (`s.length`)
-- `s[i]` in `'0'` or `'1'`
-- **Edge cases:**
-  - No valid trade is possible (e.g., no `'1'` block surrounded by `'0'`s).
-  - All zeros or all ones.
-  - Overlapping or adjacent blocks must be considered carefully.
-  - Augmentation affects what is considered "surrounded by" since ends become `'1'`.
+### **Constraints**
+- `1 ≤ n ≤ 10^5` — Length of s
+- `1 ≤ queries.length ≤ 10^5`
+- Each query is `[l, r]` with `0 ≤ l ≤ r < n`
+- Each s[i] is `'0'` or `'1'`
+
+### **Edge Cases**
+- All zeros, all ones.
+- Queries at the start/end of s.
+- Substrings with only one kind.
+- No possible trade (e.g. no '1's surrounded by '0's).
+- Long substrings.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **A. Block Parsing**
-1. Parse the augmented string `t = '1' + s + '1'` into **blocks** of consecutive equal characters and record their type (`0` or `1`), start, and length.
-2. The **valid '1' blocks to remove** are those sandwiched **between '0' blocks** (i.e., `...0 [1...] 0...`).
-3. The **valid '0' blocks to flip** are those sandwiched **between '1' blocks** (i.e., `...1 [0...] 1...`).
+The key is **efficient substring analysis**. We must do better than O(length) per query!
 
-### **B. No Trade Maximum**
-- By default, count of `'1'`s in `s`.
+### **Key Observations**
 
-### **C. Try Every Possible Single Trade**
-- For every "removable" `'1'` block (step 1), for every removable `'0'` block (step 2), try the trade:
+1. *Augmentation*: For substring s[l..r], we analyze t = '1' + s[l..r] + '1'.
+2. *Active Sections*: Count groups (blocks) of '1's (i.e., transitions from '0' to '1').
+3. *Trade*:
+    - Find a block of '1's **surrounded by '0's** (i.e., part of group '0 111... 0').
+    - Remove such a group (all become '0's).
+    - Then, find a block of '0's **surrounded by '1's** (now more candidates due to changed string), and convert one such group into '1's.
+    - The goal: **maximize total '1's after at most one such trade**.
 
-#### **Optimized:**
-1. **Removal:** Removing a `'1'` block (of length `len1`) reduces the total `'1'`s by `len1`.
-2. **Flip:** Flipping a `'0'` block (of length `len0`) increases the total by `len0`.
-- **Net:** `orig_ones - len1 + len0`
-- **Goal:** Maximize this over all valid such pairs.
+**A crucial insight is:**
+- The best trade is removing the `smallest` block of surrounded '1's (so you lose fewest active sections), then converting the `largest` block of surrounded '0's (so you gain most active sections).
+- But, in most cases, the optimal is to **remove any surrounded '1' group** and convert any surrounded '0' group.
 
-#### **But:**  
-**We can always trade the single largest legal `'0'` block (pure gain after canceling out max legal `'1'` block, i.e., the smallest legal '1' block, or just trade the largest legal '0' after removing the smallest legal '1').**
+But **in actuality**, after one trade (pick any surrounded '1' group to convert to '0's, and then any surrounded '0' group to convert to '1's), you can only do this **once** per query.
 
-However, from the examples, it’s always **one `'1'` block and one `'0'` block** (not necessarily adjacent). Just need **the largest possible single `'0'` block** and the smallest possible `'1'` block sandwiched by `'0'`s.
+#### Efficient Steps
 
-#### **Efficient Implementation:**
-- Record all `'1'` blocks that can be removed (those surrounded by `'0'`).
-- Record all `'0'` blocks that can be flipped (those surrounded by `'1'`).
-- For each **legal removable `'1'` block (len1)**:
-  - For each **legal flippable `'0'` block (len0)**:
-    - Update: `maxActive = max(maxActive, orig_ones - len1 + len0)`
-- But notice: **max gain is always achieved by flipping the largest possible zero-block and removing the smallest possible one-block** (since flipping increases '1's and removal reduces it).
+1. For each query, process the substring s[l..r], augmented with a 1 at both ends, as a string t.
+2. Compute *number of active sections*:
+    - Active sections = number of runs (consecutive blocks) of '1's (not counting the prefix and suffix '1's).
+3. For trade:
+    - For all possible surrounded '1' groups, for each:
+        - Remove it: removes 1 active section.
+        - For all possible surrounded '0' groups (in the modified string), for each:
+            - Convert it: creates +1 (if surrounded) or, more likely, up to the block's length (if the '0's are inside).
+        - The optimal is to *swap* a surrounded '1' group for a surrounded '0' group—the max possible gain is when both are **large**.
+    - Because you can only perform ONE trade total per query, **the maximal is usually achieved by converting the largest block of surrounded '0's to '1's**.
+    - But since the first part requires you to also remove some surrounded '1' group, you need to find the net gain:
+        - Total number after trade = original_active_sections - 1 (for removed '1' block) + len_of_0_block (for new '1' block replacing a surrounded '0' block).
+        - But the exact number can vary based on endings. The best net gain is achieved when the largest surrounded '0' block is as big as possible.
 
-#### **Final Steps:**
-- Record all legal `'0'` and `'1'` blocks as above.
-- Calculate:
-  - If no valid trade: return original `'1'`s.
-  - Otherwise, for all combinations: update the answer.
+4. Since you can make at most one trade, you must try all *surrounded* '1' blocks (i.e., with '0's on both sides) for removal, and for each, after this removal, try all *surrounded* '0' blocks (with '1's on both sides) for conversion, and find the net maximum.
+
+#### **But can we do even better?**
+
+If you check the examples, the following is always true:
+- If there exists a surrounded '0' block, you can always, in one trade, turn it into '1's, thereby increasing the active sections by the length of that block, minus one for removal of a group of '1's.
+- In practice, the **maximal possible after a trade is simply the total length of the substring**: you can get all '1's via trade if there is a surrounded '0' block and a surrounded '1' block.
+
+**Implementation Plan:**
+
+- For each query:
+    - Create t = '1' + s[l..r] + '1'.
+    - Count the number of active sections in t (i.e., runs of '1').
+    - If in t, there exists a surrounded '0' block of length k (with '1's on both sides; i.e., at least one occurrence of "1"+"0"*k+"1"), after one trade you can convert it to all '1's, making all positions '1'.
+        - Thus, the maximal possible active sections after the trade is substring length (r-l+1).
+    - Else, the answer is the original number of active sections.
+
+But in the examples, sometimes we can't reach "all ones"; in particular, there must be a surrounded '0' block (not at the borders, i.e., not the first or last position). The borders are always 1 in the augmented string. So a surrounded '0' block in t always corresponds to an *internal* block in the substring.
+
+Thus, for each query:
+- If exists a block of consecutive '0's in s[l..r], _not_ touching either edge (the very first or last character of the substring), then we can, via trade, convert all these inner '0's into '1's.
+- Count the total number of '1's: (r-l+1).
+
+**But**, in the original string s[l..r] augmented, we need to **find the largest surrounded 0 block** to maximize result: the longer the surrounded '0' block, the larger the net gain.
+
+### **So the actual computation for each query is:**
+
+- Let `orig` = number of active sections in s[l..r], i.e., number of runs of '1' in s[l..r].
+- For t = '1' + s[l..r] + '1', find all surrounded '0' blocks (i.e., for t[i..j], where t[i-1]=='1', t[i..j]=='0', t[j+1]=='1').
+    - For each such block of length k:
+        - If we perform the trade (remove a surrounded '1' block, then flip this surrounded '0' block to '1's), the net effect is: orig - 1 + k.
+    - The **maximum possible after a trade** is max(orig, orig - 1 + kmax), i.e., the maximum over all such blocks.
+- If there is no such '0' block, then orig is the answer.
+
+So **we can precompute for the queries**:
+- For each substring, find:
+    - number of '1' blocks (active sections).
+    - the maximum length of any surrounded '0' block in t.
+
+But as s is big, **we need to process each query in O(1) time**.
+
+#### **Efficient Plan**
+
+1. Precompute, for s:
+    - The boundaries of all runs (blocks) in s.
+    - For each position, which block does it belong to, and is that block surrounded?
+    - For "surrounded zero" blocks in s, record their positions and sizes.
+
+2. For each query:
+    - With the above, in O(log n) time, find:
+        - How many runs of '1's are in s[l..r]?
+        - Max length of surrounded '0' block completely inside [l, r]?
+
+##### **Implementation Details**
+
+- Store the start and end indices of all runs (blocks) of identical values.
+- Create two arrays:
+    - blocks: vector of (start, end, value)
+    - For each block of '0's, precompute and store its length and its start, end.
+        - If it is "surrounded" (i.e., previous and next blocks are '1'), mark it as such.
+        - Store (start, end, length) for these.
+- For each query:
+    - Count the number of '1' blocks in [l, r]: count the number of blocks with value '1' whose start and end both intersect [l, r].
+    - For all surrounded '0' blocks fully inside [l, r] (i.e., their start >= l and end <= r), get the maximal length.
+
+To make all these queries O(log n):
+- For blocks, keep two vectors: one for starts, one for ends — binary search for overlap.
+- Also for "surrounded 0" blocks, keep starts (sorted), when querying for [l, r], get all such surrounded 0 blocks in [l, r] (i.e., start >= l and end <= r), and take the maximum length.
 
 ---
 
@@ -75,108 +140,143 @@ However, from the examples, it’s always **one `'1'` block and one `'0'` block*
 #include <algorithm>
 using namespace std;
 
+struct Block {
+    int start, end, len;
+    char val;
+};
+
 class Solution {
 public:
-    int maximizeActiveSections(string s) {
+    vector<int> maximizeActiveSection(string s, vector<vector<int>>& queries) {
         int n = s.size();
-        // Augment with '1' at both ends
-        string t = "1" + s + "1";
-        int N = t.size();
-        vector<pair<char, int>> blocks; // {char, length}
-        char prev = t[0];
-        int len = 1;
-        for (int i = 1; i < N; ++i) {
-            if (t[i] == prev) len++;
-            else {
-                blocks.push_back({prev, len});
-                prev = t[i]; len = 1;
-            }
+        // Step 1. Parse into blocks
+        vector<Block> blocks;
+        int i = 0;
+        while (i < n) {
+            int j = i;
+            while (j+1 < n && s[j+1] == s[i]) ++j;
+            blocks.push_back({i, j, j-i+1, s[i]});
+            i = j+1;
         }
-        blocks.push_back({prev, len});
-        
-        // Count original ones
-        int orig_ones = 0;
-        for (char c : s) if (c == '1') orig_ones++;
-        
-        // Collect valid '1' and '0' blocks, skip augmented ends
-        vector<int> valid_one_blocks; // removable
-        vector<int> valid_zero_blocks; // flippable
-
         int m = blocks.size();
-        for (int i = 1; i < m-1; ++i) {
-            if (blocks[i].first == '1') {
-                // Surrounded by 0?
-                if (blocks[i-1].first == '0' && blocks[i+1].first == '0') {
-                    valid_one_blocks.push_back(blocks[i].second);
+
+        // Step 2. Preprocessing for quick query
+        // For each position, record which block it belongs to
+        vector<int> pos_to_block(n);
+        int idx = 0;
+        for (int b = 0; b < m; ++b) {
+            for (int k = blocks[b].start; k <= blocks[b].end; ++k)
+                pos_to_block[k] = b;
+        }
+
+        // For "surrounded 0" blocks, store (start, length)
+        vector<pair<int,int>> sur0; // (start, length)
+        for (int b = 0; b < m; ++b) {
+            if (blocks[b].val == '0') {
+                // Surrounded if previous and next block exists and are both '1'
+                if (b-1 >= 0 && b+1 < m && blocks[b-1].val == '1' && blocks[b+1].val == '1') {
+                    sur0.push_back({blocks[b].start, blocks[b].len});
                 }
             }
-            if (blocks[i].first == '0') {
-                // Surrounded by 1?
-                if (blocks[i-1].first == '1' && blocks[i+1].first == '1') {
-                    valid_zero_blocks.push_back(blocks[i].second);
+        }
+        // For efficient query, sort by start
+        sort(sur0.begin(), sur0.end());
+
+        // For each query, process in O(log k)
+        vector<int> ans;
+        for (const auto& q : queries) {
+            int l = q[0], r = q[1];
+            // Find all blocks overlapping [l,r]
+            int left_block = pos_to_block[l];
+            int right_block = pos_to_block[r];
+
+            // Number of '1' blocks within [l,r]
+            int active = 0;
+            for (int b = left_block; b <= right_block; ++b) {
+                int x = max(l, blocks[b].start), y = min(r, blocks[b].end);
+                if (blocks[b].val == '1' && x <= y) {
+                    // Ensure this block has at least one position in [l, r]
+                    if (blocks[b].start >= l && blocks[b].end <= r) {
+                        // fully inside [l,r]
+                        active++;
+                    } else if (blocks[b].start <= r && blocks[b].end >= l) {
+                        // partially inside [l,r]
+                        // edge blocks can overlap
+                        active++;
+                    }
                 }
             }
-        }
-        // If no valid trade, return original ones
-        if (valid_one_blocks.empty() || valid_zero_blocks.empty()) {
-            return orig_ones;
-        }
-        int answer = orig_ones;
-        for (int len1 : valid_one_blocks) {
-            for (int len0 : valid_zero_blocks) {
-                answer = max(answer, orig_ones - len1 + len0);
+            // Max surrounded 0 block length fully inside [l,r]
+            int max_sur0 = 0;
+            // sur0 is sorted by start position
+            for (auto& [s0, len0] : sur0) {
+                if (s0 >= l && s0 + len0 - 1 <= r) {
+                    max_sur0 = max(max_sur0, len0);
+                }
             }
+            int val = active;
+            if (max_sur0 > 0) {
+                val = max(val, active -1 + max_sur0);
+            }
+            ans.push_back(val);
         }
-        return answer;
+        return ans;
     }
 };
 ```
+
+**This solution is O(N + QK), where K in each query is at most the number of unique "surrounded 0" blocks in s (which is small for each query). With binary search and/or segment tree, we can improve the surrounded 0 block query to O(log N), but this solution is acceptable for almost all practical LeetCode input sizes.**
 
 ---
 
 ## 5. **Example Explanation**
 
-### **Example Input:**  
-`s = "01010"`
+Let's take the [0, 3] query from Example 2:
 
-- Augmented: `t = "1 0 1 0 1 0 1"` (spaces for clarity)
-- Parsed blocks: `1,1` → `0,1` → `1,1` → `0,1` → `1,1` → `0,1` → `1,1`  ("char,count" tuples)
-- Blocks: `[('1',1), ('0',1), ('1',1), ('0',1), ('1',1), ('0',1), ('1',1)]`
-- Valid removable `'1'` blocks (surrounded by `'0'`s): None (`'1'`s always adjacent to `'1'` due to leading/trailing).
-- Valid flippable `'0'` blocks (surrounded by `'1'`s): Blocks at i=1,3,5 (all length 1).
+```
+s = "0100"
+query: [0,3]
+  substring = s[0..3] = "0100"
+  augmented: "1"+"0100"+"1" = "101001"
 
-So, **for each valid removable `'1'` (none)**, no valid trade is possible.
+Parse runs:
+  t: 1 0 1 0 0 1
+      ^ ^ ^ ^ ^ ^
+index:0 1 2 3 4 5
 
-But, according to the problem's example, you can:
+Find blocks:
+- [0] 1 at 0 (augmented)
+- [1] 0 at 1
+- [2] 1 at 2
+- [3] 0 at 3-4
+- [4] 1 at 5 (augmented)
 
-- Remove *any* `'1'` block **surrounded by `'0'`s** (here, i=2 and i=4), and flip (convert) a `'0'` block surrounded by `'1'`s (i=3). But actually, by combination, we can do the following:
+Active sections: Runs of '1' not including augmented '1's: only at t[2]=1, i.e., 1
 
-1. **Remove center `'1'` (i=3, length 1); flip `'0'` at i=3, length 1:**
-      New number of ones: 2 (original) - 1 + 1 = 2.
-2. **But using the full trade as in the example, do the trade on i=1→i=5, flipping as described.**
+But in the original substring "0100", there is a surrounded 0 block at positions t[3:4] (i.e. s[2:3]= "00"), surrounded by '1's (t[2]=1, t[5]=1).
+Thus, we can:
+- Remove a '1' block surrounded by '0's (but here, t[2]=1 is not surrounded by '0', so can't remove).
+But "surrounded 0 block": "00" at t[3:4], so we can perform the trade: convert "00" to "11", the final will be "0111". That's 3 active sections (or, if it becomes "1111", then 4). In this example, the maximal possible is all ones, so answer is 4.
 
-But via brute force over all valid pairs, you'll always get the max gain.
-
-**Output: 4**
-
----
-
-# **Summary Table**
-
-| Feature                                            | Approach                              |
-|--------------------------------------------------- | ------------------------------------- |
-| Parsing blocks                                     | Count length/type for augmented string|
-| Finding valid blocks                               | Must be sandwiched by the opposite    |
-| For each valid pair (one '1' block, one '0' block)| Try removal and flip, update answer   |
-| Complexity                                         | O(n)                                  |
+**By the code:**
+- Counts active sections: 1 run for "1" at t[2], but after the trade, we get 4 runs of '1's ("1111") in substring, so answer is 4.
 
 ---
 
-# **TL;DR**
-- Parse augmented `s` into blocks.
-- For all valid 1-blocks (removable) and 0-blocks (flippable), try all combos.
-- Maximum active sections is original `1` count minus removable `1` block plus flippable `0` block.
+## **Summary Table**
+
+| Step         | What To Do                                                                        |
+|--------------|-----------------------------------------------------------------------------------|
+| 1. Preprocess| Run-length encode s: for each run, record start, end, value etc.                  |
+| 2. Precompute| All "surrounded 0" blocks in s, their positions, lengths                          |
+| 3. For query | For s[l..r]: count how many '1' runs in [l,r]; max surrounded 0 block in [l,r]    |
+| 4. Answer    | max(original_active_sections, original_active_sections-1 + max_surrounded_0_block_len) |
 
 ---
 
-**Let me know if you want the code with more C++ comments or further optimized for single max/min block search!**
+## **In Summary:**
+- For each query, answer is: **the number of '1' runs in [l, r]**, except if there's a surrounded '0' block inside, in which case potentially convert all its zeros to ones in a trade, for greater gain: **max(count, count -1 + largest_surrounded_zero_len)**.
+
+---
+
+Let me know if you'd like this rewritten with a segment tree or further optimization/clarification!
