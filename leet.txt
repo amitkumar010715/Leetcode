@@ -1,180 +1,66 @@
-Let's break down the requested answer:
+Let's break down the problem step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given an integer array `nums`, you are to find how many **unique** values can be formed by taking the XOR of three (not-necessarily-distinct) elements where indices satisfy `i <= j <= k`. That is, count how many unique values:  
-`nums[i] ^ nums[j] ^ nums[k]` as you vary `i, j, k` with `i <= j <= k`.  
+Given a positive integer `n`, return the **maximum product** obtainable by multiplying any two digits of `n`.  
+The same digit can be used twice only if it appears more than once in `n`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Input Size:** `1 <= nums.length <= 1500` — Reasonable for O(N³) in worst case, but we want better.
-- **Element Value:** `1 <= nums[i] <= 1500`
+- **Constraints:**
+  - `10 <= n <= 10^9` (so `n` has at least 2 digits, and at most 9 digits)
 - **Edge Cases:**
-    - Array of size 1: Only one triplet `(0,0,0)`, so output is 1.
-    - All elements equal: Only one unique value possible by XOR-ing equal numbers.
-    - All elements distinct: There can be up to `N+N(N-1)/2+N(N-1)(N-2)/6` possible unique values, but typically much fewer due to XOR collisions.
+  - All digits are the same (like `11`, `9999`): only one unique product.
+  - Digits include `0` (like `102`, `904`): zero will result in products of zero.
+  - Only two digits (e.g., `10`).
+  - Multiple occurrences of digits: using same digit twice is allowed if it actually appears at least twice.
+  - n will never have only one digit by constraints.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Observation**
-
-For `i <= j <= k`,  
-the triplet XOR can be represented as:  
-`nums[i] ^ nums[j] ^ nums[k]`
-
-We need an efficient way to enumerate all possible triplets `(i, j, k)` (including repetitions when some indices are equal), and compute the set of all possible XOR values.
-
-#### Brute Force:  
-O(N³) by 3 nested loops — **TLE** for N=1500.
-
-#### **Optimized Approach (O(N²)):**
-
-Let’s rewrite the problem. Notice that for fixed `i` and `k` (where `i <= k`), we can enumerate all `j` with `i <= j <= k` and combine the XORs:
-
-Define:  
-- For any subarray `[i, k]`, the XOR of its elements is `prefixXor[k+1] ^ prefixXor[i]`.
-
-But, the triplet is **not** necessarily all in a single subarray (since 3 indices). But let's examine:
-
-Let’s try all triplets `(i, j, k)`:
-
-But with duplications (e.g., different orderings), let's instead observe:
-
-For fixed values of indices:
-- When all indices are equal (`i==j==k`): `nums[i] ^ nums[j] ^ nums[k] = nums[i] ^ nums[i] ^ nums[i] = nums[i]` (since x ^ x ^ x = x)
-- For two indices equal, e.g., (`i==j < k`):  
-  - `nums[i] ^ nums[i] ^ nums[k] = nums[k]`
-- For (`i < j==k`):  
-  - `nums[i] ^ nums[j] ^ nums[j] = nums[i]`
-- For three distinct:  
-  - `i < j < k`: `nums[i] ^ nums[j] ^ nums[k]`
-
-Let us try to enumerate all possible values efficiently.  
-But note from the example:  
-- For n=2, nums=[1,3], possible triplets are:
-    - (0,0,0): `1`
-    - (0,0,1): `1^1^3 = 3`
-    - (0,1,1): `1^3^3 = 1`
-    - (1,1,1): `3`
-    - Set = `{1,3}`
-
-So for n elements:
-
-1. For all values of (i, j, k) with i <= j <= k:
-   - 1 loop for i (0..n-1)
-      - 2nd loop j (i..n-1)
-         - 3rd loop k (j..n-1): get nums[i]^nums[j]^nums[k]
-
-This is O(N^3), still possible for N=1500 because 1500^3 / 10^9 ~ 3. But let's still try to optimize.
-
-#### Smart Precomputation
-
-Let's define **all possible XORs of three numbers** with order and repetition allowed.
-
-But, what about this:  
-XOR is associative and commutative with respect to numbers, but **not with respect to positions** since the problem cares about index orderings.
-
-But let's look for possible optimizations.
-
-##### Precompute all pairwise XORs
-
-But the number of possible triplets is O(N^3), although many triplets collapse to the same XOR value.
-
-But, since we only need unique values, we can use a set to track all possible results.
-
-But, let's note:
-
-For `i <= j <= k`, the number of triplets is O(N^3 / 6), but if N is 1500, that is about 563 million iterations, which is a bit much.
-
-But since we only need unique results, and the problem constraints are moderate (1500 distinct possible input values), perhaps it's manageable.
-
-#### **Better O(N^2) Approach?**
-
-Let’s rearrange the loops:
-
-For all possible (i, j, k) where i <= j <= k, the total number of triplet XOR values is the union of:
-
-- All elements in nums
-- All pairwise XORs: `nums[i]^nums[j]` for i < j
-- All triplet XORs: `nums[i]^nums[j]^nums[k]` for i < j < k
-
-But the problem wants us to consider i <= j <= k.
-
-So let's try to simulate the triplets as follows:
-
-**Variant O(N^2) approach:**  
-
-For each possible pair (i, j), with i <= j:
-- For k = j..n-1:
-    - Compute xor = nums[i] ^ nums[j] ^ nums[k]
-    - Insert xor into a set
-
-Now, we have:
-- First loop: i = 0 .. n-1
-    - Second loop: j = i .. n-1
-        - Third loop: k = j .. n-1
-
-Number of iterations:  
-- For each i: n - i
-- For each j: n - j
-
-So, total = sum over i=0..n-1 sum over j=i..n-1 (n-j)
-- For i in 0 to n-1:
-   - For j in i to n-1:
-       - k in j to n-1
-
-But this is still O(N^3).
-
-But perhaps we can fix one endpoint and precompute all XORs.
-
-**Alternatively: Precompute all prefixXors**
-
-But perhaps for this problem, since N is manageable, a triple nested loop with a set is acceptable.
-
-#### **Acceptable Solution in Practice**
-
-Given N <= 1500, the number of total iterations is at most 1.5e3³ / 6 = about 0.56e9, which is feasible given simple per-iteration work and a fast hashset.
-
-##### **Final Algorithm:** (Acceptable and Simple)
-
-- Initialize an empty set to store unique results.
-- Loop over i from 0 to n-1:
-    - Loop over j from i to n-1:
-        - Loop over k from j to n-1:
-            - Compute `nums[i] ^ nums[j] ^ nums[k]`
-            - Insert into the set.
-
-- Return the size of the set.
+- **Observation:** With up to 9 digits, a brute force check of all pairs is efficient (since \( C(n,2) + C(f,2) \) is at most 36 for 9 digits).
+- **Algorithm:**
+  1. Extract all digits of `n` into a vector.
+  2. For each pair of indices `(i, j)` (`i <= j`), if `i == j` then only count it if that digit appears more than once.
+  3. Compute `digit[i] * digit[j]`, and keep track of the maximum.
+- Thus, O(number of digits^2), always less than 100 iterations.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <unordered_set>
+using namespace std;
 
 class Solution {
 public:
-    int countTriplets(std::vector<int>& nums) {
-        int n = nums.size();
-        std::unordered_set<int> uniqueXors;
-
-        for (int i = 0; i < n; ++i) {
-            for (int j = i; j < n; ++j) {
-                for (int k = j; k < n; ++k) {
-                    int val = nums[i] ^ nums[j] ^ nums[k];
-                    uniqueXors.insert(val);
-                }
+    int maxProduct(int n) {
+        vector<int> digits;
+        vector<int> count(10, 0);
+        int temp = n;
+        // Extract digits & count them
+        while (temp > 0) {
+            int d = temp % 10;
+            digits.push_back(d);
+            count[d]++;
+            temp /= 10;
+        }
+        int ans = 0;
+        int len = digits.size();
+        for (int i = 0; i < len; ++i) {
+            for (int j = i; j < len; ++j) {
+                if (i == j && count[digits[i]] < 2) continue; // can't reuse if only one occurrence
+                ans = max(ans, digits[i] * digits[j]);
             }
         }
-        return uniqueXors.size();
+        return ans;
     }
 };
 ```
@@ -183,37 +69,20 @@ public:
 
 ## 5. **Example Explanation**
 
-### Example: `nums = [1, 3]`
+### Example: `n = 124`
 
-Indices: 0 and 1
-
-List all (i, j, k) with i <= j <= k:
-
-- (0,0,0): nums[0] ^ nums[0] ^ nums[0] = 1 ^ 1 ^ 1 = 1
-- (0,0,1): 1 ^ 1 ^ 3 = (1 ^ 1) ^ 3 = 0 ^ 3 = 3
-- (0,1,1): 1 ^ 3 ^ 3 = 1 ^ (3 ^ 3) = 1 ^ 0 = 1
-- (1,1,1): 3 ^ 3 ^ 3 = (3 ^ 3) ^ 3 = 0 ^ 3 = 3
-
-So, the unique values are {1, 3}, for a total of **2**.
-
----
-
-## **Summary Table**
-
-| Input      | All Triplets (i, j, k) | XOR Value | 
-|------------|------------------------|-----------|
-| (0,0,0)    | 1 ^ 1 ^ 1              | 1         |  
-| (0,0,1)    | 1 ^ 1 ^ 3              | 3         |
-| (0,1,1)    | 1 ^ 3 ^ 3              | 1         |
-| (1,1,1)    | 3 ^ 3 ^ 3              | 3         |
-
-Unique values: `{1,3}`.  
-**Return: 2**
+- **Digits:** `[1, 2, 4]`
+- **All pairs:**
+  - (1,1): only one `1`, cannot use twice.
+  - (1,2): `1*2 = 2`
+  - (1,4): `1*4 = 4`
+  - (2,2): only one `2`.
+  - (2,4): `2*4 = 8`
+  - (4,4): only one `4`.
+- **Maximum:** `8` (from `2*4`)
+- **Output:** `8`
 
 ---
 
-## **Conclusion**
-
-- Constraints allow a direct triple-nested loop with a hashset.
-- Solution runs in O(N³) time, but is acceptable for N ~ 1500.
-- If tighter constraints, further optimizations may be needed.
+**In summary:**  
+We extract digits, count occurrences, and check all valid pairs for their product, tracking the maximum. Constraints allow this brute-force approach, and the C++ solution is both optimal and clear!
