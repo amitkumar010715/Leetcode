@@ -1,35 +1,41 @@
-Let's break down the problem step by step:
+Sure! Here’s a detailed breakdown of how to solve the **Maximum Product of Three Numbers** problem.
 
 ---
 
 ## 1. **Summary**
 
-Given a positive integer `n`, return the **maximum product** obtainable by multiplying any two digits of `n`.  
-The same digit can be used twice only if it appears more than once in `n`.
+Given an array of integers `nums`, you must choose three numbers whose **product is maximum**, and return this maximum product.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `10 <= n <= 10^9` (so `n` has at least 2 digits, and at most 9 digits)
-- **Edge Cases:**
-  - All digits are the same (like `11`, `9999`): only one unique product.
-  - Digits include `0` (like `102`, `904`): zero will result in products of zero.
-  - Only two digits (e.g., `10`).
-  - Multiple occurrences of digits: using same digit twice is allowed if it actually appears at least twice.
-  - n will never have only one digit by constraints.
+### Constraints:
+
+- `3 <= nums.length <= 10^4`
+- `-1000 <= nums[i] <= 1000`
+
+### Edge Cases:
+
+- All numbers are **negative**: The product of the three largest (i.e., least negative) numbers is greatest, which will still be negative.
+- Large positive and large negative numbers: Multiplying two large negatives and one large positive could yield a bigger product than three large positives.
+- Zeros in the array: Product may become 0 if zeros are included.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm & Reasoning**
 
-- **Observation:** With up to 9 digits, a brute force check of all pairs is efficient (since \( C(n,2) + C(f,2) \) is at most 36 for 9 digits).
-- **Algorithm:**
-  1. Extract all digits of `n` into a vector.
-  2. For each pair of indices `(i, j)` (`i <= j`), if `i == j` then only count it if that digit appears more than once.
-  3. Compute `digit[i] * digit[j]`, and keep track of the maximum.
-- Thus, O(number of digits^2), always less than 100 iterations.
+Sort the array. The maximum product is **either**:
+
+- The product of the **three largest numbers** (maybe all positive, or the least negative and two smaller ones).
+- The product of the **two smallest numbers** (could be large negative, so product is positive) and the largest number.
+
+So, just compute both possibilities and pick the maximum:
+
+- Option 1: `nums[n-1] * nums[n-2] * nums[n-3]`  (three largest)
+- Option 2: `nums[0] * nums[1] * nums[n-1]`      (two smallest, one largest)
+
+`O(n log n)` time due to sort, or `O(n)` time and space (find max 3 & min 2 in 1 pass).
 
 ---
 
@@ -37,30 +43,19 @@ The same digit can be used twice only if it appears more than once in `n`.
 
 ```cpp
 #include <vector>
+#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int maxProduct(int n) {
-        vector<int> digits;
-        vector<int> count(10, 0);
-        int temp = n;
-        // Extract digits & count them
-        while (temp > 0) {
-            int d = temp % 10;
-            digits.push_back(d);
-            count[d]++;
-            temp /= 10;
-        }
-        int ans = 0;
-        int len = digits.size();
-        for (int i = 0; i < len; ++i) {
-            for (int j = i; j < len; ++j) {
-                if (i == j && count[digits[i]] < 2) continue; // can't reuse if only one occurrence
-                ans = max(ans, digits[i] * digits[j]);
-            }
-        }
-        return ans;
+    int maximumProduct(vector<int>& nums) {
+        // Sort the array to easily access the largest/smallest elements
+        sort(nums.begin(), nums.end());
+        int n = nums.size();
+        // Compute both combinations
+        int prod1 = nums[n-1] * nums[n-2] * nums[n-3];
+        int prod2 = nums[0] * nums[1] * nums[n-1];
+        return max(prod1, prod2);
     }
 };
 ```
@@ -69,20 +64,19 @@ public:
 
 ## 5. **Example Explanation**
 
-### Example: `n = 124`
+### Example 2
 
-- **Digits:** `[1, 2, 4]`
-- **All pairs:**
-  - (1,1): only one `1`, cannot use twice.
-  - (1,2): `1*2 = 2`
-  - (1,4): `1*4 = 4`
-  - (2,2): only one `2`.
-  - (2,4): `2*4 = 8`
-  - (4,4): only one `4`.
-- **Maximum:** `8` (from `2*4`)
-- **Output:** `8`
+**Input:** nums = `[1, 2, 3, 4]`
+
+**Step 1:** Sort: `[1, 2, 3, 4]`
+
+**Step 2:**  
+- Three largest: `2, 3, 4` ⟶ `2*3*4 = 24`
+- Two smallest & largest: `1, 2, 4` ⟶ `1*2*4 = 8`
+
+**Step 3:** Return `max(24, 8) = 24`
 
 ---
 
 **In summary:**  
-We extract digits, count occurrences, and check all valid pairs for their product, tracking the maximum. Constraints allow this brute-force approach, and the C++ solution is both optimal and clear!
+*Either multiply the three largest or the two smallest (most negative) and the largest; pick the max!*
