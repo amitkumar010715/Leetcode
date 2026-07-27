@@ -1,82 +1,69 @@
-Sure! Here’s a detailed breakdown of how to solve the **Maximum Product of Three Numbers** problem.
+### 1. **Summary**
+
+Given an array of integers, you are to choose two distinct indices \( i \) and \( j \), and compute \((nums[i]-1)*(nums[j]-1)\). The task is to find the maximum value of this expression for all possible pairs.
 
 ---
 
-## 1. **Summary**
+### 2. **Constraints & Edge Cases**
 
-Given an array of integers `nums`, you must choose three numbers whose **product is maximum**, and return this maximum product.
+- **Constraints:**
+    - \( 2 \leq \text{nums.length} \leq 500 \) (there are at least two elements)
+    - \( 1 \leq \text{nums}[i] \leq 10^3 \) (all numbers are positive and at least 1)
 
----
-
-## 2. **Constraints & Edge Cases**
-
-### Constraints:
-
-- `3 <= nums.length <= 10^4`
-- `-1000 <= nums[i] <= 1000`
-
-### Edge Cases:
-
-- All numbers are **negative**: The product of the three largest (i.e., least negative) numbers is greatest, which will still be negative.
-- Large positive and large negative numbers: Multiplying two large negatives and one large positive could yield a bigger product than three large positives.
-- Zeros in the array: Product may become 0 if zeros are included.
+- **Edge Cases:**
+    - Array has exactly 2 elements: Only one possible pair.
+    - All elements are the same.
+    - Minimum and maximum numbers constraints (e.g., [1, 1], [1000, 1000]).
+    - Duplicates in the array.
+    - No need to handle empty arrays since length >= 2.
 
 ---
 
-## 3. **Optimal Algorithm & Reasoning**
+### 3. **Optimal Algorithm**
 
-Sort the array. The maximum product is **either**:
+To maximize \((nums[i]-1)*(nums[j]-1)\), you want the two largest numbers in the array because subtracting one minimally reduces their product. Therefore:
 
-- The product of the **three largest numbers** (maybe all positive, or the least negative and two smaller ones).
-- The product of the **two smallest numbers** (could be large negative, so product is positive) and the largest number.
+1. Traverse the array once to find the **largest** and **second largest** numbers.
+2. Compute and return \((\text{largest}-1)*(\text{secondLargest}-1)\).
 
-So, just compute both possibilities and pick the maximum:
-
-- Option 1: `nums[n-1] * nums[n-2] * nums[n-3]`  (three largest)
-- Option 2: `nums[0] * nums[1] * nums[n-1]`      (two smallest, one largest)
-
-`O(n log n)` time due to sort, or `O(n)` time and space (find max 3 & min 2 in 1 pass).
+This approach is \(O(n)\) time and \(O(1)\) space.
 
 ---
 
-## 4. **C++ Solution**
+### 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-using namespace std;
-
 class Solution {
 public:
-    int maximumProduct(vector<int>& nums) {
-        // Sort the array to easily access the largest/smallest elements
-        sort(nums.begin(), nums.end());
-        int n = nums.size();
-        // Compute both combinations
-        int prod1 = nums[n-1] * nums[n-2] * nums[n-3];
-        int prod2 = nums[0] * nums[1] * nums[n-1];
-        return max(prod1, prod2);
+    int maxProduct(vector<int>& nums) {
+        int max1 = 0, max2 = 0;
+        for (int n : nums) {
+            if (n > max1) {
+                max2 = max1;
+                max1 = n;
+            } else if (n > max2) {
+                max2 = n;
+            }
+        }
+        return (max1 - 1) * (max2 - 1);
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+### 5. **Example Walkthrough**
 
-### Example 2
+**Example:**  
+`nums = [3, 4, 5, 2]`
 
-**Input:** nums = `[1, 2, 3, 4]`
+- During traversal:
+    - Start: max1 = 0, max2 = 0
+    - n = 3 → max1 = 3, max2 = 0
+    - n = 4 → max1 = 4, max2 = 3
+    - n = 5 → max1 = 5, max2 = 4
+    - n = 2 → (no change)
+- Largest: 5, Second largest: 4
+- Answer: (5-1) * (4-1) = 4 * 3 = **12**
 
-**Step 1:** Sort: `[1, 2, 3, 4]`
-
-**Step 2:**  
-- Three largest: `2, 3, 4` ⟶ `2*3*4 = 24`
-- Two smallest & largest: `1, 2, 4` ⟶ `1*2*4 = 8`
-
-**Step 3:** Return `max(24, 8) = 24`
-
----
-
-**In summary:**  
-*Either multiply the three largest or the two smallest (most negative) and the largest; pick the max!*
+This matches the expected result. The algorithm efficiently finds the answer in a single pass.
