@@ -1,77 +1,140 @@
-Let's break down the solution according to your requirements:
+Let's solve **Smallest Palindromic Rearrangement II** (LeetCode, Hard).
 
 ---
 
-## 1. Short Summary
+## 1. **Short Summary**
 
-Given a **palindromic** string `s`, rearrange its characters to form the **lexicographically smallest palindromic permutation** possible. Return that palindrome string.
-
----
-
-## 2. Constraints & Edge Cases
-
-- **String length up to 10<sup>5</sup>**: Require efficient O(N) or O(N log K) solution.
-- **Only lowercase letters**.
-- **s is already a palindrome**: So we know a palindromic permutation always exists using the given characters.
-- **Edge Cases**:
-  - Length 1 string: just return `s`.
-  - String with all identical letters: return `s`.
-  - Odd length: only one odd counting character can be in the middle; the rest must be paired.
+Given a palindromic string `s` and an integer `k`, find the *k-th* lexicographically smallest **distinct** palindromic permutation of `s`. If fewer than `k` exist, return `""`.
 
 ---
 
-## 3. Optimal Algorithm
+## 2. **Constraints & Edge Cases**
 
-### Step-by-step:
+**Constraints**
+- `1 <= s.length <= 10^4`
+- All chars lowercase English
+- `s` is a palindrome
+- `1 <= k <= 10^6`
 
-1. **Count frequency of each character in `s`**.
-2. **Find the middle (if needed)**: For palindromic permutation, if the length is odd, there must be exactly one character with an odd count (to place in the middle).
-3. **Build half of the palindrome**:
-    - For each character (in increasing lexicographical order), take half its frequency (using only the pairs) and append that many times to form the first half.
-    - The second half will be the reverse of the first half.
-4. **Build full answer**:
-    - If any character with odd frequency exists, place it in the center.
-    - Concatenate: first half + (middle, if any) + reverse(first half).
-
-This approach guarantees both palindrome and minimal lexicographical order.
-
-**Time Complexity**: O(N + K log K), where K=number of unique characters (constant 26).
+**Edge Cases**
+- Only one palindromic rearrangement? Return empty if `k > 1`.
+- Multiple repeated characters? 
+- String length odd/even.
+- `k` is large.
+- Must count **distinct** palindromic rearrangements, ignore duplicates.
 
 ---
 
-## 4. Clean C++ Solution
+## 3. **Optimal Algorithm**
+
+### **Key Observations**
+
+1. **Palindrome Structure**:  
+   Any palindromic permutation can be built using a **first half** and its reverse as the second half, with an optional **center character** if the length is odd.
+
+2. **Counting Distinct Palindromic Permutations**:  
+   - For even-length: All chars must have even counts.
+   - For odd-length: Exactly one char with odd count (for the center).
+   - The first half can use half of each char's count.
+
+   **Number of distinct permutations of first half**:  
+   If the multiset for the half is `n` total chars, with counts `c1, c2, ...` per char:
+   \[
+   \text{\#perms} = \frac{n!}{c1! \cdot c2! \cdot ...}
+   \]
+
+3. **Lexicographical k-th Palindromic Permutation**:  
+   - Build the first half lexicographically, one letter at a time.
+   - At each step, for each available char, compute how many total palindromic permutations can be built using that char next.
+   - If `k` is within that, pick that char.
+   - Subtract possibilities if not.
+
+### **Implementation Steps**
+1. **Count character frequencies**.  
+2. **Check palindromic rearrangement possible** (should always be true since `s` is palindromic).
+3. **Build first half's multiset**: Use `cnt[c] // 2` for each char `c`.
+4. **Middle character**: Char with odd count (if needed).
+5. **k-th permutation by stepwise selection**:  
+   - At each position, try every possible remaining character in lex order.
+   - For each, count how many permutations if that char is picked next.
+   - If `k` <= that count, pick; else, decrement `k` and try next char.
+6. **Assemble full palindrome**: first half + mid (if any) + reversed first half.
+
+### **Efficient Multinomial Coefficient Computation**
+- Since n can be up to 5000, precompute factorials up to n.
+- Use `log(fac)` anti-overflow, but since 1e4 is fine, regular int/LL factorials and divisions work in C++ up to that.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
-#include <string>
-#include <vector>
-#include <algorithm>
+#include <bits/stdc++.h>
 using namespace std;
 
 class Solution {
 public:
-    string smallestPalindromic(string s) {
-        vector<int> freq(26, 0);
-        for(char c : s) freq[c - 'a']++;
-        
-        string leftHalf = "";
-        char middleChar = 0;
-        
-        // Find the smallest middle character (if any)
-        for(int i = 0; i < 26; ++i) {
-            if(freq[i] % 2 == 1 && middleChar == 0)
-                middleChar = 'a' + i;
+    string kthPalindrome(string s, int k) {
+        vector<int> cnt(26, 0);
+        for (char c : s) cnt[c - 'a']++;
+        // Check mid char
+        int n = s.size();
+        int odd_count = 0, mid_c = -1;
+        for (int i = 0; i < 26; ++i)
+            if (cnt[i] % 2) { odd_count++; mid_c = i; }
+        if (odd_count > 1) return ""; // Shouldn't happen, s is palindromic
+
+        // Build first half multiset
+        vector<int> half_cnt(26, 0);
+        int half_len = 0;
+        for (int i = 0; i < 26; ++i) {
+            half_cnt[i] = cnt[i] / 2;
+            half_len += half_cnt[i];
         }
 
-        // Create the left half, choosing minimal lex order first
-        for(int i = 0; i < 26; ++i) {
-            int pairs = freq[i] / 2;
-            leftHalf += string(pairs, 'a' + i);
+        // Precompute factorials up to 10^4/2
+        static const int MAX = 5000 + 10;
+        static vector<long long> fac(MAX, 0), ifac(MAX, 0);
+        static bool fac_init = false;
+        if (!fac_init) {
+            fac[0] = 1;
+            for (int i = 1; i < MAX; ++i) fac[i] = fac[i-1] * i;
+            ifac[MAX-1] = 1.0 / fac[MAX-1]; // Actually, we'll only use fac and mult/div here, so can avoid ifac.
+            fac_init = true;
         }
-        
-        string res = leftHalf;
-        if(middleChar) res += middleChar;
-        reverse(leftHalf.begin(), leftHalf.end());
-        res += leftHalf;
+
+        // Helper: multinomial for half_cnt
+        auto perm_count = [&](vector<int> &cnt) -> long long {
+            long long res = fac[accumulate(cnt.begin(), cnt.end(), 0)];
+            for (int x : cnt) if (x > 1) res /= fac[x];
+            return res;
+        };
+
+        // If not enough possibilities
+        long long total = perm_count(half_cnt);
+        if (k > total) return "";
+
+        // Build answer
+        string half = "";
+        for (int i = 0; i < half_len; ++i) {
+            for (int c = 0; c < 26; ++c) {
+                if (half_cnt[c] == 0) continue;
+                half_cnt[c]--;
+                long long cnt_here = perm_count(half_cnt);
+                if (k <= cnt_here) {
+                    half += (char)('a' + c);
+                    break;
+                } else {
+                    k -= cnt_here;
+                    half_cnt[c]++;
+                }
+            }
+        }
+        string rev_half = half;
+        reverse(rev_half.begin(), rev_half.end());
+        string res = half;
+        if (s.size() % 2 == 1) res += (char)('a' + mid_c);
+        res += rev_half;
         return res;
     }
 };
@@ -79,32 +142,26 @@ public:
 
 ---
 
-## 5. Example Explained
+## 5. **Example Explanation**
 
-Let's explain **Example 2: s = "babab"**
+**Example 1:**  
+`s = "abba"`, `k = 2`
 
-- **Count**: 'a':2, 'b':3
-- **Odd freq**: 'b' (count 3): becomes the center
-- **First half**:
-  - 'a' count 2 → use 1 for the left: "a"
-  - 'b' count 3 → use 1 for the left: "b"
-  - Combine in lex order: "ab"
-- **Middle**: "b"
-- **Reverse(first half)**: "ba"
-- **Final palindrome**: "ab" + "b" + "ba" = **"abbba"** (as required)
+- Char counts: `a:2,b:2`
+- Half counts: `a:1,b:1` ("ab" or "ba" as first half)
+- Permutations of half: `2` (`ab` or `ba`)
 
----
+- First permutation (k=1):  
+  - Try 'a': use 'a', half_cnt->`a:0,b:1`. Then only 'b' left, so `ab`.  
+  - Final: `ab | ba` (mirror) = `"abba"`
 
-### Summary Table
+- Second permutation (k=2):  
+  - Try 'a': if use 'a', have 1 permutation, which is abba. Since k > 1, skip.  
+  - Try 'b': use 'b', then 'a' left, so "ba" as first half.  
+  - Final: `ba | ab` = `"baab"`
 
-| Step                 | Intermediate Result  |
-|----------------------|---------------------|
-| Count                | a:2, b:3            |
-| Half for left        | a(1), b(1) => "ab"  |
-| Middle               | "b"                 |
-| Reverse(leftHalf)    | "ba"                |
-| Final Answer         | "abbba"             |
+So output is `"baab"`.
 
 ---
 
-Let me know if you have any questions or need further clarifications!
+Let me know if you'd like a further breakdown or an alternate approach!
