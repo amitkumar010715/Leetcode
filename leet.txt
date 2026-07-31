@@ -1,52 +1,90 @@
-Let's break down the solution as requested:
+Let's walk through the solution step-by-step as requested.
 
 ---
 
-## 1. **Short summary**
+## 1. **Short Summary**
 
-You are given a string of **distinct lowercase letters**. On a phone keypad (keys 2 to 9), each letter is assigned to one key, and letters on the same key require more pushes. You can **remap the letters to keys as you wish**. The goal is to map letters such that **typing the whole word requires the smallest possible total key pushes**.
+You can assign each of the 26 lowercase letters to one of the 8 keys (2-9) on a keypad, any way you want. Each letter, on its assigned key, is typed by pressing the key the corresponding number of times (1st letter: 1 push, 2nd letter: 2 pushes, etc.).
+
+**Task:** Given a word, find the _minimal total number of key presses_ required to type it, if you can freely assign which key maps to which letters.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= word.length <= 26`
-  - All letters in `word` are unique.
-  - 8 keys: 2-9 (i.e., you have 8 "buckets" to distribute letters among in any way).
-  - Each letter must be assigned to *exactly one* key.
-- **Edge Cases:**
-  - If length <= 8, best is to put one letter per key: each letter costs 1 push.
-  - For numbers not divisible by 8, can fill the "earliest" positions to minimize the total.
-  - Longer inputs fill keys in a round-robin or greedy "leveled" fashion to minimize pushing required.
+- **Word length:** `1 <= word.length <= 1e5` -- Large input, so **O(N log N)** or better needed.
+- **Only lowercase English letters** (`a`-`z`).
+- **Each letter assigned to one key**; each key may hold any subset of letters; no letter repeats across keys.
+- May assign **fewer than 8 keys** if fewer than 8 letters in the word; keys can have any number of letters.
+- **Letters can have different frequencies** — assign more frequent letters to earlier (cheaper) positions.
+
+**Edge Cases:**
+- Word with all same letter.
+- All letters unique.
+- All letters with equal frequency.
+- Less than or equal to 8 unique letters.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- We can distribute letters among 8 keys.
-- The minimum number of pushes is achieved by distributing letters as **evenly as possible**: assign the first 8 letters one in each key (all cost 1), next 8 letters fill the "second slot" of each key (all cost 2), etc.
-- For a `len(word) = n`, sort letters into "levels":
-  - Level 1: first up to 8 letters (cost 1)
-  - Level 2: next up to 8 letters (cost 2)
-  - etc.
-- So, for i from 0 to n-1:
-  - **Cost for letter at index i:** 1 + (i/8)
-- **Sum this up for all i in [0, n):**
+### **Insight**
+
+You want to minimize the sum: For each occurrence of each letter, the number of presses * frequency.
+
+- **Optimal mapping**: Assign the most frequent letters to the earliest ("cheapest") positions on the keys (positions 1, 2, ...) across all keys.
+
+- **Steps**:
+    1. Count frequencies of each letter in the `word`.
+    2. Sort frequencies decreasingly.
+    3. Distribute letters into an 8×N grid (N ≥ frequency of the busiest position), filling position 1 on all keys first, then position 2, etc.
+
+    - Given the mapping, the i-th letter (in sorted frequency order) gets position `pos = (i / 8) + 1` on a key, and thus costs `freq * pos`.
+
+### **Pseudocode**
+
+```
+1. Count letter frequencies.
+2. Sort frequencies descending.
+3. For i, f in enumerate(frequencies_sorted):
+       pushes += f * (i // 8 + 1)
+4. Return pushes
+```
+
+- This ensures that the 8 most frequent letters get the first, cheapest positions, next 8 the 2nd position, etc.
+
+### **Complexity**
+- Frequency count: **O(N)**
+- Sort 26 elements: **O(1)** (since constant size)
+- Accumulate total: **O(1)**
+- ---> **O(N)**
 
 ---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+#include <string>
+#include <algorithm>
+
 class Solution {
 public:
-    int minimumPushes(string word) {
-        int n = word.size();
+    int minimumPushes(std::string word) {
+        std::vector<int> freq(26, 0);
+        for (char c : word) freq[c - 'a']++;
+        
+        // Only push non-zero frequencies to our vector
+        std::vector<int> letters;
+        for (int f : freq) if (f > 0) letters.push_back(f);
+        
+        // Sort in descending order of frequency
+        std::sort(letters.begin(), letters.end(), std::greater<int>());
+        
         int total = 0;
-        for (int i = 0; i < n; ++i) {
-            // For i in 0..7 -> cost 1, i in 8..15 -> cost 2, etc.
-            total += 1 + (i / 8);
+        for (int i = 0; i < letters.size(); ++i) {
+            int pos = (i / 8) + 1; // positions: 1-indexed
+            total += letters[i] * pos;
         }
         return total;
     }
@@ -55,40 +93,53 @@ public:
 
 ---
 
-## 5. **Explanation with Example**
+## 5. **Example Explanation**
 
-**Example:**  
-`word = "xycdefghij"` (length = 10)
+Let's use **Example 3**: `word = "aabbccddeeffgghhiiiiii"`
 
-- We have 8 keys, so the first 8 letters get cost 1 each: positions 0..7 ("x" to "h")
-- Next 2 letters get cost 2: positions 8,9 ("i","j")
-- Total = 8 * 1 + 2 * 2 = 8 + 4 = **12**.
+First count letters:
 
-**Step-by-step:**
+| Letter | Frequency |
+|--------|-----------|
+| a      |     2     |
+| b      |     2     |
+| c      |     2     |
+| d      |     2     |
+| e      |     2     |
+| f      |     2     |
+| g      |     2     |
+| h      |     2     |
+| i      |     6     |
 
-| Letter | Index | Cost |
-|--------|-------|------|
-| x      |  0    | 1    |
-| y      |  1    | 1    |
-| c      |  2    | 1    |
-| d      |  3    | 1    |
-| e      |  4    | 1    |
-| f      |  5    | 1    |
-| g      |  6    | 1    |
-| h      |  7    | 1    |
-| i      |  8    | 2    |
-| j      |  9    | 2    |
+Sorted by frequency (descending): `6 (i), 2 (a), 2 (b), 2 (c), 2 (d), 2 (e), 2 (f), 2 (g), 2 (h)`
 
-Sum: **8 × 1 + 2 × 2 = 12**
+Assign by cheapest positions:
+
+| Position            | Letters | # keys (max: 8) |
+|---------------------|---------|-----------------|
+| Position 1 (cost 1) | i, a, b, c, d, e, f, g | 8 letters |
+| Position 2 (cost 2) | h | 1 letter (9th)  |
+
+- So mapping (in code):  
+  - i=0: 'i' freq=6: cost = 6\*1 = 6  
+  - i=1 to i=7: each freq=2, cost = 2\*1=2, total 2\*7=14  
+  - i=8: 'h' freq=2, cost=2\*2=4
+
+- **Sum:** 6 + 14 + 4 = **24**
 
 ---
 
-### **Summary**
+### **Summary Table (for general mapping):**
 
-- Distribute letters as evenly as possible among 8 keys.
-- Cost for each letter is 1 + (index/8), all indices from 0.
-- Sum all costs for the final answer.
+If `k` = 8 keys, for sorted frequency array F[0...L-1],  
+position for F[i] is `(i // 8) + 1`  
+**Total = sum_over_i (F[i] * (i//8 + 1))**
 
 ---
 
-**If you need more explanation or Python code, let me know!**
+## **Concise Takeaway**
+Greedily assign the most frequent letters to the cheapest positions across all available keys — this is fair, optimal, and efficiently computes the answer.
+
+---
+
+Let me know if you'd like further clarifications or have a custom test case in mind!
