@@ -1,132 +1,96 @@
-Sure! Let's break it down systematically.
+Let's break down the problem and deliver each requirement step by step.
 
 ---
 
-## 1. Short Summary
+## 1. **Short Summary**
 
-This game asks who will win (or if it's a tie) between Alice and Bob, as they take turns taking 1-3 stones from the front of a row of stones, each with integer values (which can be negative or positive). Both play **optimally** for maximum score. Return "Alice", "Bob", or "Tie".
-
----
-
-## 2. Constraints & Edge Cases
-
-- **Size**: Up to **50,000** stones: need an **O(n)** or **O(nk)** solution (`k=3`).
-- **Values**: Stones can be **negative, zero, or positive**.
-- **Edge**: Small arrays (1, 2, or 3 stones).
-- **Edge**: All negative - best play may be to force the other to take the worst.
-- **Tie**: Ensure equal final scores are handled as 'Tie'.
+Given an array `nums` with unique integers in some range (with the smallest and largest number still present), find all the **missing** integers in that continuous range in **sorted** order, or return an empty list if none are missing.
 
 ---
 
-## 3. Optimal Algorithm
+## 2. **Constraints & Edge Cases**
 
-### DP Formulation
+**Constraints:**
+- `2 <= nums.length <= 100`
+- `1 <= nums[i] <= 100`
+- All elements are unique.
+- The _full range_ is from `min(nums)` to `max(nums)` (inclusive).
+- The endpoints (min, max) are *always* present.
 
-Let `dp[i]` = **maximum score difference** (`current_player - other_player`) starting at position `i`.
-
-- If `dp[i] > 0`: player to move wins from `i`.
-- If `dp[i] == 0`: draw.
-- If `dp[i] < 0`: player to move loses.
-
-At each turn (for `i`), the current player can pick 1, 2, or 3 stones (if they exist), summing their values, and the other player then plays from `i+k`. So for each possible `k=1..3`:
-
-```
-dp[i] = max(
-    sum(stoneValue[i:i+1]) - dp[i+1],  // Takes 1 stone, subtract opponent best from i+1
-    sum(stoneValue[i:i+2]) - dp[i+2],  // Takes 2 stones ...
-    sum(stoneValue[i:i+3]) - dp[i+3]   // Takes 3 stones ...
-)
-```
-
-**Base case:** past the last stone, `dp[n] = 0`.
-
-We start from the end and calculate backwards.
+**Edge Cases:**
+- All numbers in range present (no missing → return `[]`)
+- All but the endpoints missing (e.g. `[1,5]` → `[2,3,4]`)
+- Reversed order, random order, sparse or dense
+- Smallest allowed array length, e.g. `[1,2]` (no missing)
+- Largest allowed range, e.g. `[1, 100]` (could have 98 missing)
+- The array isn't sorted
 
 ---
 
-## 4. Clean C++ Solution
+## 3. **Optimal Algorithm**
+
+Let:
+- `L = min(nums)`
+- `R = max(nums)`
+
+We want to collect all `x` in `[L, R]`, such that `x` is **not** in `nums`.
+
+Algorithm:
+1. Insert all elements of `nums` into a `set` for O(1) lookup.
+2. Loop from `L` to `R`, and for each value not present in the set, add to result.
+3. Return result as a vector (already in sorted order because of range scan).
+
+**Time Complexity:**  
+- Building set: O(n)
+- Scanning `[L, R]`: O(R-L+1), at most 99
+- Space: O(n)
+
+This is very efficient under constraints.
+
+---
+
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <string>
+#include <unordered_set>
 #include <algorithm>
-using namespace std;
 
 class Solution {
 public:
-    string stoneGameIII(vector<int>& stoneValue) {
-        int n = stoneValue.size();
-        vector<int> dp(4, 0);  // Only keep last 4 since we only look ahead 1-3
-
-        for (int i = n - 1; i >= 0; --i) {
-            int currSum = 0;
-            int best = INT_MIN;
-            for (int k = 1; k <= 3; ++k) {
-                if (i + k - 1 >= n) break;
-                currSum += stoneValue[i + k - 1];
-                best = max(best, currSum - dp[(i + k) % 4]);
+    std::vector<int> findMissingElements(std::vector<int>& nums) {
+        int L = *std::min_element(nums.begin(), nums.end());
+        int R = *std::max_element(nums.begin(), nums.end());
+        std::unordered_set<int> present(nums.begin(), nums.end());
+        std::vector<int> res;
+        for (int x = L; x <= R; ++x) {
+            if (!present.count(x)) {
+                res.push_back(x);
             }
-            dp[i % 4] = best;
         }
-
-        if (dp[0] > 0)
-            return "Alice";
-        else if (dp[0] < 0)
-            return "Bob";
-        else
-            return "Tie";
+        return res;
     }
 };
 ```
-**Space:** Only `O(1)` extra (rolling array).  
-**Time:** `O(n)`
 
 ---
 
-## 5. Example Explanation
+## 5. **Explanation of Example**
 
-Let's work through **Example 1**:  
-**Input:** `stoneValue = [1,2,3,7]`
+**Example:**  
+`nums = [5, 1]`
 
-Work backwards (let's use full dp for clarity):
+**Step 1:** Find min and max: `L = 1`, `R = 5`  
+**Step 2:** Set of present: `{1,5}`  
+**Step 3:** Iterate from 1 to 5:
+- 1 → present (skip)
+- 2 → **missing** (add)
+- 3 → **missing** (add)
+- 4 → **missing** (add)
+- 5 → present (skip)
 
-- dp[4] = 0 (past end)  
-- i=3: Take `[7]` (only 1 stone left): `7 - dp[4] = 7 - 0 = 7`  
-  dp[3] = 7  
-- i=2:  
-    - Take `[3]`: `3 - dp[3] = 3 - 7 = -4`
-    - Take `[3,7]`: sum=10, `10 - dp[4] = 10 - 0 = 10`
-    - Only 2 stones remain  
-    => best = max(-4, 10) = **10**  
-   dp[2]=10
-- i=1:  
-    - Take `[2]`: `2 - dp[2] = 2 - 10 = -8`
-    - Take `[2,3]`: sum=5, `5 - dp[3] = 5 - 7 = -2`
-    - Take `[2,3,7]`: sum=12, `12 - dp[4] = 12 - 0 = 12`
-    => max(-8, -2, 12) = **12**  
-   dp[1]=12
-- i=0:
-    - Take `[1]`: `1 - dp[1] = 1 - 12 = -11`
-    - `[1,2]`: sum=3, `3 - dp[2] = 3 - 10 = -7`
-    - `[1,2,3]`: sum=6, `6 - dp[3] = 6 - 7 = -1`
-    => max(-11, -7, -1) = **-1**
-   dp[0] = -1
-
-Interpretation:  
-- dp[0] < 0 => Current player (Alice) will lose, Bob wins!  
-**Output:** `"Bob"`
+**Result:** `[2, 3, 4]` (in sorted order)
 
 ---
 
-### Summary Table
-
-|    i   | [Take 1] | [Take 2]   | [Take 3]   | Best dp[i] |
-|--------|----------|------------|------------|------------|
-| 3      | 7-0=7    | -          | -          | 7          |
-| 2      | 3-7=-4   | 10-0=10    | -          | 10         |
-| 1      | 2-10=-8  | 5-7=-2     | 12-0=12    | 12         |
-| 0      | 1-12=-11 | 3-10=-7    | 6-7=-1     | -1         |
-
----
-
-**If you need a Python version or detailed trace on other examples, let me know!**
+Let me know if you'd like a version for a different language or further explanation!
