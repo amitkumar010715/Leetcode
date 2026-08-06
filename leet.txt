@@ -1,155 +1,94 @@
-Let's break down the problem, then provide the solution:
+Let's break down the solution as requested:
 
 ---
 
-## 1. Short Summary
+## 1. **Short Summary**
 
-Given a *directed graph* of invocation relationships between methods, you need to:
-- **Remove all methods that are suspicious**: those directly or indirectly reachable from method `k`.
-- But **removal is allowed only if no outside method calls any suspicious method** (no incoming edge from "outside" to "inside" the suspicious group).
-- Return the remaining methods after removal, or all methods (no removal) if impossible to cleanly remove suspicious ones.
+Given integers `n` and `t`, find **the smallest integer** `x` such that `x ≥ n` and the **product of its digits** is divisible by `t`.
 
 ---
 
-## 2. Constraints & Edge Cases
+## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- `n` up to 100,000 and `invocations` up to 200,000: O(N + M) algorithm required.
-- Directed graph (can have cycles, see Example 3).
-- All indices are valid (`0 <= ai, bi < n`).
-- No self-loops, no repeat edges.
+- `1 ≤ n ≤ 100`
+- `1 ≤ t ≤ 10`
 
 **Edge Cases:**
-- All methods can be suspicious (e.g., if all reachable from k, and no incoming edges from outside).
-- No invocations at all.
-- Suspicious group reachable from "outside": cannot delete any of them.
-- Suspicious group has cycles.
-- The suspicious group is not reachable by outside, but non-suspicious methods may still invoke each other.
+- **Product is 0:** Any number containing digit `0` has a product of digits equal to 0, so it is always divisible by `t` unless `t == 0` (not possible here).
+- **t = 1:** All numbers have a product divisible by 1.
+- **Single-digit `n`:** Handle cases where `n` is a single digit (`1 ≤ n ≤ 9`).
+- The range is very small (`n` up to 100), so brute-force solution is feasible and efficient.
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-**Step-by-step Algorithm:**
-1. **Build the Graph:**
-   - For each method, keep a list of methods it calls (`adj`), and a list of which methods call it (`reverse_adj`).  
-   - We need both the normal and the reverse graph.
+Since `n` is up to 100, we can **simply iterate from `n` upwards**, for each number:
+- Compute the product of its digits.
+- If that product is divisible by `t`, return the number.
 
-2. **Find ALL suspicious methods:**
-   - Perform BFS/DFS from `k` using the normal graph to collect all reachable nodes (`suspicious` set).
+Product calculation:
+- For a number `x`, extract digits and multiply (careful: if a digit is `0`, product immediately becomes `0`).
 
-3. **Check for validity of removal:**
-   - For all suspicious methods, check if any of their *callers* (via reverse graph) are **outside** of the suspicious set.  
-   - If so, removal is not possible (since an outside method is calling into the suspicious group).
-
-4. **Return the answer:**
-   - If it's possible, remove all suspicious methods and return the rest.  
-   - Otherwise, return all original methods.
+**Why is this optimal?**
+- Max 2-digit numbers only, so even checking up to a few numbers per query is fast.
 
 ---
 
-## 4. Clean C++ Solution
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <queue>
-#include <unordered_set>
-using namespace std;
-
 class Solution {
 public:
-    vector<int> removeMethods(int n, int k, vector<vector<int>>& invocations) {
-        vector<vector<int>> adj(n), reverse_adj(n);
-        for (auto &edge : invocations) {
-            int from = edge[0], to = edge[1];
-            adj[from].push_back(to);
-            reverse_adj[to].push_back(from);
-        }
-
-        // Step 1: Find all suspicious methods via BFS/DFS from k
-        vector<bool> suspicious(n, false);
-        queue<int> q;
-        q.push(k);
-        suspicious[k] = true;
-        while (!q.empty()) {
-            int u = q.front(); q.pop();
-            for (int v : adj[u]) {
-                if (!suspicious[v]) {
-                    suspicious[v] = true;
-                    q.push(v);
+    int smallestDivisibleDigitProduct(int n, int t) {
+        for (int x = n; ; ++x) {
+            int product = 1;
+            int y = x;
+            if (y == 0) product = 0;
+            else {
+                while (y > 0) {
+                    int d = y % 10;
+                    product *= d;
+                    y /= 10;
                 }
             }
+            // If product == 0, it is divisible by any t > 0
+            if (product % t == 0)
+                return x;
         }
-
-        // Step 2: Check for incoming edges from outside
-        for (int i = 0; i < n; ++i) {
-            if (!suspicious[i]) continue;
-            for (int caller : reverse_adj[i]) {
-                if (!suspicious[caller]) {
-                    // Can't remove
-                    vector<int> res;
-                    for (int j = 0; j < n; ++j) res.push_back(j);
-                    return res;
-                }
-            }
-        }
-
-        // Step 3: Return the rest (non-suspicious)
-        vector<int> res;
-        for (int i = 0; i < n; ++i) {
-            if (!suspicious[i]) res.push_back(i);
-        }
-        return res;
+        // Should never reach here because solution always exists for given constraints
+        return -1;
     }
 };
 ```
----
-
-## 5. Example Explanation
-
-Let's take **Example 2**:
-
-> n = 5, k = 0  
-> invocations = [[1,2],[0,2],[0,1],[3,4]]
-
-**Step 1. Build the graph:**
-- adj[1] = [2]
-- adj[0] = [2, 1]
-- adj[3] = [4]
-
-**Step 2. Find suspicious methods (BFS from 0):**
-- Start at 0.  
-- From 0, can go to 1 and 2.
-- From 1, can go to 2 (already marked).
-- So suspicious = {0, 1, 2}
-
-**Step 3. Check for incoming edges into suspicious group from outside:**
-- For 0: callers? None
-- For 1: callers? 0 (suspicious), so ok
-- For 2: callers? 1 (suspicious), 0 (suspicious) — all ok
-
-**Step 4. Output**
-- Non-suspicious methods are [3, 4] (since suspicious = {0, 1, 2}).
-- **Return [3, 4].**
 
 ---
 
-### Notes
+## 5. **Example Explanation**
 
-- The check for incoming edges must be for *every* suspicious method, against all their callers.
-- If a method outside the suspicious group ever calls into it, you must abandon removal.
+### Example 2
 
----
+> **Input:** `n = 15, t = 3`
 
-## **Summary Table**
+**Start checking from 15:**
 
-| Step              | Logic                                      |
-|-------------------|--------------------------------------------|
-| Build Graph       | Both directions (callers & callees)        |
-| BFS from k        | Collect all suspicious methods             |
-| Check incoming    | Is any suspicious method’s caller outside? |
-| Output            | Remove suspicious if possible              |
+- **15:** Digits: 1 and 5; Product: 1 * 5 = 5. 5 % 3 != 0.
+- **16:** Digits: 1 and 6; Product: 1 * 6 = 6. 6 % 3 == 0.
+
+**So 16 is the answer.**
 
 ---
 
-Let me know if you want a Python version or further explanation!
+## ## **Summary Table**
+
+| n  | t  | Check x | Product of Digits | Divisible by t? |
+|----|----|---------|-------------------|-----------------|
+| 15 | 3  |   15    |   1 * 5 = 5       | No              |
+|    |    |   16    |   1 * 6 = 6       | Yes             |
+|    |    |         |                   |                 |
+|    |    |  **Return 16**             |                 |
+
+
+---
+
+**This approach is fast due to small constraints and covers all tricky cases.**
