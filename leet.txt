@@ -1,219 +1,232 @@
-Let’s tackle the problem step-by-step as requested.
+Let's break the problem down step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a string `num` representing a *positive integer* (possibly very big), and an integer `t`, find the **smallest zero-free integer** (no '0' digits) ≥ `num` such that the **product of its digits** is divisible by `t`. Return its string representation, or `"-1"` if impossible.
+We are given `word1` and `word2`. We need to **pick a strictly ascending sequence of indices from `word1`** that, when the corresponding letters are concatenated, gives a string "almost equal" (i.e., can differ by *at most one character*) to `word2`.  
+Among all possible such index sequences, **return the lexicographically smallest array of indices** (not the smallest string!).  
+Return an empty array if not possible.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- `num.length` up to 2 × 10⁵ ⇒ can't enumerate all numbers, must digit DP or similar.
-- `t` up to 10¹⁴ ⇒ non-trivial divisors.
-- No leading zeros in `num`.
-- `num` may contain zeros, but the returned number cannot.
+- **Constraints**
+    - `1 <= word2.length < word1.length <= 3 * 10^5`
+    - Only lowercase English letters
+    - Indices in the answer must be strictly increasing
 
-**Edge Cases:**
-- If `num` contains '0', can't pick or copy that digit in result.
-- If t's factorization needs zeros (e.g. multiple 2s and 5s but not enough room), answer is -1.
-- Product of digits grows quickly – but we *only* care about divisibility, not actual value.
-- Leading digits ≫ 1: Smallest answer may need to increment with as little change as possible.
+- **Edge Cases**
+    - No solution exists: return `[]`
+    - The change can be at any position (not specified)
+    - We can change either a matching or non-matching character to fit `word2`
+    - The sequence must be *exactly* of length `word2.length`.
+    - There may be many possible sequences; must return the one with the *smallest* indices in lex.STRING order.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-#### **Key Insights:**
-- **Digit DP** is required, but product tracking is tricky since `t` could be big and product can overflow.
-- For divisibility, it's not necessary to track the product itself, but to track its **prime factorization modulus t**.
-- Since all digits must be **non-zero**, at all positions must pick [1..9].
+This is effectively a "lex smallest subsequence matching `word2`" problem, **allowing at most one character mismatch**.
 
-#### **Approach:**
+Since both `word1` and `word2` can be huge, **brute force is not possible.**  
+We need to pick indices in ascending order, so **greedy approach** + **preprocessing** for fast lookup.
 
-1. **Prime Factorization:**  
-   Decompose `t` into its prime factors:  
-   `t = p1^e1 * p2^e2 *...* pk^ek`
+### **Algorithm Steps**
+- **Preprocess:** For each letter `'a'..'z'`, store the list of indices in `word1` where that letter occurs.
+- For each position `j` in `word2`:
+    - Let `cur` be the index in `word1` from which we are searching for the next valid position.
+- For every choice, we can make **at most one mismatch** at any position.
 
-2. **Track Exponents:**  
-   For each prime factor `pi`, keep a current exponent counter mod `ei` (from digits picked so far).
-   To be divisible, the final exponents for every prime `pi` must be at least `ei`.
+#### **Key idea:**
+For each position in `word2`, *either*:
+- Use a matching character (minimizing the index lex order)
+- *Or* (at most once) pick a non-matching character (only once for all positions)
 
-3. **Digit DP State:**  
-   - `pos`: current index in num.
-   - `tight`: is the prefix equal to num so far (`True` if the current prefix == num's prefix, need to keep digits ≥ num's digits).
-   - `exponents`: tuple of exponents (for all primes in t) **so far**.
-   - The DP can prune (and only recurse) if it's possible to fulfill the requirements with the number of digits left.
+Because we need the **lexicographically smallest index sequence**, we can do a form of dynamic programming:
 
-4. **Search for Result:**  
-   - Try to keep digits minimal and match num as much as allowed for lex minimality.
-   - At each position, from possible `d` (`1..9`), select next digit.
-   - Build the minimal number (DFS, always pick minimal possible digit).
-   - If can't, increase at the left-most possible position.
+Track:  
+- The smallest sequence (`indices`) using 0 mismatch so far  
+- The smallest sequence using 1 mismatch.
 
-5. **Pruning:**  
-   - If required exponents for t's factors can't be reached in remaining positions (e.g. not enough digits left to reach full exponent requirement), prune.
+At each step, for each of the two states (mismatch used or not used), try:
+- Next index in `word1` that matches `word2[j]` (advance normally)
+- If mismatch not yet used and matching is not possible at current step, try using a mismatch.
 
-6. **Implementation Feasibility**  
-   - If the number of primes in t is small (t up to 10¹⁴ ⇒ ≤5 primes), state space is manageable:  
-          DP[pos][tuple of exponents][tight]
-   - For each digit (9 options), cross all remaining possibilities.
+Because we always want the **lex smallest indices**, we can try for both variants in parallel, prioritizing smaller indices.
+
+But since `word1` is big, we need to *efficiently* search for the next occurrence of a char after a given position:  
+- For each letter, maintain sorted indices → use `lower_bound` to search.
+
+#### **DP Approach:**
+
+Let:
+- At step `j` (position in `word2`), keep two states:
+    - Whether a mismatch has been used or not (0 or 1)
+    - Current position in `word1` after last selected index
+
+Track for each state:
+- The position in `word1` up to which we've matched
+- The sequence of indices used so far
+
+But to avoid exponential states, we can track only one path for each `j` and `mismatch_used`, and always keep only the **lex smallest** path for each state.
+
+So:  
+- Start with (`prev = -1`, `j = 0`, `mismatch used = 0`)
+- For each `j`, pick:
+    - Next smallest occurrence (index > prev) in `word1` of `word2[j]` as the main path
+    - If mismatch not yet used, for each possible letter (that is not `word2[j]`), pick the next smallest index > prev, keeping track of **best overall option** (since we want lex smallest indices).
+
+We stop at the first valid answer.
+
+#### **Greedy Forward Path (Optimized)**
+Since we need only the lex smallest indices, and mismatch can be used at any of the positions, we can **try each possible mismatch position (0...m-1), and for each, try to greedily (with 0 mismatches elsewhere) match every other character in `word2` to `word1`**.
+
+For each possible mismatch position `pos_mis` (from 0 to len(word2)-1):
+- For positions before `pos_mis` (i < pos_mis), strictly match `word2[i]`
+- At pos_mis, pick the next smallest *any* letter ≠ `word2[pos_mis]`
+- For positions after, strictly match `word2[i]`
+
+At each step, always pick the **lex smallest index > last selected index** (to keep answer lex smallest).
+
+Also, don't forget to try the 0-mismatch case (all characters matched exactly).
+
+This is O(m log n) where n=|word1|, m=|word2|, since for each position we do a binary search.
 
 ---
 
 ## 4. **C++ Solution**
 
-We'll focus on step-by-step construction, seeking the lex smallest result.
-
 ```cpp
-#include <bits/stdc++.h>
+#include <vector>
+#include <string>
+#include <iostream>
+#include <algorithm>
+
 using namespace std;
-typedef long long ll;
 
-// Factorize t into (prime, exponent)
-vector<pair<ll, int>> factor(ll t) {
-    vector<pair<ll, int>> res;
-    for (ll d = 2; d * d <= t; ++d) {
-        if (t % d == 0) {
-            int cnt = 0;
-            while (t % d == 0) t /= d, cnt++;
-            res.emplace_back(d, cnt);
-        }
-    }
-    if (t > 1) res.emplace_back(t, 1);
-    return res;
-}
-
-string smallestDivisibleDigitProduct(string num, ll t) {
-    int n = num.size();
-    vector<pair<ll, int>> pf = factor(t);
-    int k = pf.size();
-
-    // All possible digits, no zero allowed
-    vector<int> digits;
-    for (int d = 1; d <= 9; ++d) digits.push_back(d);
-
-    // Precompute, for any digit (1-9), what prime exponents it adds
-    vector<vector<int>> digit2exp(10, vector<int>(k));
-    for (int d = 1; d <= 9; ++d) {
-        int val = d;
-        for (int j = 0; j < k; ++j) {
-            int cnt = 0;
-            ll prime = pf[j].first;
-            int exp = pf[j].second;
-            int tmp = val;
-            while (tmp % prime == 0) {
-                cnt++;
-                tmp /= prime;
-            }
-            digit2exp[d][j] = cnt;
-        }
-    }
-
-    // Maximum required exponents per factor
-    vector<int> maxexp(k);
-    for (int i = 0; i < k; ++i) maxexp[i] = pf[i].second;
-
-    // DP key: pos, tight, vector<current exponents>
-    // Very important: Only store minimal exponents required at each step
-    // Visited state optimization: unordered_map, but using exponent tuple as key.
-    using State = tuple<int, bool, vector<int>>;
-    struct StateHash {
-        size_t operator()(const State& s) const {
-            size_t h = get<0>(s) * 100003 + get<1>(s);
-            for (auto x: get<2>(s)) h = h * 13331 + x;
-            return h;
-        }
-    };
-
-    unordered_map<State, bool, StateHash> memo;
-    vector<int> choice(n, -1);
-
-    function<bool(int, bool, vector<int>&)> dfs = [&](int pos, bool tight, vector<int> &exps) -> bool {
-        // Prune: check if not enough positions left to reach required exponents
-        int rem = n - pos;
-        for (int j = 0; j < k; ++j) {
-            int need = maxexp[j] - exps[j];
-            if (need > rem) return false;
-        }
-        if (pos == n) {
-            // Must meet all requirements
-            for (int j = 0; j < k; ++j)
-                if (exps[j] < maxexp[j]) return false;
-            return true;
-        }
-        State key = {pos, tight, exps};
-        if (memo.count(key)) return false;
-
-        int start = tight ? (num[pos] - '0') : 1;
-        for (int d = start; d <= 9; ++d) {
-            // skip 0
-            // Prepare new exponents
-            vector<int> new_exp = exps;
-            for (int j = 0; j < k; ++j)
-                new_exp[j] += digit2exp[d][j];
-            // Limit: we don't care about exps beyond maxexp (since only care >=)
-            for (int j = 0; j < k; ++j)
-                new_exp[j] = min(new_exp[j], maxexp[j]);
-            bool next_tight = tight && (d == start);
-            if (dfs(pos + 1, next_tight, new_exp)) {
-                choice[pos] = d;
-                return true;
-            }
-        }
-        memo[key] = false;
-        return false;
-    };
-
-    vector<int> exps(k, 0);
-    if (!dfs(0, true, exps)) {
-        return "-1";
-    }
-    // reconstruct result
-    string res;
-    for (int i = 0; i < n; ++i) {
-        assert(1 <= choice[i] && choice[i] <=9);
-        res += char('0' + choice[i]);
-    }
-    return res;
-}
-```
-
-**Driver:**
-```cpp
-// Leetcode style wrapper
 class Solution {
 public:
-    string smallestDivisibleDigitProduct(string num, long long t) {
-        return ::smallestDivisibleDigitProduct(num, t);
+    vector<int> findLexSmallestSeq(string word1, string word2) {
+        int n = word1.size(), m = word2.size();
+
+        // letter_positions[c] = list of all positions of char c in word1 (sorted)
+        vector<vector<int>> letter_positions(26);
+        for (int i = 0; i < n; ++i) {
+            letter_positions[word1[i] - 'a'].push_back(i);
+        }
+
+        vector<int> best_res;
+        bool found = false;
+
+        // Try using mismatch at every position or not at all
+        for (int mismatch_pos = -1; mismatch_pos < m; ++mismatch_pos) {
+            vector<int> res(m, -1); // answer indices
+            int prev = -1;
+            bool ok = true;
+
+            for (int j = 0; j < m; ++j) {
+                if (j == mismatch_pos) {
+                    // try mismatch here
+                    int min_idx = n + 1;
+                    int pick = -1;
+                    // Try all letters except word2[j]
+                    for (int c = 0; c < 26; ++c) {
+                        if (c == (word2[j] - 'a')) continue;
+                        // next occurrence of c after prev
+                        auto& arr = letter_positions[c];
+                        auto it = upper_bound(arr.begin(), arr.end(), prev);
+                        if (it != arr.end()) {
+                            if (*it < min_idx) {
+                                min_idx = *it;
+                                pick = *it;
+                            }
+                        }
+                    }
+                    if (pick == -1) { ok = false; break; }
+                    res[j] = pick;
+                    prev = pick;
+                } else {
+                    // try to match word2[j]
+                    auto& arr = letter_positions[word2[j] - 'a'];
+                    auto it = upper_bound(arr.begin(), arr.end(), prev);
+                    if (it == arr.end()) { ok = false; break; }
+                    res[j] = *it;
+                    prev = *it;
+                }
+            }
+            if (ok) {
+                if (!found || res < best_res) {
+                    best_res = res;
+                    found = true;
+                }
+            }
+        }
+        if (!found) return {};
+        return best_res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-### Example 1
+Let's use **Example 2**:
 
-> **Input:** num = "1234", t = 256
+```
+word1 = "bacdc", word2 = "abc"
+```
 
-- 256 = 2⁸
-- So, need 8 factors of 2 in the digit product.
-    - Each digit can at most contribute:
-        - 8: 3
-        - 6: 1
-        - 4: 2
-        - 2: 1
-        - 1, 3, 5, 7, 9: 0
+We preprocess indices:
+- For 'a': [1]
+- For 'b': [0]
+- For 'c': [2,4]
+- For 'd': [3]
 
-- Try "1234": product = 1×2×3×4 = 24. 24 = 2³×3¹ ⇒ not enough 2's.
-- Try next zero-free numbers: 1235, 1236, ..., but only at 1488, with product 1×4×8×8 = 256 = 2⁸, do we get 8 factors of 2.
+### Try all possible mismatch locations (0,1,2, or none):
 
-**Output:** "1488"
+#### 1. **No mismatch**
+- Match 'a': first 'a' after -1: index 1
+- Match 'b': first 'b' after 1: none! fails
+
+#### 2. **Mismatch at pos 0**
+- Mismatch: find letter ≠ 'a' after -1
+  - First 'b': 0
+- pos=1: 'b' after 0: none! fails
+
+#### 3. **Mismatch at pos 1**
+- Match 'a' after -1: 1
+- Mismatch: letter ≠ 'b' after 1: next 'c': 2
+- pos=2: 'c' after 2: 4
+
+Sequence: [1,2,4]
+
+#### 4. **Mismatch at pos 2**
+- Match 'a' after -1: 1
+- Match 'b' after 1: none! fails
+
+So, answer is **[1,2,4]**, which matches the output.
 
 ---
 
-If you need further explanation for a more complex example or want the code for Python instead, let me know!
+## **Summary Table**
+
+| Mismatch at pos | Sequence | Valid? |
+|-----------------|----------|--------|
+| N/A (no mis)    | [1]      | no     |
+| 0               | [0]      | no     |
+| 1               | [1,2,4]  | yes    |
+| 2               |          | no     |
+
+---
+
+## **Final Notes**
+- We efficiently precompute letter locations in `word1`
+- For each possible mismatch location (or none), greedily select minimum indices
+- Return lexicographically smallest solution
+
+---
+
+**Let me know if you would like a step-by-step trace for another example!**
