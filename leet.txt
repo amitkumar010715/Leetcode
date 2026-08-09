@@ -1,232 +1,145 @@
-Let's break the problem down step by step:
+Let's break down the problem and solution as requested.
 
 ---
 
 ## 1. **Short Summary**
 
-We are given `word1` and `word2`. We need to **pick a strictly ascending sequence of indices from `word1`** that, when the corresponding letters are concatenated, gives a string "almost equal" (i.e., can differ by *at most one character*) to `word2`.  
-Among all possible such index sequences, **return the lexicographically smallest array of indices** (not the smallest string!).  
-Return an empty array if not possible.
+In **Stone Game II**, Alice and Bob take turns picking the first `X` piles of stones from a row, with `1 ≤ X ≤ 2M`, and then set `M = max(M, X)`. Alice starts first, both play optimally, the goal is to maximize Alice's stone total. Return the most stones Alice can get.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints**
-    - `1 <= word2.length < word1.length <= 3 * 10^5`
-    - Only lowercase English letters
-    - Indices in the answer must be strictly increasing
+### Constraints:
+- `1 ≤ piles.length ≤ 100` (small enough for DP).
+- `1 ≤ piles[i] ≤ 10^4` (stone values don't affect complexity).
 
-- **Edge Cases**
-    - No solution exists: return `[]`
-    - The change can be at any position (not specified)
-    - We can change either a matching or non-matching character to fit `word2`
-    - The sequence must be *exactly* of length `word2.length`.
-    - There may be many possible sequences; must return the one with the *smallest* indices in lex.STRING order.
+### Edge Cases:
+- **Single pile:** Alice takes all stones.
+- **All piles equal:** Should handle ties correctly.
+- **Big last pile:** The algorithm must handle optimal turn ordering, not just greedy.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This is effectively a "lex smallest subsequence matching `word2`" problem, **allowing at most one character mismatch**.
+Let's use **Dynamic Programming** with memoization.
 
-Since both `word1` and `word2` can be huge, **brute force is not possible.**  
-We need to pick indices in ascending order, so **greedy approach** + **preprocessing** for fast lookup.
+Let `dp(i, m)` = the maximum stones the current player can get with the current subarray starting at index `i` and parameter `M = m`.
 
-### **Algorithm Steps**
-- **Preprocess:** For each letter `'a'..'z'`, store the list of indices in `word1` where that letter occurs.
-- For each position `j` in `word2`:
-    - Let `cur` be the index in `word1` from which we are searching for the next valid position.
-- For every choice, we can make **at most one mismatch** at any position.
+At each step:
+- The player can take `X` piles, where `1 ≤ X ≤ 2M` (but not past end).
+- New `M` becomes `max(m, X)`.
+- The player gets the sum of the piles taken; then, the opponent plays optimally on the remainder.
+- The goal is to maximize the total stones the **current player** can collect.
 
-#### **Key idea:**
-For each position in `word2`, *either*:
-- Use a matching character (minimizing the index lex order)
-- *Or* (at most once) pick a non-matching character (only once for all positions)
+**Transition:**
+```
+dp(i, m) = max(sum(i, X) + totalStones(i+X) - dp(i+X, max(m, X))) for all 1 ≤ X ≤ 2m
+```
+But it's simpler to imagine: since both play optimally and "win as much as possible", at each move, the player's stones = the remainingSum - opponent's maximum from the rest.
 
-Because we need the **lexicographically smallest index sequence**, we can do a form of dynamic programming:
+So the main recurrence is:
+```
+dp(i, m) = max(totalRemaining(i) - dp(i+X, max(m, X))) for X in [1, 2m]
+```
+We precompute `suffixSum[i] = sum(piles[i:])` for efficient access.
 
-Track:  
-- The smallest sequence (`indices`) using 0 mismatch so far  
-- The smallest sequence using 1 mismatch.
-
-At each step, for each of the two states (mismatch used or not used), try:
-- Next index in `word1` that matches `word2[j]` (advance normally)
-- If mismatch not yet used and matching is not possible at current step, try using a mismatch.
-
-Because we always want the **lex smallest indices**, we can try for both variants in parallel, prioritizing smaller indices.
-
-But since `word1` is big, we need to *efficiently* search for the next occurrence of a char after a given position:  
-- For each letter, maintain sorted indices → use `lower_bound` to search.
-
-#### **DP Approach:**
-
-Let:
-- At step `j` (position in `word2`), keep two states:
-    - Whether a mismatch has been used or not (0 or 1)
-    - Current position in `word1` after last selected index
-
-Track for each state:
-- The position in `word1` up to which we've matched
-- The sequence of indices used so far
-
-But to avoid exponential states, we can track only one path for each `j` and `mismatch_used`, and always keep only the **lex smallest** path for each state.
-
-So:  
-- Start with (`prev = -1`, `j = 0`, `mismatch used = 0`)
-- For each `j`, pick:
-    - Next smallest occurrence (index > prev) in `word1` of `word2[j]` as the main path
-    - If mismatch not yet used, for each possible letter (that is not `word2[j]`), pick the next smallest index > prev, keeping track of **best overall option** (since we want lex smallest indices).
-
-We stop at the first valid answer.
-
-#### **Greedy Forward Path (Optimized)**
-Since we need only the lex smallest indices, and mismatch can be used at any of the positions, we can **try each possible mismatch position (0...m-1), and for each, try to greedily (with 0 mismatches elsewhere) match every other character in `word2` to `word1`**.
-
-For each possible mismatch position `pos_mis` (from 0 to len(word2)-1):
-- For positions before `pos_mis` (i < pos_mis), strictly match `word2[i]`
-- At pos_mis, pick the next smallest *any* letter ≠ `word2[pos_mis]`
-- For positions after, strictly match `word2[i]`
-
-At each step, always pick the **lex smallest index > last selected index** (to keep answer lex smallest).
-
-Also, don't forget to try the 0-mismatch case (all characters matched exactly).
-
-This is O(m log n) where n=|word1|, m=|word2|, since for each position we do a binary search.
+**Base case:** If `i` is beyond last pile, get `0`.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <string>
-#include <iostream>
 #include <algorithm>
-
+#include <cstring>
 using namespace std;
 
 class Solution {
 public:
-    vector<int> findLexSmallestSeq(string word1, string word2) {
-        int n = word1.size(), m = word2.size();
+    int dp[101][101]; // Index, M
 
-        // letter_positions[c] = list of all positions of char c in word1 (sorted)
-        vector<vector<int>> letter_positions(26);
-        for (int i = 0; i < n; ++i) {
-            letter_positions[word1[i] - 'a'].push_back(i);
+    int stoneGameII(vector<int>& piles) {
+        int n = piles.size();
+        vector<int> suffixSum(n+1, 0); // suffixSum[i] = sum of piles[i...n-1]
+        for (int i = n-1; i >= 0; --i)
+            suffixSum[i] = piles[i] + suffixSum[i+1];
+
+        memset(dp, -1, sizeof(dp));
+        return dfs(0, 1, suffixSum, n);
+    }
+
+    int dfs(int i, int M, vector<int>& suffixSum, int n) {
+        if (i >= n) return 0;
+        if (dp[i][M] != -1) return dp[i][M];
+
+        int res = 0;
+        // At most take all remaining piles.
+        for (int X = 1; X <= 2*M && i+X <= n; ++X) {
+            // Stones taken this round: suffixSum[i] - suffixSum[i+X]
+            // The opponent will get dfs(i+X, max(M, X)), so we get:
+            int taken = suffixSum[i] - suffixSum[i+X];
+            int opp = dfs(i+X, max(M, X), suffixSum, n);
+            res = max(res, taken + (suffixSum[i+X] - opp));
+            // Or simply: res = max(res, suffixSum[i] - dfs(i+X, max(M, X),...))
+            res = max(res, suffixSum[i] - opp);
         }
-
-        vector<int> best_res;
-        bool found = false;
-
-        // Try using mismatch at every position or not at all
-        for (int mismatch_pos = -1; mismatch_pos < m; ++mismatch_pos) {
-            vector<int> res(m, -1); // answer indices
-            int prev = -1;
-            bool ok = true;
-
-            for (int j = 0; j < m; ++j) {
-                if (j == mismatch_pos) {
-                    // try mismatch here
-                    int min_idx = n + 1;
-                    int pick = -1;
-                    // Try all letters except word2[j]
-                    for (int c = 0; c < 26; ++c) {
-                        if (c == (word2[j] - 'a')) continue;
-                        // next occurrence of c after prev
-                        auto& arr = letter_positions[c];
-                        auto it = upper_bound(arr.begin(), arr.end(), prev);
-                        if (it != arr.end()) {
-                            if (*it < min_idx) {
-                                min_idx = *it;
-                                pick = *it;
-                            }
-                        }
-                    }
-                    if (pick == -1) { ok = false; break; }
-                    res[j] = pick;
-                    prev = pick;
-                } else {
-                    // try to match word2[j]
-                    auto& arr = letter_positions[word2[j] - 'a'];
-                    auto it = upper_bound(arr.begin(), arr.end(), prev);
-                    if (it == arr.end()) { ok = false; break; }
-                    res[j] = *it;
-                    prev = *it;
-                }
-            }
-            if (ok) {
-                if (!found || res < best_res) {
-                    best_res = res;
-                    found = true;
-                }
-            }
-        }
-        if (!found) return {};
-        return best_res;
+        return dp[i][M] = res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-Let's use **Example 2**:
+### Example 1:
 
-```
-word1 = "bacdc", word2 = "abc"
-```
+**Input:** `piles = [2, 7, 9, 4, 4]`
 
-We preprocess indices:
-- For 'a': [1]
-- For 'b': [0]
-- For 'c': [2,4]
-- For 'd': [3]
+**Suffix sums:** `[26, 24, 17, 8, 4, 0]`
+- At start: Alice can take X = 1 or 2 piles.
 
-### Try all possible mismatch locations (0,1,2, or none):
+#### Option A: Alice takes 1 pile (2)
 
-#### 1. **No mismatch**
-- Match 'a': first 'a' after -1: index 1
-- Match 'b': first 'b' after 1: none! fails
+- Remaining: [7, 9, 4, 4], M=1
+- Bob can take X=1 or 2:
+    - Bob takes 2: takes [7,9]=16, remaining [4,4], M=2
+        - Alice can take 1 or 2 piles (but only left is [4,4]):
+        - Alice takes both: gets 8
+        - Bob gets 0 more
+        - Final: Alice 2+8=10, Bob 16
 
-#### 2. **Mismatch at pos 0**
-- Mismatch: find letter ≠ 'a' after -1
-  - First 'b': 0
-- pos=1: 'b' after 0: none! fails
+#### Option B: Alice takes 2 piles (2+7=9):
 
-#### 3. **Mismatch at pos 1**
-- Match 'a' after -1: 1
-- Mismatch: letter ≠ 'b' after 1: next 'c': 2
-- pos=2: 'c' after 2: 4
+- Remaining: [9, 4, 4], M=2
+- Bob now can take up to 2*2=4 piles (so all), so Bob takes all: Bob gets 17 (bad for Alice).
+- Alice gets 9, Bob gets 17.
 
-Sequence: [1,2,4]
+So, optimal for Alice is Option A: **10**.
 
-#### 4. **Mismatch at pos 2**
-- Match 'a' after -1: 1
-- Match 'b' after 1: none! fails
+---
 
-So, answer is **[1,2,4]**, which matches the output.
+**Summary Table:**
+
+| Action          | Alice's Stones | Bob's Stones |
+|-----------------|:-------------:|:------------:|
+| Alice:1, Bob:2  |      10       |     16       |
+| Alice:2, Bob:3  |       9       |     17       |
+
+**Return value:** `10`
 
 ---
 
 ## **Summary Table**
-
-| Mismatch at pos | Sequence | Valid? |
-|-----------------|----------|--------|
-| N/A (no mis)    | [1]      | no     |
-| 0               | [0]      | no     |
-| 1               | [1,2,4]  | yes    |
-| 2               |          | no     |
-
----
-
-## **Final Notes**
-- We efficiently precompute letter locations in `word1`
-- For each possible mismatch location (or none), greedily select minimum indices
-- Return lexicographically smallest solution
+| Requirement | Addressed? |
+|-------------|:----------:|
+| Summary     | ✅         |
+| Constraints | ✅         |
+| Algorithm   | ✅         |
+| C++ Code    | ✅         |
+| Example     | ✅         |
 
 ---
-
-**Let me know if you would like a step-by-step trace for another example!**
