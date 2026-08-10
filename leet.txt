@@ -1,51 +1,45 @@
-Let's break down the problem and solution as requested.
+Let's break down the solution step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-In **Stone Game II**, Alice and Bob take turns picking the first `X` piles of stones from a row, with `1 ≤ X ≤ 2M`, and then set `M = max(M, X)`. Alice starts first, both play optimally, the goal is to maximize Alice's stone total. Return the most stones Alice can get.
+This problem is a variant of the classic take-away game (Nim), where each move consists of removing any non-zero perfect square number of stones. Given `n` stones and optimal play, determine if Alice (the first player) is guaranteed to win.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### Constraints:
-- `1 ≤ piles.length ≤ 100` (small enough for DP).
-- `1 ≤ piles[i] ≤ 10^4` (stone values don't affect complexity).
+**Constraints:**
+- `1 <= n <= 10^5`
+- Each move removes a positive perfect square number of stones: 1, 4, 9, 16...
+- Both players play optimally.
 
-### Edge Cases:
-- **Single pile:** Alice takes all stones.
-- **All piles equal:** Should handle ties correctly.
-- **Big last pile:** The algorithm must handle optimal turn ordering, not just greedy.
+**Edge Cases:**
+- `n = 1`: Only one move possible, Alice wins.
+- `n` is a perfect square: Alice can win in one move.
+- `n = 2, 3`: Alice cannot win if Bob plays optimally.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Let's use **Dynamic Programming** with memoization.
+This is a **classic DP (Dynamic Programming)** game problem where for each `n`, we want to know if the "current player" (who starts with `n` stones) can force a win.
 
-Let `dp(i, m)` = the maximum stones the current player can get with the current subarray starting at index `i` and parameter `M = m`.
-
-At each step:
-- The player can take `X` piles, where `1 ≤ X ≤ 2M` (but not past end).
-- New `M` becomes `max(m, X)`.
-- The player gets the sum of the piles taken; then, the opponent plays optimally on the remainder.
-- The goal is to maximize the total stones the **current player** can collect.
+We define `dp[i] = true` if with `i` stones, the current player can force a win, else `dp[i] = false`.
 
 **Transition:**
-```
-dp(i, m) = max(sum(i, X) + totalStones(i+X) - dp(i+X, max(m, X))) for all 1 ≤ X ≤ 2m
-```
-But it's simpler to imagine: since both play optimally and "win as much as possible", at each move, the player's stones = the remainingSum - opponent's maximum from the rest.
+- For each `i` from 1 to n:
+  - Try every legal move (removing `k*k` stones where `k*k <= i`).
+  - If for some `k`, `dp[i - k*k] == false` (i.e., if after this move, opponent loses), then `dp[i] = true`.
 
-So the main recurrence is:
-```
-dp(i, m) = max(totalRemaining(i) - dp(i+X, max(m, X))) for X in [1, 2m]
-```
-We precompute `suffixSum[i] = sum(piles[i:])` for efficient access.
+**Initialization:**
+- `dp[0] = false` (If there are no stones, current player loses).
+- `dp[1] = true` (Alice wins by taking the last stone).
 
-**Base case:** If `i` is beyond last pile, get `0`.
+**Complexity:**  
+- Time: `O(n * sqrt(n))`
+- Space: `O(n)`
 
 ---
 
@@ -53,40 +47,21 @@ We precompute `suffixSum[i] = sum(piles[i:])` for efficient access.
 
 ```cpp
 #include <vector>
-#include <algorithm>
-#include <cstring>
-using namespace std;
+#include <cmath>
 
 class Solution {
 public:
-    int dp[101][101]; // Index, M
-
-    int stoneGameII(vector<int>& piles) {
-        int n = piles.size();
-        vector<int> suffixSum(n+1, 0); // suffixSum[i] = sum of piles[i...n-1]
-        for (int i = n-1; i >= 0; --i)
-            suffixSum[i] = piles[i] + suffixSum[i+1];
-
-        memset(dp, -1, sizeof(dp));
-        return dfs(0, 1, suffixSum, n);
-    }
-
-    int dfs(int i, int M, vector<int>& suffixSum, int n) {
-        if (i >= n) return 0;
-        if (dp[i][M] != -1) return dp[i][M];
-
-        int res = 0;
-        // At most take all remaining piles.
-        for (int X = 1; X <= 2*M && i+X <= n; ++X) {
-            // Stones taken this round: suffixSum[i] - suffixSum[i+X]
-            // The opponent will get dfs(i+X, max(M, X)), so we get:
-            int taken = suffixSum[i] - suffixSum[i+X];
-            int opp = dfs(i+X, max(M, X), suffixSum, n);
-            res = max(res, taken + (suffixSum[i+X] - opp));
-            // Or simply: res = max(res, suffixSum[i] - dfs(i+X, max(M, X),...))
-            res = max(res, suffixSum[i] - opp);
+    bool winnerSquareGame(int n) {
+        std::vector<bool> dp(n + 1, false);
+        for (int i = 1; i <= n; ++i) {
+            for (int k = 1; k * k <= i; ++k) {
+                if (!dp[i - k * k]) {
+                    dp[i] = true;
+                    break;
+                }
+            }
         }
-        return dp[i][M] = res;
+        return dp[n];
     }
 };
 ```
@@ -95,51 +70,28 @@ public:
 
 ## 5. **Example Explanation**
 
-### Example 1:
+**Example: `n = 2`**
 
-**Input:** `piles = [2, 7, 9, 4, 4]`
+- **Alice's move:**
+  - Can only remove 1 stone (since 2 - 1 = 1, 2 - 4 < 0).
+  - Leaves 1 stone for Bob (game state: `n = 1`).
 
-**Suffix sums:** `[26, 24, 17, 8, 4, 0]`
-- At start: Alice can take X = 1 or 2 piles.
+- **Bob's move:**
+  - Can remove the last 1 stone and wins.
 
-#### Option A: Alice takes 1 pile (2)
-
-- Remaining: [7, 9, 4, 4], M=1
-- Bob can take X=1 or 2:
-    - Bob takes 2: takes [7,9]=16, remaining [4,4], M=2
-        - Alice can take 1 or 2 piles (but only left is [4,4]):
-        - Alice takes both: gets 8
-        - Bob gets 0 more
-        - Final: Alice 2+8=10, Bob 16
-
-#### Option B: Alice takes 2 piles (2+7=9):
-
-- Remaining: [9, 4, 4], M=2
-- Bob now can take up to 2*2=4 piles (so all), so Bob takes all: Bob gets 17 (bad for Alice).
-- Alice gets 9, Bob gets 17.
-
-So, optimal for Alice is Option A: **10**.
+Therefore, **Alice loses** for `n = 2`.
 
 ---
 
-**Summary Table:**
+### **Summary Table for Small n:**
 
-| Action          | Alice's Stones | Bob's Stones |
-|-----------------|:-------------:|:------------:|
-| Alice:1, Bob:2  |      10       |     16       |
-| Alice:2, Bob:3  |       9       |     17       |
-
-**Return value:** `10`
-
----
-
-## **Summary Table**
-| Requirement | Addressed? |
-|-------------|:----------:|
-| Summary     | ✅         |
-| Constraints | ✅         |
-| Algorithm   | ✅         |
-| C++ Code    | ✅         |
-| Example     | ✅         |
+| n | Alice wins? | Why?                     |
+|---|-------------|--------------------------|
+| 1 | true        | Remove 1, Bob loses      |
+| 2 | false       | Remove 1, Bob wins       |
+| 3 | true        | Remove 1, leaves 2 (Bob loses) |
+| 4 | true        | Remove 4, Bob loses      |
 
 ---
+
+**This DP solution ensures optimal play and is efficient for `n` up to 1e5.**
