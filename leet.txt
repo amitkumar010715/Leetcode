@@ -1,142 +1,72 @@
-Let's break down the solution for **LeetCode: Longest Substring of One Repeating Character** step by step.
+Sure! Here is a comprehensive response to your request:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a string `s`, you are to process a sequence of update queries. Each query changes `s[i]` to a new character. After each update, **find the length of the longest contiguous substring made of only one repeating character**.  
-We are to return an array representing the answer after each query.
+**Problem:**  
+Given a string `s`, find the maximum length of a substring such that every character appears **at most two times** in that substring.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 **Constraints:**
-- `1 ≤ s.length ≤ 100000`
-- `1 ≤ k ≤ 100000` (number of queries)
-- Each query updates any single character in `s`.
+- `2 <= s.length <= 100` (string is quite short)
+- `s` contains only lowercase letters (`a-z`).
 
 **Edge Cases:**
-- Repeated updates on the same index.
-- Changing a character to the same current character (no-op update).
-- All characters in `s` are initially the same.
-- All queries preserve or break existing maximal substring.
+- All identical characters, e.g., `"aaaa"`.
+- All unique characters, e.g., `"abcdef"`.
+- Substrings at the start, end, or in the middle are valid.
+- The answer is at least `2`, since a substring of two identical characters is always valid.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm Explanation**
 
-**Naive approach**:  
-After each update, scan the whole string for the maximal run.  
-**Time**: O(k * n), which is too slow.
+Given the small constraint (`n <= 100`), **brute force with optimizations** or a **sliding window** approach are both feasible.
 
-**Efficient Approach:**  
-Use an interval (run-length encoding or segment) data structure to:
-  - Track contiguous substrings (runs) of the same character.
-  - Support efficient splitting, merging, and length querying after each change.
+### Approach: **Sliding Window**
 
-A **balanced BST** (like `std::set` in C++ with custom comparison) can be used to store runs `[start, end, char]`  
-- After a change at position `p`:  
-    - If the character doesn't change, nothing changes.
-    - Otherwise:
-        1. Locate the run covering `p`
-        2. Possibly split the run left and right of `p`
-        3. Reassign `p` as a new 1-length run.
-        4. Check if adjacent runs can be merged with `p` (same character).
-        5. Update a multiset maintaining all run lengths to quickly get the max after each update.
+- Maintain a window `[left, right]` in the string.
+- Use an array (`cnt[26]`) to count occurrences of each character in the current window.
+- Expand the window by moving `right` and adding `s[right]` to counts.
+- If any character’s count exceeds **2**, shrink the window by moving `left` and reducing counts until all counts ≤ 2.
+- At each step, keep track of the window’s maximum size.
 
-**Time:** Average O(log n) per update and query.  
-**Space:** O(n), for storing all runs and lengths.
+**Time Complexity:**  
+- Each character is added and removed at most once: O(n)
+- Thus, O(n) total.
 
-----
+---
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-#include <iostream>
 #include <vector>
-#include <set>
-#include <string>
+#include <algorithm>
 using namespace std;
-
-// Run definition: [l, r, ch]
-struct Run {
-    int l, r; // [l, r]
-    char c;
-    bool operator<(const Run &other) const { return l < other.l; }
-};
 
 class Solution {
 public:
-    vector<int> longestRepeating(string s, string qc, vector<int>& qi) {
+    int maximumLengthSubstring(string s) {
         int n = s.size();
-        set<Run> runs;
-        multiset<int> lens;
+        vector<int> cnt(26, 0);
+        int maxLen = 0;
+        int left = 0;
 
-        // Build initial runs
-        int i = 0;
-        while (i < n) {
-            int j = i;
-            while (j + 1 < n && s[j + 1] == s[i]) ++j;
-            runs.insert({i, j, s[i]});
-            lens.insert(j - i + 1);
-            i = j + 1;
+        for (int right = 0; right < n; ++right) {
+            cnt[s[right] - 'a']++;
+
+            while (cnt[s[right] - 'a'] > 2) {
+                cnt[s[left] - 'a']--;
+                left++;
+            }
+
+            maxLen = max(maxLen, right - left + 1);
         }
-
-        vector<int> ans;
-        for (int q = 0; q < qi.size(); ++q) {
-            int idx = qi[q];
-            char newch = qc[q];
-            auto it = runs.upper_bound(Run{idx, 0, 0});
-            if (it == runs.begin()) continue; // idx < 0 not possible
-            --it;
-
-            if (s[idx] == newch) {
-                ans.push_back(*lens.rbegin());
-                continue;
-            }
-
-            Run run = *it;
-            runs.erase(it);
-            lens.erase(lens.find(run.r - run.l + 1));
-            // Split left [run.l, idx-1], middle [idx,idx], right [idx+1, run.r]
-            if (run.l < idx)
-                runs.insert({run.l, idx - 1, run.c}),
-                lens.insert(idx - run.l);
-            if (idx < run.r)
-                runs.insert({idx + 1, run.r, run.c}),
-                lens.insert(run.r - idx);
-
-            // Now, insert new run [idx,idx,newch], later try to merge with left/right
-            Run cur = {idx, idx, newch};
-
-            // Attempt merge left
-            if (cur.l > 0) {
-                auto itl = runs.lower_bound(Run{cur.l - 1, 0, 0});
-                if (itl != runs.begin()) --itl;
-                else itl = runs.end();
-                if (itl != runs.end() && itl->r == idx - 1 && itl->c == cur.c) {
-                    lens.erase(lens.find(itl->r - itl->l + 1));
-                    cur.l = itl->l;
-                    runs.erase(itl);
-                }
-            }
-            // Attempt merge right
-            auto itr = runs.lower_bound(Run{cur.r + 1, 0, 0});
-            if (itr != runs.end() && itr->l == idx + 1 && itr->c == cur.c) {
-                lens.erase(lens.find(itr->r - itr->l + 1));
-                cur.r = itr->r;
-                runs.erase(itr);
-            }
-
-            lens.insert(cur.r - cur.l + 1);
-            runs.insert(cur);
-
-            s[idx] = newch; // mark update
-
-            ans.push_back(*lens.rbegin());
-        }
-        return ans;
+        return maxLen;
     }
 };
 ```
@@ -145,70 +75,33 @@ public:
 
 ## 5. **Example Walkthrough**
 
-**Example 1:**  
-`s = "babacc"`, `queryCharacters = "bcb"`, `queryIndices = [1,3,3]`
+**Example:** `s = "bcbbbcba"`
 
-Let's walk through:
+Let’s step through the algorithm:
 
-### **Initial runs:**
-- [0,0,'b']
-- [1,1,'a']
-- [2,2,'b']
-- [3,4,'a']
-- [5,5,'c']
+```
+left=0, right moves from 0 to 7.
+cnt:  Tracks counts of chars in window.
+maxLen: Tracks max valid window length.
 
-### **First Query:** idx=1, ch='b':
+- right=0 ('b'): cnt['b']=1, valid, maxLen=1
+- right=1 ('c'): cnt['c']=1, valid, maxLen=2
+- right=2 ('b'): cnt['b']=2, valid, maxLen=3
+- right=3 ('b'): cnt['b']=3, (too many 'b'), so increment left:
+    - left=1 (decrement 'b'), cnt['b']=2, valid again
+- right=4 ('b'): cnt['b']=3, again too many 'b', move left to 2-3:
+    - left=2, cnt['c']=0, still cnt['b']=3 (still too high)
+    - left=3, cnt['b']=2, valid
+- right=5 ('c'): cnt['c']=1, valid
+- right=6 ('b'): cnt['b']=3, too many again, move left to 4-5:
+    - left=4, cnt['b']=2, valid
+- right=7 ('a'): cnt['a']=1, valid, window is [4,7] ("bcba"), length=4
 
-Old string: `b a b a a c`  
-Set s[1]='b' → `b b b a a c`
+Throughout, the max valid length observed is **4**.
 
-Relevant runs:
-- [0,0,'b']
-- **[1,1,'a']** (split, merged)
-- [2,2,'b']
-
-After:
-- Merge [0,0,'b'], [1,1,'b'], [2,2,'b'] → [0,2,'b']
-- Others: [3,4,'a'], [5,5,'c']
-- Lengths: 3,2,1  
-`max=3` (ans[0]=3)
-
-### **Second Query:** idx=3, ch='c':
-
-String: `b b b a a c`  
-Set s[3]='c' → `b b b c a c`
-
-Runs:
-- [3,4,'a'] splits to [4,4,'a']
-- Insert [3,3,'c']
-- merge [3,3,'c'] and [5,5,'c'] → [3,3], [5,5]; not adjacent, but note merge only adjacents.
-
-No merging.  
-Runs: [0,2,'b'], [3,3,'c'], [4,4,'a'], [5,5,'c']  
-Lengths: 3,1,1,1  
-`max=3` (ans[1]=3)
-
-### **Third Query:** idx=3, ch='b':
-
-String: `b b b c a c`  
-Set s[3]='b' → `b b b b a c`
-
-Runs:  
-- [0,2,'b'] + [3,3,'b'] (new) → [0,3,'b']
-- Others: [4,4,'a'], [5,5,'c']
-- Lengths: 4,1,1  
-`max=4` (ans[2]=4)
-
-Final output: `[3, 3, 4]`
+```
+**Final output: `4`**
 
 ---
 
-## **Summary**
-
-- Efficiently manage "runs" (intervals of identical characters) in BST/set after every update.
-- After each update, at most three runs are involved: possibly split left, right, and the position itself.
-- After adjust/merge, `max(len)` is available at all times.
-
----
-
-Let me know if you need any clarifications!
+Let me know if you'd like explanations for other approaches or languages!
