@@ -1,83 +1,71 @@
-Let's go through each of your requirements:
-
----
-
 ## 1. **Short Summary**
 
-Given an array of stones, in each round you split them into two non-empty parts. Bob throws away the part with the **larger sum** (or if equal, you choose), and your score increases by the sum of the remaining part. The process repeats with the remaining stones until only one is left. Return the maximum possible score you can acquire.
+Given an array `nums` and integer `k`, we need to find the **largest integer** in `nums` that appears in **exactly one subarray** of size `k`. If no such integer exists, return `-1`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - 1 ≤ stoneValue.length ≤ 500
-  - 1 ≤ stoneValue[i] ≤ 1,000,000
-
+- `1 ≤ nums.length ≤ 50` (small size; O(N²) is OK)
+- `0 ≤ nums[i] ≤ 50` (very small values, so we can use small arrays and counting)
+- `1 ≤ k ≤ nums.length`
 - **Edge Cases:**
-  - If only one stone, your score is 0 (no possible splits).
-  - If all values are the same, there are often multiple valid splits with equal sums.
-  - You must consider optimal splits at every step, as greedy doesn't work.
+  - If every integer appears in 0 or more than 1 subarray, answer is `-1`.
+  - Duplicate numbers must be handled.
+  - If `k == nums.length`, only one subarray (the entire array).
+  - If `k == 1`, each element forms a subarray. If an integer occurs more than once, it appears in multiple subarrays.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-This is a classic DP problem over intervals.
+Because all constraints are small, we can brute force:
 
-- **Key observations:**
-  - For every subarray `[i, j]`, we store the max score that Alice can obtain, i.e., `dp[i][j]`.
-  - For every possible division between `i` and `j`, we check the sum of the left and right halves.
-  - If the sum of the left half ≤ right, Bob removes the right half and Alice gets `sum(left)` plus the best from the left half: `sum(left) + dp[i][k]`.
-  - If the right sum < left, Alice gets `sum(right)` plus best from the right: `sum(right) + dp[k+1][j]`.
-  - If both are equal, Alice can choose the better of the two options.
+1. For each subarray of size `k` (there are `n - k + 1`), count which numbers appear in that subarray.
+2. For each number `x`, keep a **set of subarray IDs (indices)** where it appears.
+3. After iterating, for each number that ever appeared, if its set of subarrays has length == 1, add it to a list of candidates.
+4. Return the **maximum** of those candidates; if none, return `-1`.
 
-**Steps:**
+**Implementation Notes:**  
+- Since `0 <= nums[i] <= 50`, we can use an array of size 51 to track sets of subarray IDs.
+- For counting sets unambiguously, we can use a 2D array (`present[num][sub_idx] = 1/0`) or use `std::set<int>` for each number.
 
-1. Build a prefix sum array for O(1) range sums.
-2. Use DP: `dp[i][j] = max score Alice can get from subarray [i, j]`.
-3. For every split point, consider the described options and maximize the result.
-4. Final answer is `dp[0][n-1]`.
-
-- Time Complexity: O(N³) (naive), but with optimized transitions, can be brought down to O(N²).
+**Time Complexity:** O(n²) (For each subarray (O(n)), scan k elements (O(k)), total O(nk) <= 50*50 = 2500)
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
+#include <set>
 #include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int stoneGameV(vector<int>& stoneValue) {
-        int n = stoneValue.size();
-        vector<int> prefix(n + 1, 0);
-        for (int i = 0; i < n; ++i)
-            prefix[i + 1] = prefix[i] + stoneValue[i];
+    int findLargestAlmostMissing(vector<int>& nums, int k) {
+        // 0 <= nums[i] <= 50, so use array of sets
+        vector< set<int> > appear_in(51); // appear_in[num] = set of subarray indices with this num
         
-        // dp[i][j]: max score for subarray [i, j]
-        vector<vector<int>> dp(n, vector<int>(n, 0));
-        
-        for (int len = 2; len <= n; ++len) { // length of subarray
-            for (int i = 0; i + len <= n; ++i) { // start index
-                int j = i + len - 1; // end index
-                // Try all possible first splits
-                for (int k = i; k < j; ++k) {
-                    int left_sum = prefix[k + 1] - prefix[i];
-                    int right_sum = prefix[j + 1] - prefix[k + 1];
-                    if (left_sum < right_sum)
-                        dp[i][j] = max(dp[i][j], left_sum + dp[i][k]);
-                    else if (left_sum > right_sum)
-                        dp[i][j] = max(dp[i][j], right_sum + dp[k + 1][j]);
-                    else // equal
-                        dp[i][j] = max(dp[i][j], left_sum + max(dp[i][k], dp[k + 1][j]));
+        int n = nums.size();
+        for (int start = 0; start <= n - k; ++start) {
+            // For each subarray nums[start .. start+k-1]
+            set<int> already; // avoid double-counting the same number in this subarray
+            for (int i = start; i < start + k; ++i) {
+                int num = nums[i];
+                if (!already.count(num)) {
+                    appear_in[num].insert(start);
+                    already.insert(num);
                 }
             }
         }
-        return dp[0][n - 1];
+        int ans = -1;
+        for (int num = 0; num <= 50; ++num) {
+            if (appear_in[num].size() == 1)
+                ans = max(ans, num);
+        }
+        return ans;
     }
 };
 ```
@@ -86,33 +74,38 @@ public:
 
 ## 5. **Example Explanation**
 
-**Example 1:**  
-Input: `[6, 2, 3, 4, 5, 5]`  
-Output: `18`
+Let's explain **Example 1**:  
+`nums = [3,9,2,1,7], k = 3`
 
-**Let's see how we can get 18:**
+All subarrays of size 3 are:  
+- [3, 9, 2] (`idx 0`)
+- [9, 2, 1] (`idx 1`)
+- [2, 1, 7] (`idx 2`)
 
-- Split `[6,2,3|4,5,5]` (sums: 11, 14) → Bob throws away right half, Alice gets `11`.
-- Now Alice has `[6,2,3]`:
-  - Split `[6|2,3]` (sums: 6, 5) → Bob removes left, Alice gets `5` (total now 16).
-- Now Alice has `[2,3]`:
-  - Split `[2|3]` → Bob removes right, Alice gets `2` (total now 18).
-- Finally, only one stone left. Done.
+Build map of number → set of subarrays (indices) it appears in:
+- 3: {0} (in [3, 9, 2])
+- 9: {0,1}
+- 2: {0,1,2}
+- 1: {1,2}
+- 7: {2}
 
-This is just one optimal sequence; the DP ensures the maximum is considered at each split.
-
----
-
-**Summary Table:**
-
-| Step                        | Row(s)         | Score Gained | Total Score |
-|-----------------------------|----------------|--------------|-------------|
-| Initial                     | [6 2 3 4 5 5]  | -            | 0           |
-| 1st split: [6 2 3] / [4 5 5]| throw [4 5 5]  | 11           | 11          |
-| 2nd split: [6] / [2 3]      | throw [6]      | 5            | 16          |
-| 3rd split: [2] / [3]        | throw [3]      | 2            | 18          |
-| Only one left               |                |              | 18          |
+Now, numbers appearing in **exactly one** subarray: **3 (subarray 0), 7 (subarray 2)**
+Pick the largest: **7**
 
 ---
 
-Let me know if you need any more details!
+**Summary Table for Example 1:**
+
+| Number | Appears in subarrays | Count |
+|--------|---------------------|-------|
+| 3      | 0                   | 1     |
+| 7      | 2                   | 1     |
+| 9      | 0,1                 | 2     |
+| 2      | 0,1,2               | 3     |
+| 1      | 1,2                 | 2     |
+
+Return **7**.
+
+---
+
+**Done!**
