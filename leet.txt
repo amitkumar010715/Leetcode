@@ -1,71 +1,68 @@
+Let's address your requirements step by step!
+
+---
+
 ## 1. **Short Summary**
 
-Given an array `nums` and integer `k`, we need to find the **largest integer** in `nums` that appears in **exactly one subarray** of size `k`. If no such integer exists, return `-1`.
+Given a 1-indexed array of distinct integers (`nums`), distribute its elements between two arrays (`arr1` and `arr2`) following a fixed rule:  
+- nums[1] → arr1  
+- nums[2] → arr2  
+- For each subsequent nums[i]:  
+  - If arr1's last element > arr2's last, append nums[i] to arr1; else append to arr2.  
+Return the concatenation: `arr1` followed by `arr2`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 ≤ nums.length ≤ 50` (small size; O(N²) is OK)
-- `0 ≤ nums[i] ≤ 50` (very small values, so we can use small arrays and counting)
-- `1 ≤ k ≤ nums.length`
+- **Constraints:**
+  - `3 <= n <= 50` (Small, for O(n) algorithms)
+  - `1 <= nums[i] <= 100`
+  - All `nums[i]` are distinct
+
 - **Edge Cases:**
-  - If every integer appears in 0 or more than 1 subarray, answer is `-1`.
-  - Duplicate numbers must be handled.
-  - If `k == nums.length`, only one subarray (the entire array).
-  - If `k == 1`, each element forms a subarray. If an integer occurs more than once, it appears in multiple subarrays.
+  - Minimum `n = 3` (cannot have fewer, so always at least [x, y, z])
+  - The order of concatenation is **always** arr1 + arr2
+  - arr1 and arr2 both will always have at least one element
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Because all constraints are small, we can brute force:
+This process is strictly defined and direct:
 
-1. For each subarray of size `k` (there are `n - k + 1`), count which numbers appear in that subarray.
-2. For each number `x`, keep a **set of subarray IDs (indices)** where it appears.
-3. After iterating, for each number that ever appeared, if its set of subarrays has length == 1, add it to a list of candidates.
-4. Return the **maximum** of those candidates; if none, return `-1`.
+1. Initialize arr1 with nums[0] and arr2 with nums[1] (note: zero-indexed in C++).
+2. For each `i` from 2 to n-1 (i.e., nums[2], nums[3], ...):
+    - If arr1.back() > arr2.back(), arr1.push_back(nums[i]);
+    - Else, arr2.push_back(nums[i]);
+3. Concatenate arr1 + arr2 as the result.
 
-**Implementation Notes:**  
-- Since `0 <= nums[i] <= 50`, we can use an array of size 51 to track sets of subarray IDs.
-- For counting sets unambiguously, we can use a 2D array (`present[num][sub_idx] = 1/0`) or use `std::set<int>` for each number.
-
-**Time Complexity:** O(n²) (For each subarray (O(n)), scan k elements (O(k)), total O(nk) <= 50*50 = 2500)
+**This is a simple O(n) algorithm with two lists.**
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <set>
-#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int findLargestAlmostMissing(vector<int>& nums, int k) {
-        // 0 <= nums[i] <= 50, so use array of sets
-        vector< set<int> > appear_in(51); // appear_in[num] = set of subarray indices with this num
-        
+    vector<int> resultArray(vector<int>& nums) {
+        vector<int> arr1, arr2;
         int n = nums.size();
-        for (int start = 0; start <= n - k; ++start) {
-            // For each subarray nums[start .. start+k-1]
-            set<int> already; // avoid double-counting the same number in this subarray
-            for (int i = start; i < start + k; ++i) {
-                int num = nums[i];
-                if (!already.count(num)) {
-                    appear_in[num].insert(start);
-                    already.insert(num);
-                }
+        arr1.push_back(nums[0]);
+        arr2.push_back(nums[1]);
+        for (int i = 2; i < n; ++i) {
+            if (arr1.back() > arr2.back()) {
+                arr1.push_back(nums[i]);
+            } else {
+                arr2.push_back(nums[i]);
             }
         }
-        int ans = -1;
-        for (int num = 0; num <= 50; ++num) {
-            if (appear_in[num].size() == 1)
-                ans = max(ans, num);
-        }
-        return ans;
+        arr1.insert(arr1.end(), arr2.begin(), arr2.end());
+        return arr1;
     }
 };
 ```
@@ -74,38 +71,20 @@ public:
 
 ## 5. **Example Explanation**
 
-Let's explain **Example 1**:  
-`nums = [3,9,2,1,7], k = 3`
+**For `nums = [5, 4, 3, 8]`:**
 
-All subarrays of size 3 are:  
-- [3, 9, 2] (`idx 0`)
-- [9, 2, 1] (`idx 1`)
-- [2, 1, 7] (`idx 2`)
-
-Build map of number → set of subarrays (indices) it appears in:
-- 3: {0} (in [3, 9, 2])
-- 9: {0,1}
-- 2: {0,1,2}
-- 1: {1,2}
-- 7: {2}
-
-Now, numbers appearing in **exactly one** subarray: **3 (subarray 0), 7 (subarray 2)**
-Pick the largest: **7**
+- Initial: arr1 = [], arr2 = []
+- Step 1 (`nums[0]=5`): arr1 = [5]
+- Step 2 (`nums[1]=4`): arr2 = [4]
+- Step 3 (`nums[2]=3`):
+    - arr1.back()=5 > arr2.back()=4 → arr1 gets 3
+    - arr1 = [5, 3], arr2 = [4]
+- Step 4 (`nums[3]=8`):
+    - arr1.back()=3 < arr2.back()=4 → arr2 gets 8
+    - arr1 = [5, 3], arr2 = [4, 8]
+- Result: [5, 3] + [4, 8] = **[5, 3, 4, 8]**
 
 ---
 
-**Summary Table for Example 1:**
-
-| Number | Appears in subarrays | Count |
-|--------|---------------------|-------|
-| 3      | 0                   | 1     |
-| 7      | 2                   | 1     |
-| 9      | 0,1                 | 2     |
-| 2      | 0,1,2               | 3     |
-| 1      | 1,2                 | 2     |
-
-Return **7**.
-
----
-
-**Done!**
+**Summary:**  
+This problem is a direct simulation according to strict rules. The optimal O(n) approach is enough. The code is straightforward and no complex edge cases exist beyond the provided behavior.
