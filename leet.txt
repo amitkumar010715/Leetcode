@@ -1,192 +1,77 @@
-Sure! Let’s address your requirements step by step.
+Let's proceed step-by-step.
 
 ---
 
-## 1. **Short Summary**
+### 1. **Short Summary**
 
-Given an array of coin denominations (`coins`), each coin available in infinite quantity, **but you cannot mix denominations in a sum**. Find the k-th smallest *distinct* positive amount you can make with these constraints.
+We are given an integer `n`. We need to:
+- Find the sum of its digits (**digit sum**).
+- Find the product of its digits (**digit product**).
+- Sum the above two values.
+- Check if `n` is divisible by this total.
 
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints:**
-  - `1 <= coins.length <= 15`
-  - `1 <= coins[i] <= 25` and all `coins[i]` are distinct
-  - `1 <= k <= 2 * 10^9` (very large k!)
-
-- **Edge cases:**
-  - Denominations that are multiples of each other (e.g., [2,4,8])
-  - Need to **avoid duplicate counts** (e.g., 6 can be made by 3 and 6)
-  - Only **multiples of a single denomination** allowed per amount
-  - k can be huge, so naive simulation would TLE
+Return `true` if divisible, else `false`.
 
 ---
 
-## 3. **Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-### **Key observations**
-
-- Any amount in the answer is of form: `n * c` for integer n ≥ 1 and some coin c.
-- For each c, the possible amounts: {c, 2c, 3c, ...}
-- **You cannot form, e.g., 5 + 6 = 11 via 5, then 6:** Only multiples of a single coin at a time!
-
-### **Problem reduced:**
-- List all positive multiples of all coins, deduplicated and sorted, output the k-th smallest.
-
-But as k could be up to 2e9, **we cannot generate all the numbers up to k.**
-
-### **How to count ≤ X "allowed amounts"?**
-
-Let S = set of coins.
-
-- For a given X, every amount ≤ X that's a positive multiple of any coin.
-- For each coin c: floor(X / c) numbers up to X.
-- BUT, need to **avoid overcounting** numbers that are multiples of multiple coins (e.g., least common multiples).
-
-#### **Thus: Inclusion-Exclusion Principle!**
-
-For all non-empty subsets T of coins,
-- Let lcm_T = LCM of all coins in T
-- sign = +1 if subset size is odd, -1 if even
-- for each subset T (not empty): add sign * floor(X / lcm_T) to total
-
-Total count up to X is:
-
-\[
-\text{count}(X) = \sum_{\text{non-empty } T\subset S} (-1)^{|T|+1} \left\lfloor \frac{X}{\text{lcm}(T)} \right\rfloor
-\]
-
-Why correct? It counts all numbers divisible by at least one coin, deduplicated.
-
-### **Algorithm:**
-
-1. **Binary Search**: Let’s find minimal X such that `count(X) ≥ k`.
-    - left = 1, right = k * min(coins)
-    - On each mid, compute count(mid).
-2. When left == right, this is the k-th amount.
-
-**Count per query:** For each of the `2^N - 1` nonempty subsets, O(1) work per subset (N≤15), so ≤ 32,000 iterations per query, acceptable.
+- **Constraints**:  
+  - `1 <= n <= 1,000,000`
+- **Edge Cases**:
+  - **Single-digit n**: Product is the digit itself; sum is the digit; total is `2 * n`.
+  - **Digit 0**: Any number with a `0` digit makes the product `0`, so product + sum = sum. Must handle `0` properly.
+  - **Dividing by zero**: By constraints, n≥1, so sum+prod≥1, division safe.
+  - **Maximum input**: Efficient for 7-digit numbers, no special handling needed.
 
 ---
 
-## 4. **C++ Solution**
+### 3. **Optimal Algorithm**
+
+- Initialize `digit_sum = 0` and `digit_product = 1`.
+- Iterate over the digits of `n`:
+  - Add each digit to `digit_sum`.
+  - Multiply `digit_product` by the digit.
+- Get `total = digit_sum + digit_product`.
+- Check if `n % total == 0` and return accordingly.
+
+**Complexity:**  
+Time: O(log₁₀n) → Up to 7 digits, so constant time.
+
+---
+
+### 4. **Clean C++ Solution**
 
 ```cpp
-#include <bits/stdc++.h>
-using namespace std;
-
-typedef long long ll;
-
 class Solution {
 public:
-
-    ll count_leq(ll x, const vector<int>& coins) {
-        int n = coins.size();
-        ll ans = 0;
-        // Inclusion-Exclusion: For each non-empty subset
-        for (int mask = 1; mask < (1<<n); ++mask) {
-            ll lcm = 1;
-            int bits = 0;
-            bool over = false;
-            for (int i = 0; i < n; ++i) {
-                if (mask & (1<<i)) {
-                    lcm = lcm * coins[i] / gcd(lcm, (ll)coins[i]);
-                    // If lcm exceeds x, further divisions will be zero
-                    if (lcm > x) { over = true; break; }
-                    bits++;
-                }
-            }
-            if (over) continue;
-            ll add = x / lcm;
-            if (bits % 2 == 1) ans += add;
-            else ans -= add;
+    bool isDivisible(int n) {
+        int digit_sum = 0;
+        int digit_product = 1;
+        int temp = n;
+        while (temp > 0) {
+            int digit = temp % 10;
+            digit_sum += digit;
+            digit_product *= digit;
+            temp /= 10;
         }
-        return ans;
-    }
-    
-    int findKthSmallest(vector<int>& coins, int k) {
-        ll left = 1, right = (ll)k * (*min_element(coins.begin(), coins.end()));
-        while (left < right) {
-            ll mid = left + (right-left) / 2;
-            if (count_leq(mid, coins) >= k) {
-                right = mid;
-            } else {
-                left = mid+1;
-            }
-        }
-        return (int)left;
-    }
-    
-    // Helper function for GCD
-    ll gcd(ll a, ll b) {
-        return b == 0 ? a : gcd(b, a % b);
+        int total = digit_sum + digit_product;
+        return n % total == 0;
     }
 };
 ```
 
 ---
 
-## 5. **Explain with Example**
+### 5. **Example Explanation (`n = 99`)**
 
-Let’s consider **Example 2:**  
-`coins = [5,2], k = 7`
-
-**First, see which numbers can be formed:**
-
-- 2: 2, 4, 6, 8, 10, 12, 14, ...
-- 5: 5, 10, 15, 20, ...
-
-But **no mixing**.  
-So, the merged sorted sequence without duplicates:  
-2, 4, 5, 6, 8, 10, 12, 14, 15, ...
-
-Let’s enumerate, skipping duplicates:
-1. 2   (2x1)
-2. 4   (2x2)
-3. 5   (5x1)
-4. 6   (2x3)
-5. 8   (2x4)
-6. 10  (2x5 / 5x2, but only counted once)
-7. 12  (2x6)
-=> **So, 7th:** 12
-
-**How does the algorithm work?**
-
-- Run binary search between 1 and 14 (k*min=2*7).
-- For each mid, compute how many numbers ≤ mid.
-
-E.g., For mid=12:
-
-- For singleton subsets: 2, 5
-  - [2]: floor(12/2) = 6
-  - [5]: floor(12/5) = 2
-- For size-2 subset (both): lcm(2,5)=10, floor(12/10)=1
-
-so, Inclusion-Exclusion:
-- +6  (from [2])
-- +2  (from [5])
-- -1  (from [2,5])
-
-Total = 6 + 2 - 1 = **7**  
-So 12 is the 7th amount.
+- Digits: 9 and 9
+- Digit Sum: 9 + 9 = **18**
+- Digit Product: 9 × 9 = **81**
+- Total: 18 + 81 = **99**
+- Divisibility: 99 % 99 == 0 ⇒ **true**
 
 ---
 
-### **Summary Table**
-
-| Step | Description                                       | Value           |
-|------|---------------------------------------------------|-----------------|
-|  1   | Possible amounts (sorted, dedup)                  | 2,4,5,6,8,10,12 |
-|  2   | At 7, answer is                                   | 12              |
-|  3   | Algorithm finds where cumulative count ≥ 7        | 12              |
-
----
-
-## **Summary**
-
-- Use inclusion-exclusion to count the number of positive multiples of any denominations up to X.
-- Use binary search to find the k-th such number.
-- Efficient, O(32,000) per check for up to 2e9.
-
-Let me know if you need further clarifications or a Python conversion!
+**In summary:**  
+Extract digits. Compute their sum and product. Add together. If `n` divides evenly by this sum+product, return true; else, false.
