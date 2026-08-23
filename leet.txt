@@ -1,77 +1,139 @@
-Let's proceed step-by-step.
+Let's solve **LeetCode: Sum Game** step by step.
 
 ---
 
-### 1. **Short Summary**
+## 1. Short Summary
 
-We are given an integer `n`. We need to:
-- Find the sum of its digits (**digit sum**).
-- Find the product of its digits (**digit product**).
-- Sum the above two values.
-- Check if `n` is divisible by this total.
-
-Return `true` if divisible, else `false`.
+Alice and Bob alternate replacing '?' in a string of digits (with even length). Alice goes first. When all '?' are replaced, if the sum of the digits in the first half equals the sum of the second half, **Bob wins**; otherwise, **Alice wins**. Both play optimally. Return whether Alice can guarantee a win.
 
 ---
 
-### 2. **Constraints & Edge Cases**
+## 2. Constraints & Edge Cases
 
-- **Constraints**:  
-  - `1 <= n <= 1,000,000`
-- **Edge Cases**:
-  - **Single-digit n**: Product is the digit itself; sum is the digit; total is `2 * n`.
-  - **Digit 0**: Any number with a `0` digit makes the product `0`, so product + sum = sum. Must handle `0` properly.
-  - **Dividing by zero**: By constraints, n≥1, so sum+prod≥1, division safe.
-  - **Maximum input**: Efficient for 7-digit numbers, no special handling needed.
-
----
-
-### 3. **Optimal Algorithm**
-
-- Initialize `digit_sum = 0` and `digit_product = 1`.
-- Iterate over the digits of `n`:
-  - Add each digit to `digit_sum`.
-  - Multiply `digit_product` by the digit.
-- Get `total = digit_sum + digit_product`.
-- Check if `n % total == 0` and return accordingly.
-
-**Complexity:**  
-Time: O(log₁₀n) → Up to 7 digits, so constant time.
+- **Constraints:**
+    - `2 <= num.length <= 1e5`
+    - `num.length` is even.
+    - `num` contains only digits and `?`.
+- **Edge Cases:**
+    - No `?` in string: Immediate check of digit sums.
+    - All `?` in one half: Alice can force win.
+    - All `?` paired evenly: May end tied.
+    - Odd number of '?': Alice has last move.
+    - Even number of '?': Bob has last move.
 
 ---
 
-### 4. **Clean C++ Solution**
+## 3. Optimal Algorithm
+
+We note:
+- At each turn, a '?' can be replaced with any digit 0–9, with both players playing optimally to reach their win condition.
+
+Let:
+- `n` = length of num (even).
+- Split into left half (indices [`0`, `n/2-1`]) and right half (indices [`n/2`, `n-1`]).
+
+**Game Theory Key:**
+- Each '?' gives the player at the move the ability to strongly influence the corresponding sum for its half.
+
+**Algorithm Steps:**
+
+1. Count total sum of known digits in each half.
+2. Count number of `?` in each half: `left_q`, `right_q`.
+3. Since number of moves is fixed:
+    - Total '?' is even: Bob makes the final move.
+    - Total '?' is odd: Alice makes the final move.
+4. At every '?' slot, the _maximum_ "leverage" is if the player puts 9 vs 0 in their half.
+
+5. **Intuition/Math:**
+    - Each unmatched `?` in left half can be assigned 0–9, with net *maximum* half-sum swing for Alice if she goes first for more `?`.
+    - Crucially, if the initial difference in known digits can be balanced by the best possible assignments of `?` (taking turns), then Bob can guarantee a tie.
+    - Otherwise, Alice can unbalance.
+
+**Formal:**
+- Let sum_left, sum_right = sum of digits in each half.
+- ql, qr = number of '?' in each half.
+- Let total_q = ql + qr.
+- The maximum difference Alice can force is determined by the difference in number of `?` in each half (since Alice and Bob alternate moving; for odd difference Alice acts more).
+
+Let:
+- diff = sum_left – sum_right
+- delta_q = ql – qr
+
+Maximum possible effect:
+- The "extra power" is `(delta_q/2) * 9`, since in expectation, each extra '?' in a half over the other gives Alice the opportunity to skew the sum by up to 9 per extra.
+    - If delta_q is odd, it's as if Alice gets an extra chance.
+
+Check if it's **possible** for Bob to make sums equal:
+- If `2 * diff == (qr - ql) * 9`, Bob can tie (make sums equal).
+- Otherwise, Alice can force inequality.
+
+### Implementation Steps
+
+- Count known digits: sum_left, sum_right (ignoring '?')
+- Count ql, qr
+- Evaluate: `2 * (sum_left - sum_right) == (qr - ql) * 9` ? Bob wins : Alice wins
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 class Solution {
 public:
-    bool isDivisible(int n) {
-        int digit_sum = 0;
-        int digit_product = 1;
-        int temp = n;
-        while (temp > 0) {
-            int digit = temp % 10;
-            digit_sum += digit;
-            digit_product *= digit;
-            temp /= 10;
+    bool sumGame(string num) {
+        int n = num.size();
+        int sumLeft = 0, sumRight = 0;
+        int leftQ = 0, rightQ = 0;
+        for (int i = 0; i < n; ++i) {
+            if (i < n/2) {
+                if (num[i] == '?') leftQ++;
+                else sumLeft += num[i] - '0';
+            } else {
+                if (num[i] == '?') rightQ++;
+                else sumRight += num[i] - '0';
+            }
         }
-        int total = digit_sum + digit_product;
-        return n % total == 0;
+        // If the difference in sum can be made up with difference in question marks:
+        // Each unmatched '?' pair gives possible delta 9
+        // If even number of '?', Bob can force a tie if possible
+        // If not, Alice can force win
+        int diff = sumLeft - sumRight;
+        int deltaQ = leftQ - rightQ;
+        // For the sums to be possibly equal at the end:
+        // 2*diff == (rightQ - leftQ) * 9
+        if ((2 * diff) == (rightQ - leftQ) * 9) 
+            return false; // Bob wins
+        else
+            return true; // Alice wins
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation (`n = 99`)**
+## 5. Example Explained
 
-- Digits: 9 and 9
-- Digit Sum: 9 + 9 = **18**
-- Digit Product: 9 × 9 = **81**
-- Total: 18 + 81 = **99**
-- Divisibility: 99 % 99 == 0 ⇒ **true**
+**Example:** `num = "25??"`
+
+- Length 4, left: '2', '5'; right: '?', '?'
+- sumLeft = 2 + 5 = 7
+- sumRight = 0 (`?` ignored)
+- leftQ = 0, rightQ = 2
+- diff = 7 - 0 = 7
+- rightQ - leftQ = 2
+
+Plug into condition:
+- `2 * 7 = 14`
+- `(2) * 9 = 18` (rightQ-leftQ)*9
+- **14 != 18** (not equal)
+
+=> Alice wins, i.e. it is impossible for Bob to make sums equal.
+
+If the values were such that Bob could pick digits for `?` to equalize left and right side, he would win. Here, Alice can prevent that.
 
 ---
 
-**In summary:**  
-Extract digits. Compute their sum and product. Add together. If `n` divides evenly by this sum+product, return true; else, false.
+## Final Notes
+
+- The key insight is the maximum swing per unpaired `?` and who gets more control (via an odd difference of `?`). The equality check ensures optimal play.
+- Algorithm is **O(n)**—just a single pass to count sums and question marks.
