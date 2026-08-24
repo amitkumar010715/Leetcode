@@ -1,139 +1,114 @@
-Let's solve **LeetCode: Sum Game** step by step.
+Let's break down the problem as per your requirements:
 
 ---
 
-## 1. Short Summary
+## 1. **Short Summary**
 
-Alice and Bob alternate replacing '?' in a string of digits (with even length). Alice goes first. When all '?' are replaced, if the sum of the digits in the first half equals the sum of the second half, **Bob wins**; otherwise, **Alice wins**. Both play optimally. Return whether Alice can guarantee a win.
+Given an array of stones, Alice and Bob take turns (Alice first). In each move, a player can remove at least two stones from the left, sum their values, add the sum to their score, and put a new stone with that value at the left. The game continues until only one stone remains. The goal is to **compute Alice's score minus Bob's score**, assuming **both play optimally**.
 
 ---
 
-## 2. Constraints & Edge Cases
+## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-    - `2 <= num.length <= 1e5`
-    - `num.length` is even.
-    - `num` contains only digits and `?`.
+  - \(2 \leq n \leq 10^5\)
+  - Each stone value: \([-10^4, 10^4]\)
 - **Edge Cases:**
-    - No `?` in string: Immediate check of digit sums.
-    - All `?` in one half: Alice can force win.
-    - All `?` paired evenly: May end tied.
-    - Odd number of '?': Alice has last move.
-    - Even number of '?': Bob has last move.
+  - All stones negative or positive.
+  - Only two stones.
+  - Remove all stones on one turn.
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-We note:
-- At each turn, a '?' can be replaced with any digit 0–9, with both players playing optimally to reach their win condition.
+#### **Key Observations**
 
-Let:
-- `n` = length of num (even).
-- Split into left half (indices [`0`, `n/2-1`]) and right half (indices [`n/2`, `n-1`]).
+- **Prefix sums**: At each move, you can only remove the first \(x\) stones (\(x \geq 2\)), meaning possible options are taking prefix sums from index 2 to \(n\).
+- **State transitions:** Each move can be understood as: take prefix sum, shrink array, add new stone as that sum.
+- **DP approach:** Let `dp[i]` be the *maximum score difference* the current player can get if the current array starts at prefix `i`.
 
-**Game Theory Key:**
-- Each '?' gives the player at the move the ability to strongly influence the corresponding sum for its half.
+#### **How to Build the Solution**
 
-**Algorithm Steps:**
+- **Suffix DP:** 
+  - Let `pref[i]` be the sum of the first `i` stones.
+  - Start from the **back**: At each position (from `n-1` to `2`), consider if picking the current prefix sum as the new stone will benefit by simulating the two-player optimal difference choices.
 
-1. Count total sum of known digits in each half.
-2. Count number of `?` in each half: `left_q`, `right_q`.
-3. Since number of moves is fixed:
-    - Total '?' is even: Bob makes the final move.
-    - Total '?' is odd: Alice makes the final move.
-4. At every '?' slot, the _maximum_ "leverage" is if the player puts 9 vs 0 in their half.
+- **DP State:**
+  - \( dp[i] = \max(\text{pref}[i] - dp[i + 1], dp[i + 1]) \)
+  - But actually, **we only need to keep track of the "best difference" if we started with a single sum at position \(i\)**.
+  - At each step: `score = prefix_sum[i] - best_so_far` (where `best_so_far` is the best answer if the current array starts from position \(i\))
+  - We start from the end backwards and update the answer as we go.
 
-5. **Intuition/Math:**
-    - Each unmatched `?` in left half can be assigned 0–9, with net *maximum* half-sum swing for Alice if she goes first for more `?`.
-    - Crucially, if the initial difference in known digits can be balanced by the best possible assignments of `?` (taking turns), then Bob can guarantee a tie.
-    - Otherwise, Alice can unbalance.
+#### **Algorithm Steps**
+1. Compute all prefix sums: `prefix_sum[i] = stones[0] + ... + stones[i]`
+2. From the second last stone to the second stone, maintain a variable `best` recording the best answer so far.
+3. For each index, update `best = max(best, prefix_sum[i] - best)`
+4. The answer will be `best` (starting with Alice).
 
-**Formal:**
-- Let sum_left, sum_right = sum of digits in each half.
-- ql, qr = number of '?' in each half.
-- Let total_q = ql + qr.
-- The maximum difference Alice can force is determined by the difference in number of `?` in each half (since Alice and Bob alternate moving; for odd difference Alice acts more).
-
-Let:
-- diff = sum_left – sum_right
-- delta_q = ql – qr
-
-Maximum possible effect:
-- The "extra power" is `(delta_q/2) * 9`, since in expectation, each extra '?' in a half over the other gives Alice the opportunity to skew the sum by up to 9 per extra.
-    - If delta_q is odd, it's as if Alice gets an extra chance.
-
-Check if it's **possible** for Bob to make sums equal:
-- If `2 * diff == (qr - ql) * 9`, Bob can tie (make sums equal).
-- Otherwise, Alice can force inequality.
-
-### Implementation Steps
-
-- Count known digits: sum_left, sum_right (ignoring '?')
-- Count ql, qr
-- Evaluate: `2 * (sum_left - sum_right) == (qr - ql) * 9` ? Bob wins : Alice wins
+#### **Complexity**
+- O(n) time and O(1) space (besides prefix sums).
 
 ---
 
-## 4. Clean C++ Solution
+## 4. **Clean C++ Solution**
 
 ```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    bool sumGame(string num) {
-        int n = num.size();
-        int sumLeft = 0, sumRight = 0;
-        int leftQ = 0, rightQ = 0;
-        for (int i = 0; i < n; ++i) {
-            if (i < n/2) {
-                if (num[i] == '?') leftQ++;
-                else sumLeft += num[i] - '0';
-            } else {
-                if (num[i] == '?') rightQ++;
-                else sumRight += num[i] - '0';
-            }
+    int stoneGameVIII(vector<int>& stones) {
+        int n = stones.size();
+        // Compute prefix sums
+        vector<int> prefix(n);
+        prefix[0] = stones[0];
+        for (int i = 1; i < n; ++i) {
+            prefix[i] = prefix[i - 1] + stones[i];
         }
-        // If the difference in sum can be made up with difference in question marks:
-        // Each unmatched '?' pair gives possible delta 9
-        // If even number of '?', Bob can force a tie if possible
-        // If not, Alice can force win
-        int diff = sumLeft - sumRight;
-        int deltaQ = leftQ - rightQ;
-        // For the sums to be possibly equal at the end:
-        // 2*diff == (rightQ - leftQ) * 9
-        if ((2 * diff) == (rightQ - leftQ) * 9) 
-            return false; // Bob wins
-        else
-            return true; // Alice wins
+        // Suffix DP: best score difference for subarray starting from current point
+        int best = prefix[n - 1]; // If we take all stones at once
+        for (int i = n - 2; i >= 1; --i) {
+            best = max(best, prefix[i] - best);
+        }
+        return best;
     }
 };
 ```
 
 ---
 
-## 5. Example Explained
+## 5. **Example Explained**
 
-**Example:** `num = "25??"`
+**Example 1:**
+```
+stones = [-1,2,-3,4,-5]
+prefix = [-1,1,-2,2,-3]
+```
 
-- Length 4, left: '2', '5'; right: '?', '?'
-- sumLeft = 2 + 5 = 7
-- sumRight = 0 (`?` ignored)
-- leftQ = 0, rightQ = 2
-- diff = 7 - 0 = 7
-- rightQ - leftQ = 2
+- Alice's choices:
+  - Remove first 2: get (-1+2) = 1, stones = [1,-3,4,-5]
+  - Remove first 3: get (-1+2-3) = -2, stones = [-2,4,-5]
+  - Remove first 4: get (-1+2-3+4) = 2, stones = [2,-5]
+  - Remove all: (-1+2-3+4-5) = -3, stones = [-3]
 
-Plug into condition:
-- `2 * 7 = 14`
-- `(2) * 9 = 18` (rightQ-leftQ)*9
-- **14 != 18** (not equal)
+- **Best for Alice:** Remove first 4 → get 2, stones = [2,-5]
+- Now Bob only has one move: take 2+-5 = -3
+- Score: Alice = 2, Bob = -3. **Difference=2-(-3)=5**
 
-=> Alice wins, i.e. it is impossible for Bob to make sums equal.
+**Our DP:**
+- prefix: -1, 1, -2, 2, -3
+- Start `best= -3`
+- i=3: max(2, 2-(-3)) = max(2, 5) = 5
+- i=2: max(5, -2-5) = max(5, -7) = 5
+- i=1: max(5, 1-5) = max(5, -4) = 5
+- i=0: skip (can't remove less than 2)
 
-If the values were such that Bob could pick digits for `?` to equalize left and right side, he would win. Here, Alice can prevent that.
+- Output: **5**
 
 ---
 
-## Final Notes
-
-- The key insight is the maximum swing per unpaired `?` and who gets more control (via an odd difference of `?`). The equality check ensures optimal play.
-- Algorithm is **O(n)**—just a single pass to count sums and question marks.
+**Summary:**  
+The game reduces to a dynamic programming problem, considering only possible moves at each step using prefix sums from the back. The solution is O(n).
