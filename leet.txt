@@ -1,91 +1,108 @@
-Let's go step by step:
+Let's break down the problem and solution step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given a binary string `s` and an integer `k`, find the **shortest** substring of `s` that contains exactly `k` ones (`1`). Among all such substrings of minimum length, return the **lexicographically smallest** one. If none exists, return an empty string.
+Given two strings `s` and `target` of equal length, find **the lexicographically smallest permutation of `s` that is strictly greater than `target`**. If no such permutation exists, return the empty string.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= s.length <= 100` (string is short! O(N^2) is acceptable)
-- `1 <= k <= s.length`
-- May be 0 or more substrings with exactly `k` ones.
-- If `s` has fewer than `k` ones, return `""` (impossible).
-- If `k == 0`, not possible under constraints.
-- Substrings may overlap.
-- All characters are '0' or '1'.
-
-**Edge Cases:**
-- String of all `0`.
-- String of all `1`.
-- `k > total # of ones in s`.
+- **s.length, target.length ≤ 300**: Brute-force listing of all permutations is infeasible.
+- `s` and `target` may contain repeated characters.
+- **Edge Cases:**
+  - If `s` is already the largest permutation ≤ `target`, return "".
+  - If `s` is a permutation of `target` and is not strictly greater, return "".
+  - If all permutations of `s` are lexicographically less than or equal to `target`, return "".
+  - If for some position `i`, we can change a letter to be the next larger than `target[i]`, we should use the smallest such letter and fill the rest with the smallest possible order.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Because the string is small (`<=100`), we can brute force all substrings, but with optimization:
+**Key Insight:**  
+You want to build lex smallest string using the letters of `s`, such that it's strictly greater than `target`. This is similar to finding the next permutation of `s` greater than `target`, but the input `s` may not be ordered.
 
-**Steps:**
-1. Use a sliding window to find all substrings with exactly `k` ones.
-2. For each such substring, record its length and string.
-3. Find the **minimum** length over all such substrings.
-4. Among substrings of that minimal length, select the **lex smallest** one.
+**Algorithm Steps:**
 
-**How to efficiently scan for substrings with exactly `k` ones?**
+1. **Letter Count:**  
+   - Record frequency of each letter in `s`.
 
-- Use two pointers (`left`, `right`) to maintain a window, and a variable `cnt` for the number of ones in `[left, right]`.
-- Move the right pointer and expand the window.
-- While `cnt > k`, move left pointer right (shrinking).
-- When `cnt == k`, consider substring `[left, right]` as a candidate.
+2. **Greedy Build:**  
+   - For each position `i` (from 0 to n-1):
+     - Try to match `target[i]` if possible.
+     - If you must diverge (at position i, you can't match `target[i]`), choose the smallest character available that is bigger than `target[i]`, and fill in the rest with the smallest possible letters (sorted order).
+     - At every step, if forced to diverge (pick a letter > target[i]), the remainder should be the minimal lex order given remaining letters.
+
+3. **Implementation Details:**  
+   - For each position, keep track of what letter you have used.
+   - If at any point, you can't follow the above, return "".
+   - The first time you have to pick a larger letter than `target[i]`, fill the rest with the smallest permutation.
+
+**Complexity:**  
+- Since there are only 26 possible letters and n ≤ 300, looping over positions and frequencies is acceptable.
 
 ---
 
-### Time Complexity
-
-- Each character is expanded and contracted at most once: O(N) + O(N) = O(N)
-- For each valid substring, storing and comparing: O(1) for up to O(N^2) substrings.
-- Given N <= 100, this is acceptable.
-
----
-
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <string>
+#include <vector>
+
 using namespace std;
 
 class Solution {
 public:
-    string shortestBeautifulSubstring(string s, int k) {
+    string getLexicographicallySmallestPermutation(string s, string target) {
         int n = s.size();
-        int left = 0, ones = 0;
-        int minLen = n+1;
-        string answer = "";
+        vector<int> freq(26);
+        for (char c : s) freq[c - 'a']++;
 
-        for (int right = 0; right < n; ++right) {
-            if (s[right] == '1') ones++;
+        // Try to build the output one letter at a time
+        string res = "";
+        bool greater = false; // If we've picked a letter > target[i] at some position
 
-            // shrink left pointer if we have more than k ones
-            while (ones > k && left <= right) {
-                if (s[left] == '1') ones--;
-                left++;
-            }
+        for (int i = 0; i < n; ++i) {
+            bool found = false;
 
-            // when exactly k ones, consider the window [left, right]
-            if (ones == k) {
-                int currentLen = right - left + 1;
-                string curr = s.substr(left, currentLen);
-                if (currentLen < minLen || (currentLen == minLen && curr < answer)) {
-                    minLen = currentLen;
-                    answer = curr;
+            // let's go through letters in lexicographical order
+            for (int ch = 0; ch < 26; ++ch) {
+                if (freq[ch] == 0) continue;
+
+                char c = 'a' + ch;
+
+                // If already picked greater at previous position, add lowest possible at each position
+                if (greater || c > target[i]) {
+                    res += c;
+                    freq[ch]--;
+                    // Fill the rest in lex order
+                    for (int d = 0; d < 26; ++d) {
+                        res += string(freq[d], 'a' + d);
+                    }
+                    return res;
+                }
+
+                // Try to match with target[i]
+                if (c == target[i]) {
+                    freq[ch]--;
+                    res += c;
+                    if (i == n - 1) return ""; // must be strictly greater!
+                    found = true;
+                    break; // Next position
                 }
             }
+
+            if (!found) {
+                // can't match the target prefix, nor pick a higher character (since lex won't be > target)
+                return "";
+            }
         }
-        return answer;
+
+        // If we reached here, res == target, so it's not strictly greater
+        return "";
     }
 };
 ```
@@ -94,28 +111,30 @@ public:
 
 ## 5. **Example Explanation**
 
-**Example 1: `s = "100011001"`, `k = 3`**
+**Example 1:**  
+`s = "abc"`, `target = "bba"`
 
-We look for substrings with exactly 3 ones.
+- Letter counts: `{'a':1, 'b':1, 'c':1}`
+- i=0: need at least 'b' — possible, pick 'b' (new freq: a1 b0 c1; res: "b")
+- i=1: need at least 'b' — not possible, since 'b' used up.
+  - Smallest available > 'b' is 'c'.
+- At i=1, pick 'c' ('a' is not > 'b'; 'c' is > 'b'): res = "bc"
+- Fill remaining (only 'a' left): res = "bca"
 
-Let's do the sliding windows:
-- Indices 0-5: `"100011"` – ones=3, len=6
-- Indices 1-6: `"000110"` – ones=2 (skip)
-- Indices 2-7: `"001100"` – ones=2 (skip)
-- Indices 3-8: `"011001"` – ones=3, len=6
-- ... etc.
-
-But optimal is:
-- For window starting at 4: ones=3 at window [4,8] (`"11001"`) – len=5.
-- Any substring shorter? Let's check:
-    - `"11001"` is 5 chars, and any substring shorter will lack enough ones.
-- Among all minimal substrings of length 5, `"11001"` is the lex smallest.
-
-## **Final Output:**  
-`"11001"`
+This satisfies:
+- "bca" > "bba"
+- This is the minimal such permutation.
 
 ---
 
-> **In summary**:  
-Use sliding window, find all minimal length substrings with exactly `k` ones, return the lex smallest one (or empty string if none).  
-Code above does this efficiently for the given constraints.
+### **Summary Table**
+
+|   s   |  target |  Output |  Reasoning                           |
+|-------|---------|---------|--------------------------------------|
+| "abc" |  "bba"  |  "bca"  | First matching prefix, then 'c'>'b'  |
+| "leet"|  "code" |  "eelt" | Can't match 'c', take 'e', fill rest |
+| "baba"|  "bbaa" |   ""    | All perms ≤ target                   |
+
+---
+
+If you need clarification on the implementation or another example, feel free to ask!
