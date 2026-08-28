@@ -1,48 +1,61 @@
-Let's break down the problem and solution step by step:
+Let's address the problem step by step:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-Given two strings `s` and `target` of equal length, find **the lexicographically smallest permutation of `s` that is strictly greater than `target`**. If no such permutation exists, return the empty string.
+Given two strings `s` and `target` (same length, all lowercase), find the lexicographically **smallest palindromic permutation of `s`** that is **strictly greater than `target`**. If none exists, return the empty string. A palindromic permutation of `s` is a palindrome made by rearranging its letters.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **s.length, target.length ≤ 300**: Brute-force listing of all permutations is infeasible.
-- `s` and `target` may contain repeated characters.
-- **Edge Cases:**
-  - If `s` is already the largest permutation ≤ `target`, return "".
-  - If `s` is a permutation of `target` and is not strictly greater, return "".
-  - If all permutations of `s` are lexicographically less than or equal to `target`, return "".
-  - If for some position `i`, we can change a letter to be the next larger than `target[i]`, we should use the smallest such letter and fill the rest with the smallest possible order.
+- **Constraints**:
+  - `1 < n = s.length = target.length ≤ 300`
+  - `s` and `target` are all lowercase.
+- **Edge Cases**:
+  - `s` has no palindromic permutations (e.g., more than one odd frequency letter in `s`).
+  - No palindromic permutation is greater than `target`.
+  - The answer is unique if exists (since lex smallest is required, and palindrome permutations are finite).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Key Insight:**  
-You want to build lex smallest string using the letters of `s`, such that it's strictly greater than `target`. This is similar to finding the next permutation of `s` greater than `target`, but the input `s` may not be ordered.
+### **Step-by-Step Approach:**
 
-**Algorithm Steps:**
+#### **A. Check Palindrome Possibility**
+- Count character frequencies in `s`.
+- For even length, all character counts must be even.
+- For odd length, exactly one char (potentially) has odd count.
 
-1. **Letter Count:**  
-   - Record frequency of each letter in `s`.
+#### **B. Generate Smallest Palindromic Permutation**
+- Find half counts for each char (`cnt[ch] // 2`).
+- Arrange them in lex order for the left half.
+- If odd-length, append the odd-count char in the middle.
+- Mirror the left half to get the full palindrome (left + [odd_char] + reversed(left)).
 
-2. **Greedy Build:**  
-   - For each position `i` (from 0 to n-1):
-     - Try to match `target[i]` if possible.
-     - If you must diverge (at position i, you can't match `target[i]`), choose the smallest character available that is bigger than `target[i]`, and fill in the rest with the smallest possible letters (sorted order).
-     - At every step, if forced to diverge (pick a letter > target[i]), the remainder should be the minimal lex order given remaining letters.
+#### **C. Generate Next Palindrome after a Given Target**
 
-3. **Implementation Details:**  
-   - For each position, keep track of what letter you have used.
-   - If at any point, you can't follow the above, return "".
-   - The first time you have to pick a larger letter than `target[i]`, fill the rest with the smallest permutation.
+To find the smallest palindromic permutation which is strictly greater than `target`:
+- **If the smallest palindrome is greater than `target`**, return it.
+- Else, **enumerate palindromic permutations in lex order**, generating the **next** palindromic one after `target`.
 
-**Complexity:**  
-- Since there are only 26 possible letters and n ≤ 300, looping over positions and frequencies is acceptable.
+- **Key Observation:** Since all palindromic permutations correspond to half-string permutations (with center char if needed), we can **generate the next lex greater half permutation** of the half string, reconstruct the palindrome, and check if it’s greater than target.
+
+#### **D. Efficient Implementation Details:**
+- **Use next_permutation (C++ STL) on the half string** to systematically generate the next lexicographically greater palindrome.
+
+#### **Algorithm Steps:**
+1. Check if any palindromic permutation exists (frequency check).
+2. Build the initial half string (sorted for smallest).
+3. For all possible half permutations in order (using next_permutation), for each:
+   - Generate corresponding full palindrome.
+   - If palindrome > target, return it.
+   - (Break when all permutations checked)
+4. If none found, return "".
+
+**Optimization Note**: Since n ≤ 300 and max unique chars is 26, the practical number of palindromic permutations is manageable.
 
 ---
 
@@ -51,57 +64,48 @@ You want to build lex smallest string using the letters of `s`, such that it's s
 ```cpp
 #include <string>
 #include <vector>
+#include <algorithm>
 
 using namespace std;
 
 class Solution {
 public:
-    string getLexicographicallySmallestPermutation(string s, string target) {
+    string lexicographicallySmallestPalindromicPermutation(string s, string target) {
         int n = s.size();
-        vector<int> freq(26);
-        for (char c : s) freq[c - 'a']++;
+        vector<int> freq(26, 0);
+        for (char c : s) ++freq[c - 'a'];
 
-        // Try to build the output one letter at a time
-        string res = "";
-        bool greater = false; // If we've picked a letter > target[i] at some position
-
-        for (int i = 0; i < n; ++i) {
-            bool found = false;
-
-            // let's go through letters in lexicographical order
-            for (int ch = 0; ch < 26; ++ch) {
-                if (freq[ch] == 0) continue;
-
-                char c = 'a' + ch;
-
-                // If already picked greater at previous position, add lowest possible at each position
-                if (greater || c > target[i]) {
-                    res += c;
-                    freq[ch]--;
-                    // Fill the rest in lex order
-                    for (int d = 0; d < 26; ++d) {
-                        res += string(freq[d], 'a' + d);
-                    }
-                    return res;
-                }
-
-                // Try to match with target[i]
-                if (c == target[i]) {
-                    freq[ch]--;
-                    res += c;
-                    if (i == n - 1) return ""; // must be strictly greater!
-                    found = true;
-                    break; // Next position
-                }
-            }
-
-            if (!found) {
-                // can't match the target prefix, nor pick a higher character (since lex won't be > target)
-                return "";
+        int oddCnt = 0;
+        char oddChar = 0;
+        for (int i = 0; i < 26; ++i) {
+            if (freq[i] % 2 != 0) {
+                ++oddCnt;
+                oddChar = char(i + 'a');
             }
         }
 
-        // If we reached here, res == target, so it's not strictly greater
+        // Check if palindromic permutation possible
+        if ((n % 2 == 0 && oddCnt != 0) || (n % 2 == 1 && oddCnt != 1))
+            return "";
+
+        // Build initial "half string"
+        string half;
+        for (int i = 0; i < 26; ++i) {
+            half += string(freq[i] / 2, 'a' + i);
+        }
+
+        // Target's half & mid for direct comparison — but generate all candidates efficiently
+        sort(half.begin(), half.end());
+        bool started = false;
+        do {
+            string palindrome = half;
+            if (n % 2 == 1)
+                palindrome += oddChar;
+            palindrome += string(half.rbegin(), half.rend());
+            if (palindrome > target)
+                return palindrome;
+        } while (next_permutation(half.begin(), half.end()));
+
         return "";
     }
 };
@@ -111,30 +115,28 @@ public:
 
 ## 5. **Example Explanation**
 
-**Example 1:**  
-`s = "abc"`, `target = "bba"`
+### **Example 1:**
+```
+s = "baba", target = "abba"
+```
 
-- Letter counts: `{'a':1, 'b':1, 'c':1}`
-- i=0: need at least 'b' — possible, pick 'b' (new freq: a1 b0 c1; res: "b")
-- i=1: need at least 'b' — not possible, since 'b' used up.
-  - Smallest available > 'b' is 'c'.
-- At i=1, pick 'c' ('a' is not > 'b'; 'c' is > 'b'): res = "bc"
-- Fill remaining (only 'a' left): res = "bca"
-
-This satisfies:
-- "bca" > "bba"
-- This is the minimal such permutation.
-
----
-
-### **Summary Table**
-
-|   s   |  target |  Output |  Reasoning                           |
-|-------|---------|---------|--------------------------------------|
-| "abc" |  "bba"  |  "bca"  | First matching prefix, then 'c'>'b'  |
-| "leet"|  "code" |  "eelt" | Can't match 'c', take 'e', fill rest |
-| "baba"|  "bbaa" |   ""    | All perms ≤ target                   |
+- **Frequencies:** a:2, b:2 → All even (n=4, length even), so palindromic permutations possible.
+- Build half: "ab" (1 'a', 1 'b').  
+- Sort: "ab" (smallest).
+- All palindromic permutations:
+    - half="ab" → palindrome="abba"
+    - next_permutation("ab") → "ba" → palindrome="baab"
+- Now, "abba" <= "abba" (not strictly greater), "baab" > "abba" → return "baab".
 
 ---
 
-If you need clarification on the implementation or another example, feel free to ask!
+### **Summary**
+
+- Count frequency, validate possibility, get half string.
+- Using next permutation on half, form each palindrome and check against target.
+- Instant return on first palindrome > target.
+- Efficient and easy to reason about for the given limits.
+
+---
+
+### **Let me know if you'd like Python or further explanation!**
