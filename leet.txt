@@ -1,101 +1,148 @@
-Let's address each requirement step by step:
+Let's go through your requirements step by step:
 
 ---
 
-### 1. **Short Summary**
+## 1. **Short Summary**
 
-Given an array of **distinct** integers, you need to remove both the minimum and maximum element. You can only remove elements from **the front or the back** of the array (not from the middle directly). You must find the **minimum total deletions** required to remove both.
-
----
-
-### 2. **Constraints & Edge Cases**
-
-**Constraints:**
-- `1 <= nums.length <= 10^5`
-- `-10^5 <= nums[i] <= 10^5`
-- All numbers are distinct.
-
-**Edge Cases:**
-- Array length \( n = 1 \): Only one element, it's both min and max.
-- Min and max are at the same position (only possible if array has length 1).
-- Min at front and max at back (or vice versa): Can take both in one deletion each (2 total).
-- Min and max are close together, e.g., both in the first 3 elements or last 3 elements.
-- Large arrays: Only linear solutions are feasible.
+Given a singly linked list, a **critical point** is a node which is either a local maximum or local minimum (i.e., its value is strictly greater or less than neighbors).  
+We need to **find the minimum and maximum number of nodes between any two distinct critical points**.  
+Return `[-1,-1]` if there are fewer than 2 critical points.
 
 ---
 
-### 3. **Optimal Algorithm (O(n) Time, O(1) Space)**
+## 2. **Constraints & Edge Cases**
 
-#### **Steps**
+### **Constraints:**
+- Number of nodes: `2 <= n <= 1e5` (up to 100,000 nodes)
+- Node values: `1 <= Node.val <= 1e5`
 
-1. **Find indices** of the minimum and maximum elements:
-   - Let's call them `minIdx` and `maxIdx`.
-
-2. **Compute all possible ways to remove both**:
-    - **Option 1:** Remove from the front only (cover both indices): `max(minIdx, maxIdx) + 1`
-    - **Option 2:** Remove from the back only: `n - min(minIdx, maxIdx)`
-    - **Option 3:** Remove from the front up to one, and from the back up to the other:
-      - Remove up to leftmost one from the front, and up to rightmost one from the back: `minIdx + 1 + n - maxIdx` (if `minIdx < maxIdx`)
-      - Or: `maxIdx + 1 + n - minIdx` (if `maxIdx < minIdx`)
-      - But the general formula: `min(minIdx, maxIdx) + 1 + n - max(minIdx, maxIdx)`
-
-3. Take the **minimum** of these options.
+### **Edge Cases:**
+- The head or tail can **never** be a critical point (no previous/next node).
+- Fewer than two critical points → return `[-1,-1]`.
+- Multiple critical points, possibly at consecutive positions.
+- Duplicate values are possible, but for critical points, we require **strictly** greater/smaller for maxima/minima.
+- The position is 1-based index for clarity (but can use 0-based internally).
 
 ---
 
-### 4. **C++ Solution**
+## 3. **Optimal Algorithm**
+
+### **High-level Idea:**
+- Traverse the list, and find the positions (indices) of all critical points.
+- If there are fewer than 2, return `[-1, -1]`.
+- For min distance: find the smallest difference between consecutive critical point positions.
+- For max distance: difference between the first and the last critical point positions.
+
+### **Pseudocode:**
+
+1. Traverse list, track index, and if a node is critical (using previous and next), add its position to a vector.
+2. If fewer than 2 critical points: return `[-1, -1]`.
+3. Compute min distance between any two consecutive critical points.
+4. Max distance is last - first critical point positions.
+
+**Time Complexity:** O(N)  
+**Space Complexity:** O(N) (for storing critical points, worst case)
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-using namespace std;
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
 
 class Solution {
 public:
-    int minimumDeletions(vector<int>& nums) {
-        int n = nums.size();
-        int minIdx = 0, maxIdx = 0;
-        for (int i = 1; i < n; ++i) {
-            if (nums[i] < nums[minIdx]) minIdx = i;
-            if (nums[i] > nums[maxIdx]) maxIdx = i;
+    vector<int> nodesBetweenCriticalPoints(ListNode* head) {
+        vector<int> critPositions;
+        int idx = 1; // 1-based, but C++ code can use 0 based
+        ListNode* prev = head;
+        ListNode* curr = head->next;
+        while (curr && curr->next) {
+            // Is curr a local minima?
+            if (curr->val < prev->val && curr->val < curr->next->val) {
+                critPositions.push_back(idx);
+            }
+            // Is curr a local maxima?
+            else if (curr->val > prev->val && curr->val > curr->next->val) {
+                critPositions.push_back(idx);
+            }
+            // Advance all pointers
+            prev = curr;
+            curr = curr->next;
+            idx++;
         }
-        // Ensure minIdx <= maxIdx for easier calculation
-        int left = min(minIdx, maxIdx);
-        int right = max(minIdx, maxIdx);
-        // Three options:
-        int opt1 = right + 1;            // remove from front both
-        int opt2 = n - left;             // remove from back both
-        int opt3 = (left + 1) + (n - right); // remove one from front, one from back
-        return min({opt1, opt2, opt3});
+        
+        if (critPositions.size() < 2) {
+            return {-1, -1};
+        }
+        int minDist = INT_MAX;
+        for (int i = 1; i < critPositions.size(); ++i) {
+            minDist = min(minDist, critPositions[i] - critPositions[i-1]);
+        }
+        int maxDist = critPositions.back() - critPositions.front();
+        return {minDist, maxDist};
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation ([2, 10, 7, 5, 4, 1, 8, 6])**
+## 5. **Example Explanation**
 
-- `nums = [2, 10, 7, 5, 4, 1, 8, 6]`
-- min = 1 at index 5
-- max = 10 at index 1
-    - left = min(1, 5) = 1
-    - right = max(1, 5) = 5
+Let's explain **Example 2**:
 
-Options:
-- Option 1 (from front): remove first 6 elements: 5 + 1 = 6 removals (covers index 5, the later one)
-- Option 2 (from back): remove last 7 elements: 8 - 1 = 7 removals (covers index 1, the earlier one)
-- Option 3: remove 2 from front (indices 0, 1), and 3 from back (indices 7,6,5): (1+1)+(8 - 5) = 2+3=5
+#### **head = [5,3,1,2,5,1,2]**
 
-**Minimum deletions is 5.**
+Positions (0-based for clarity):
+- 0: 5
+- 1: 3
+- 2: 1
+- 3: 2
+- 4: 5
+- 5: 1
+- 6: 2
+
+Walk-through:
+- At pos=1 (`3`): prev=5, next=1; 3 < 5 and 3 > 1 - not a critical point.
+- At pos=2 (`1`): prev=3, next=2; 1 < 3 and 1 < 2 ⇒ local minima! (add pos=2)
+- At pos=3 (`2`): prev=1, next=5; 2 > 1 and 2 < 5 - not a critical point.
+- At pos=4 (`5`): prev=2, next=1; 5 > 2 and 5 > 1 ⇒ local maxima! (add pos=4)
+- At pos=5 (`1`): prev=5, next=2; 1 < 5 and 1 < 2 ⇒ local minima! (add pos=5)
+
+`critPositions = [2, 4, 5]`
+
+- minDist: min(4-2, 5-4) = min(2, 1) = 1
+- maxDist: 5-2 = 3
+
+**Output: [1, 3]**
 
 ---
 
-**Summary Table**:
+### **Summary Table**
 
-| Option    | Calculation | Value |
-|-----------|-------------|-------|
-| From front | right + 1 | 6 |
-| From back  | n - left   | 7 |
-| Both ends  | (left+1)+(n-right) | 5 (best) |
+| Step | curr.val | prev.val | next.val | Critical? | Index | Positions |
+|------|----------|----------|----------|-----------|-------|-----------|
+| 1    | 3        | 5        | 1        | No        | 1     |           |
+| 2    | 1        | 3        | 2        | Yes (min) | 2     | 2         |
+| 3    | 2        | 1        | 5        | No        | 3     | 2         |
+| 4    | 5        | 2        | 1        | Yes (max) | 4     | 2,4       |
+| 5    | 1        | 5        | 2        | Yes (min) | 5     | 2,4,5     |
 
 ---
+
+## **In summary**:
+
+- Traverse, record critical point positions.
+- Compute distances for result.
+- Solution is O(N), single pass, and clean. 
+
+Let me know if you need the explanation for another example or want a Python version!
