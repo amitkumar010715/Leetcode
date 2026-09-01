@@ -1,148 +1,176 @@
-Let's go through your requirements step by step:
+Let's break down the problem as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a singly linked list, a **critical point** is a node which is either a local maximum or local minimum (i.e., its value is strictly greater or less than neighbors).  
-We need to **find the minimum and maximum number of nodes between any two distinct critical points**.  
-Return `[-1,-1]` if there are fewer than 2 critical points.
+Given an m x n grid with obstacles, reset zones, and “litter” to collect, a student must collect all the litter. Moving costs 1 energy point (starting with `energy`), which can be refilled to max at 'R' zones. Find the minimal number of moves to collect all 'L', or return -1 if impossible.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### **Constraints:**
-- Number of nodes: `2 <= n <= 1e5` (up to 100,000 nodes)
-- Node values: `1 <= Node.val <= 1e5`
+**Constraints**
+- `1 <= m, n <= 20` (grid is small)
+- `1 <= energy <= 50` (student’s max movement per energy refill)
+- ≤ 10 'L' cells (litter items to collect)
+- Exactly 1 'S'
+- Multiple 'R' allowed, can revisit for energy
+- 'X' is blocked
 
-### **Edge Cases:**
-- The head or tail can **never** be a critical point (no previous/next node).
-- Fewer than two critical points → return `[-1,-1]`.
-- Multiple critical points, possibly at consecutive positions.
-- Duplicate values are possible, but for critical points, we require **strictly** greater/smaller for maxima/minima.
-- The position is 1-based index for clarity (but can use 0-based internally).
+**Edge Cases**
+- Litter may be unreachable (output -1)
+- Multiple ways to reach 'L'; need minimal moves (not minimal segments between litters, but total steps)
+- Must handle all combinations of litter pickup order (TSP style), but under manageable size due to K ≤ 10.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **High-level Idea:**
-- Traverse the list, and find the positions (indices) of all critical points.
-- If there are fewer than 2, return `[-1, -1]`.
-- For min distance: find the smallest difference between consecutive critical point positions.
-- For max distance: difference between the first and the last critical point positions.
+This is a **stateful shortest path/TSP variant** with energy constraints and refilling.
 
-### **Pseudocode:**
+**Key Observations:**
+- With at most 10 litters, collecting them in any order is feasible to track (K! ~ 3 million for K=10, but we can prune).
+- Each state can be represented by: (x, y, remaining_energy, litter_mask)
+- BFS is suitable to find minimum moves, as all steps cost 1 move.
 
-1. Traverse list, track index, and if a node is critical (using previous and next), add its position to a vector.
-2. If fewer than 2 critical points: return `[-1, -1]`.
-3. Compute min distance between any two consecutive critical points.
-4. Max distance is last - first critical point positions.
+**Approach:**
+1. **Preprocessing:**
+   - Record locations of S, L, R.
+   - Assign indexes to L (for bitmask).
 
-**Time Complexity:** O(N)  
-**Space Complexity:** O(N) (for storing critical points, worst case)
+2. **BFS (or Dijkstra, but all moves are same cost):**
+   - State = (row, col, remaining_energy, litter_mask)
+   - Use a 4D visited array (row, col, litter_mask, energy).
+   - For each move:
+     - If at R, can refill energy.
+     - If entering an L cell, mark corresponding bit in litter_mask.
+     - Enqueue neighboring cells if not X, and energy>0.
+
+3. **Stop when:**
+   - All Litters are collected (litter_mask == all 1's).
+   - If not possible, return -1.
+
+**Complexity:**
+- #States: m * n * (2^K) * (energy+1) <= 20^2 * 2^10 * 51 ~ 20,000,000 at maximum, often less due to obstacles, and real BFS explores much less in practice.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
-/**
- * Definition for singly-linked list.
- * struct ListNode {
- *     int val;
- *     ListNode *next;
- *     ListNode() : val(0), next(nullptr) {}
- *     ListNode(int x) : val(x), next(nullptr) {}
- *     ListNode(int x, ListNode *next) : val(x), next(next) {}
- * };
- */
+#include <vector>
+#include <string>
+#include <queue>
+#include <tuple>
+#include <cstring>
+using namespace std;
 
 class Solution {
 public:
-    vector<int> nodesBetweenCriticalPoints(ListNode* head) {
-        vector<int> critPositions;
-        int idx = 1; // 1-based, but C++ code can use 0 based
-        ListNode* prev = head;
-        ListNode* curr = head->next;
-        while (curr && curr->next) {
-            // Is curr a local minima?
-            if (curr->val < prev->val && curr->val < curr->next->val) {
-                critPositions.push_back(idx);
+    int minMovesToClean(vector<string>& classroom, int energy) {
+        int m = classroom.size(), n = classroom[0].size();
+        vector<pair<int, int>> litter;
+        int sx, sy; // start position
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                if (classroom[i][j] == 'S') {
+                    sx = i; sy = j;
+                } else if (classroom[i][j] == 'L') {
+                    litter.emplace_back(i, j);
+                }
             }
-            // Is curr a local maxima?
-            else if (curr->val > prev->val && curr->val > curr->next->val) {
-                critPositions.push_back(idx);
-            }
-            // Advance all pointers
-            prev = curr;
-            curr = curr->next;
-            idx++;
         }
+
+        int k = litter.size();
+        vector<vector<int>> litterPos(m, vector<int>(n, -1));
+        for (int i = 0; i < k; ++i)
+            litterPos[litter[i].first][litter[i].second] = i;
+
+        // visited[x][y][litterMask][energyLeft]
+        bool visited[20][20][1<<10][51];
+        memset(visited, 0, sizeof(visited));
         
-        if (critPositions.size() < 2) {
-            return {-1, -1};
+        queue<tuple<int,int,int,int,int>> q;
+        // (x, y, litterMask, energyLeft, moves)
+        q.emplace(sx, sy, 0, energy, 0);
+        visited[sx][sy][0][energy] = true;
+
+        int dirs[4][2] = {{1,0}, {-1,0}, {0,1}, {0,-1}};
+
+        while (!q.empty()) {
+            auto [x, y, mask, e, moves] = q.front(); q.pop();
+            // If collected all litters
+            if (mask == (1 << k) - 1) return moves;
+
+            // If this is a reset, consider resetting energy (if not already at max)
+            if (classroom[x][y] == 'R' && e != energy) {
+                if (!visited[x][y][mask][energy]) {
+                    visited[x][y][mask][energy] = true;
+                    q.emplace(x, y, mask, energy, moves);
+                }
+            }
+
+            // Try moving in 4 directions
+            if (e == 0) continue;
+            for (auto& dir : dirs) {
+                int nx = x + dir[0], ny = y + dir[1];
+                if (nx < 0 || ny < 0 || nx >= m || ny >= n) continue;
+                char cell = classroom[nx][ny];
+                if (cell == 'X') continue; // Obstacle
+
+                int nmask = mask;
+                if (cell == 'L') {
+                    int lidx = litterPos[nx][ny];
+                    nmask |= (1 << lidx);
+                }
+                int ne = e - 1;
+                if (!visited[nx][ny][nmask][ne]) {
+                    visited[nx][ny][nmask][ne] = true;
+                    q.emplace(nx, ny, nmask, ne, moves + 1);
+                }
+            }
         }
-        int minDist = INT_MAX;
-        for (int i = 1; i < critPositions.size(); ++i) {
-            minDist = min(minDist, critPositions[i] - critPositions[i-1]);
-        }
-        int maxDist = critPositions.back() - critPositions.front();
-        return {minDist, maxDist};
+        return -1;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Walkthrough**
 
-Let's explain **Example 2**:
+**Example 2**
 
-#### **head = [5,3,1,2,5,1,2]**
+```text
+classroom = ["LS", "RL"], energy = 4
+```
 
-Positions (0-based for clarity):
-- 0: 5
-- 1: 3
-- 2: 1
-- 3: 2
-- 4: 5
-- 5: 1
-- 6: 2
+The grid:
+```
+L S
+R L
+```
+- Start: (0,1), energy=4
+- Litters at (0,0) and (1,1)
+- Reset at (1,0)
 
-Walk-through:
-- At pos=1 (`3`): prev=5, next=1; 3 < 5 and 3 > 1 - not a critical point.
-- At pos=2 (`1`): prev=3, next=2; 1 < 3 and 1 < 2 ⇒ local minima! (add pos=2)
-- At pos=3 (`2`): prev=1, next=5; 2 > 1 and 2 < 5 - not a critical point.
-- At pos=4 (`5`): prev=2, next=1; 5 > 2 and 5 > 1 ⇒ local maxima! (add pos=4)
-- At pos=5 (`1`): prev=5, next=2; 1 < 5 and 1 < 2 ⇒ local minima! (add pos=5)
+**Possible steps:**
+1. Move left (0,1) → (0,0): Use 1 energy (now 3), collect first L (moves: 1)
+2. Move down (0,0) → (1,0): Use 1 energy (now 2), step on R and restore to 4 (optional), (moves: 2)
+3. Move right (1,0) → (1,1): Use 1 energy (now 3), collect second L (moves: 3)
 
-`critPositions = [2, 4, 5]`
-
-- minDist: min(4-2, 5-4) = min(2, 1) = 1
-- maxDist: 5-2 = 3
-
-**Output: [1, 3]**
+Thus, minimal number of moves is **3**.
 
 ---
 
 ### **Summary Table**
 
-| Step | curr.val | prev.val | next.val | Critical? | Index | Positions |
-|------|----------|----------|----------|-----------|-------|-----------|
-| 1    | 3        | 5        | 1        | No        | 1     |           |
-| 2    | 1        | 3        | 2        | Yes (min) | 2     | 2         |
-| 3    | 2        | 1        | 5        | No        | 3     | 2         |
-| 4    | 5        | 2        | 1        | Yes (max) | 4     | 2,4       |
-| 5    | 1        | 5        | 2        | Yes (min) | 5     | 2,4,5     |
+| State         | Position | Energy | Litter Mask | Moves |
+|---------------|----------|--------|-------------|-------|
+| Start         | (0,1)    | 4      |   0b00      |   0   |
+| Left to L     | (0,0)    | 3      |   0b01      |   1   |
+| Down to R     | (1,0)    | 2      |   0b01      |   2   |
+| Right to L    | (1,1)    | 3      |   0b11      |   3   |
 
 ---
-
-## **In summary**:
-
-- Traverse, record critical point positions.
-- Compute distances for result.
-- Solution is O(N), single pass, and clean. 
-
-Let me know if you need the explanation for another example or want a Python version!
