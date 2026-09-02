@@ -1,176 +1,171 @@
-Let's break down the problem as requested:
+Let's break down the problem step by step as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an m x n grid with obstacles, reset zones, and “litter” to collect, a student must collect all the litter. Moving costs 1 energy point (starting with `energy`), which can be refilled to max at 'R' zones. Find the minimal number of moves to collect all 'L', or return -1 if impossible.
+You are given an array `nums1` of distinct integers. For each index `i`, you can set `nums2[i]` either to `nums1[i]` or to `nums1[i] - nums1[j]` for any `j != i`. You must construct an array `nums2` where all entries are either **all even or all odd** integers. Return `true` if it's possible, otherwise return `false`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints**
-- `1 <= m, n <= 20` (grid is small)
-- `1 <= energy <= 50` (student’s max movement per energy refill)
-- ≤ 10 'L' cells (litter items to collect)
-- Exactly 1 'S'
-- Multiple 'R' allowed, can revisit for energy
-- 'X' is blocked
+- **Constraints:**
+  - `1 <= n == nums1.length <= 100`
+  - `1 <= nums1[i] <= 100`
+  - All entries are distinct.
 
-**Edge Cases**
-- Litter may be unreachable (output -1)
-- Multiple ways to reach 'L'; need minimal moves (not minimal segments between litters, but total steps)
-- Must handle all combinations of litter pickup order (TSP style), but under manageable size due to K ≤ 10.
+- **Edge Cases:**
+  - **Single-element array (`n=1`)**: Only possibility is `nums2[0] = nums1[0]` (since there's no valid `j != i`), so answer will always be `true`.
+  - **All elements already even or all odd?** Trivial; can just pick `nums1[i]`.
+  - **Mixed parity in `nums1`?** Need to check if possible to "normalize" parity with the allowed operation.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm & Reasoning**
 
-This is a **stateful shortest path/TSP variant** with energy constraints and refilling.
+### **Key Observations**
 
-**Key Observations:**
-- With at most 10 litters, collecting them in any order is feasible to track (K! ~ 3 million for K=10, but we can prune).
-- Each state can be represented by: (x, y, remaining_energy, litter_mask)
-- BFS is suitable to find minimum moves, as all steps cost 1 move.
+Let’s focus on the operation:
+- For any `i`, you can pick `nums1[i]` directly or `nums1[i] - nums1[j] (j!=i)`.
 
-**Approach:**
-1. **Preprocessing:**
-   - Record locations of S, L, R.
-   - Assign indexes to L (for bitmask).
+- **Parity of `nums1[i] - nums1[j]`**:
+  - If `nums1[i]` and `nums1[j]` have the **same parity** (both odd or both even), their difference is **even**.
+  - If they have **different parities**, their difference is **odd**.
 
-2. **BFS (or Dijkstra, but all moves are same cost):**
-   - State = (row, col, remaining_energy, litter_mask)
-   - Use a 4D visited array (row, col, litter_mask, energy).
-   - For each move:
-     - If at R, can refill energy.
-     - If entering an L cell, mark corresponding bit in litter_mask.
-     - Enqueue neighboring cells if not X, and energy>0.
+### **Goal**: Can you construct an array where all elements are even, or all are odd?
 
-3. **Stop when:**
-   - All Litters are collected (litter_mask == all 1's).
-   - If not possible, return -1.
+#### **Case 1: All Even**
 
-**Complexity:**
-- #States: m * n * (2^K) * (energy+1) <= 20^2 * 2^10 * 51 ~ 20,000,000 at maximum, often less due to obstacles, and real BFS explores much less in practice.
+- You could try to force all `nums2[i]` to be even.
+- `nums1[i]`: It’s even if `nums1[i]` is even.
+- `nums1[i] - nums1[j]`: Even if both are same parity.
+- **To build all evens:**
+  - If all `nums1` are even: trivial.
+  - If exists at least two with the same parity: for all `i`, pick `nums1[i]-nums1[j]` with a suitable `j` to get an even.
 
----
+#### **Case 2: All Odd**
+
+- Want all `nums2[i]` odd.
+- `nums1[i]`: Odd if `nums1[i]` is odd.
+- `nums1[i] - nums1[j]`: Odd if `nums1[i]` and `nums1[j]` have different parity.
+- **To build all odds:**
+  - If there are both odd and even elements in `nums1`, for each index pick a `j` of different parity to get an odd difference!
+
+
+### **Conclusion/Winner Strategy**
+
+**It is always possible to construct an array of all odd numbers if there is both an odd and an even number in `nums1` (since their difference will be odd).**
+**It is always possible to construct an array of all even numbers if there are at least two numbers of the same parity in `nums1` (since their difference will be even), or all numbers are already even or already odd.**
+
+**Let's formalize it:**
+- If `nums1` contains both odd and even numbers, answer is `true`.
+- If all numbers are odd or all are even, answer is `true`.
+- In other words, you can always make `nums2` all even or all odd, **except** when `n=2`, one is even, and one is odd.
+
+#### Let's check for `n=2` and `nums1 = [odd, even]`:
+- Possible differences: `odd - even = odd`, `even - odd = odd`, can't make both even in any case.
+- Possible: set both as odd? Yes!
+  - `nums2[0] = nums1[0]` (odd)
+  - `nums2[1] = nums1[1] - nums1[0]` (even - odd = odd)
+- So it's possible.
+
+**Actually, for any `n`, using the difference, you can always create all values with the same parity, as long as you have both parities present.**
+
+### **So the answer is always `true` except possibly when `n == 1`.**
+But even then, it's always possible.
+
 
 ## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <string>
-#include <queue>
-#include <tuple>
-#include <cstring>
-using namespace std;
-
 class Solution {
 public:
-    int minMovesToClean(vector<string>& classroom, int energy) {
-        int m = classroom.size(), n = classroom[0].size();
-        vector<pair<int, int>> litter;
-        int sx, sy; // start position
-        for (int i = 0; i < m; ++i) {
-            for (int j = 0; j < n; ++j) {
-                if (classroom[i][j] == 'S') {
-                    sx = i; sy = j;
-                } else if (classroom[i][j] == 'L') {
-                    litter.emplace_back(i, j);
-                }
-            }
+    bool canMakeAllEvenOrAllOdd(vector<int>& nums1) {
+        bool has_odd = false, has_even = false;
+        for (int num : nums1) {
+            if (num % 2 == 0)
+                has_even = true;
+            else
+                has_odd = true;
         }
+        // Always possible to form all odds or all evens
+        return true;
+    }
+};
+```
 
-        int k = litter.size();
-        vector<vector<int>> litterPos(m, vector<int>(n, -1));
-        for (int i = 0; i < k; ++i)
-            litterPos[litter[i].first][litter[i].second] = i;
+But LeetCode wants the function named `canMakeAllEvenOrAllOdd` based on the description.
+Or, to return `true` only if both parities exist or all are even or all are odd:
 
-        // visited[x][y][litterMask][energyLeft]
-        bool visited[20][20][1<<10][51];
-        memset(visited, 0, sizeof(visited));
-        
-        queue<tuple<int,int,int,int,int>> q;
-        // (x, y, litterMask, energyLeft, moves)
-        q.emplace(sx, sy, 0, energy, 0);
-        visited[sx][sy][0][energy] = true;
-
-        int dirs[4][2] = {{1,0}, {-1,0}, {0,1}, {0,-1}};
-
-        while (!q.empty()) {
-            auto [x, y, mask, e, moves] = q.front(); q.pop();
-            // If collected all litters
-            if (mask == (1 << k) - 1) return moves;
-
-            // If this is a reset, consider resetting energy (if not already at max)
-            if (classroom[x][y] == 'R' && e != energy) {
-                if (!visited[x][y][mask][energy]) {
-                    visited[x][y][mask][energy] = true;
-                    q.emplace(x, y, mask, energy, moves);
-                }
-            }
-
-            // Try moving in 4 directions
-            if (e == 0) continue;
-            for (auto& dir : dirs) {
-                int nx = x + dir[0], ny = y + dir[1];
-                if (nx < 0 || ny < 0 || nx >= m || ny >= n) continue;
-                char cell = classroom[nx][ny];
-                if (cell == 'X') continue; // Obstacle
-
-                int nmask = mask;
-                if (cell == 'L') {
-                    int lidx = litterPos[nx][ny];
-                    nmask |= (1 << lidx);
-                }
-                int ne = e - 1;
-                if (!visited[nx][ny][nmask][ne]) {
-                    visited[nx][ny][nmask][ne] = true;
-                    q.emplace(nx, ny, nmask, ne, moves + 1);
-                }
-            }
+```cpp
+class Solution {
+public:
+    bool canMakeAllEvenOrAllOdd(vector<int>& nums1) {
+        bool has_odd = false, has_even = false;
+        for (int num : nums1) {
+            if (num % 2 == 0) has_even = true;
+            else has_odd = true;
         }
-        return -1;
+        // Either all even, all odd or both odd and even (because differences allow you to make any parity)
+        return true;
+    }
+};
+```
+Alternatively, you could do this as a stub for completeness (for submission):
+
+```cpp
+class Solution {
+public:
+    bool canMakeAllEvenOrAllOdd(vector<int>& nums1) {
+        return true;
+    }
+};
+```
+
+## 5. **Example Explanation**
+
+**Example:** `nums1 = [2,3]`
+
+- Parities: `2` is even, `3` is odd.
+- For `nums2`, pick:
+  - `nums2[0] = nums1[0] - nums1[1] = 2 - 3 = -1` (odd)
+  - `nums2[1] = nums1[1] = 3` (odd)
+- All odd → answer is `true`.
+
+**Alternatively:**
+- `nums2[0] = nums1[0] = 2` (even)
+- `nums2[1] = nums1[1] - nums1[0] = 3 - 2 = 1` (odd)
+- Not uniform parity, but the previous way worked!
+
+---
+
+### **Summary Table**
+
+| All odd | All even | Both present | Always possible? |
+|---------|----------|--------------|:----------------:|
+| Yes     | Yes      | Yes          |      Yes         |
+
+---
+
+## **Final Answer**
+
+- It is **always possible** for all valid inputs.  
+- A trivial solution: always return `true`.
+
+---
+
+### **Final C++ Code**
+
+```cpp
+class Solution {
+public:
+    bool canMakeAllEvenOrAllOdd(vector<int>& nums1) {
+        return true;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
-
-**Example 2**
-
-```text
-classroom = ["LS", "RL"], energy = 4
-```
-
-The grid:
-```
-L S
-R L
-```
-- Start: (0,1), energy=4
-- Litters at (0,0) and (1,1)
-- Reset at (1,0)
-
-**Possible steps:**
-1. Move left (0,1) → (0,0): Use 1 energy (now 3), collect first L (moves: 1)
-2. Move down (0,0) → (1,0): Use 1 energy (now 2), step on R and restore to 4 (optional), (moves: 2)
-3. Move right (1,0) → (1,1): Use 1 energy (now 3), collect second L (moves: 3)
-
-Thus, minimal number of moves is **3**.
-
----
-
-### **Summary Table**
-
-| State         | Position | Energy | Litter Mask | Moves |
-|---------------|----------|--------|-------------|-------|
-| Start         | (0,1)    | 4      |   0b00      |   0   |
-| Left to L     | (0,0)    | 3      |   0b01      |   1   |
-| Down to R     | (1,0)    | 2      |   0b01      |   2   |
-| Right to L    | (1,1)    | 3      |   0b11      |   3   |
-
----
+**Let me know if you'd like a more complex version handling extensions!**
