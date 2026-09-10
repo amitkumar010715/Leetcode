@@ -1,110 +1,122 @@
-Let's break down the solution step by step.
+Let's break down the solution step by step:
 
 ---
 
-## **1. Summary**
+## 1. **Short Summary**
 
-Given an integer `n`, **count the total number of commas** that would be present if you wrote out all the numbers from 1 to `n`, using standard comma groupings (every 3 digits from the right, no commas if less than 4 digits).
-
----
-
-## **2. Constraints & Edge Cases**
-
-### **Constraints**
-- `1 <= n <= 10^15` (so, brute force iterating is infeasible).
-- Only numbers with 4 or more digits (i.e., 1,000 and up) will have commas.
-
-### **Edge Cases**
-- `n < 1000`: No number has commas, answer is `0`.
-- `n = 1,000`, `n = 9,999`, etc.: Only the numbers with 4+ digits need processing.
-- Large `n` (up to `10^15`): Solution must be O(log n).
+Given a binary tree, **find how many nodes are equal to the *average* of the values in their subtree** (including themselves). The average is always rounded down to the nearest integer.
 
 ---
 
-## **3. Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-### **Insight**
-- For a number with `d` digits, the number of commas is:  
-  `num_commas = floor((d-1) / 3)`
-- All numbers in `[10^(k-1), 10^k - 1]` have `k` digits.
+### Constraints:
+- Number of nodes: **1 to 1000**
+- Node values: **0 to 1000**
 
-### **Plan**
-1. For each relevant comma tier, count how many numbers in `[1, n]` have that many commas.
-2. Sum up the contribution (commas * count) over all ranges.
-
-#### **Approach**
-- For each value of `num_commas` (i.e., for `k = 1, 2, 3, ...`)  
-  The first length with `k` commas: `len = 3*k + 1`
-- Numbers with length in `[3k+1, 3k+3]` all have `k` commas.
-
-For each `k` such that `3k+1 <= digits of n`, calculate:
-
-- **Lower Bound (`lo`):** `10^(3k)`
-- **Upper Bound (`hi`):** `min(n, 10^(3k+3) - 1)`
-
-Numbers in the tier: If `lo > n`, break loop.
-- Count = `max(0, hi - lo + 1)`
-- Commas contributed = count * k
-
-Sum for all possible `k`.
+### Edge Cases:
+- Tree with only **one node** (root)
+- Tree with all nodes having the **same value**
+- Skewed tree (all left or all right children)
+- Nodes where average may not be an integer (average is floored)
 
 ---
 
-## **4. C++ Solution**
+## 3. **Optimal Algorithm**
+
+### Approach: **DFS + Postorder traversal**
+
+We want the sum and count of nodes for every subtree (including the current node itself). We'll use recursion (DFS):
+
+- For every node:
+  - Recursively compute sum and count in left and right subtrees.
+  - Compute subtree sum and count at current node:
+    - `subtree_sum = left_sum + right_sum + node.val`
+    - `subtree_count = left_count + right_count + 1`
+  - Compute the floored average: `avg = subtree_sum / subtree_count`
+  - If `avg == node.val`, increment the answer.
+- Return count of such nodes.
+
+### Complexity:
+- **Time:** O(N) (Each node visited once)
+- **Space:** O(H) for recursion stack (H = tree height, worst O(N) for skewed)
+
+---
+
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <iostream>
-#include <cmath>
-using namespace std;
+/**
+ * Definition for a binary tree node.
+ * struct TreeNode {
+ *     int val;
+ *     TreeNode *left;
+ *     TreeNode *right;
+ *     TreeNode() : val(0), left(nullptr), right(nullptr) {}
+ *     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+ *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
+ * };
+ */
 
 class Solution {
 public:
-    long long countCommas(long long n) {
-        long long total = 0;
-        for (int k = 1; ; ++k) {
-            // Start of numbers with k commas: 10^(3*k)
-            long long lo = pow(10LL, 3 * k);
-            if (lo > n) break;
-            long long hi = min(n, pow(10LL, 3 * k + 3) - 1);
-            long long cnt = hi - lo + 1;
-            total += cnt * k;
-        }
-        return total;
+    int result = 0;
+
+    // returns {sum, count}
+    pair<int, int> dfs(TreeNode* node) {
+        if (!node) return {0, 0};
+
+        auto [left_sum, left_count] = dfs(node->left);
+        auto [right_sum, right_count] = dfs(node->right);
+
+        int curr_sum = left_sum + right_sum + node->val;
+        int curr_count = left_count + right_count + 1;
+
+        int avg = curr_sum / curr_count;
+        if (avg == node->val) result++;
+
+        return {curr_sum, curr_count};
+    }
+
+    int averageOfSubtree(TreeNode* root) {
+        result = 0;
+        dfs(root);
+        return result;
     }
 };
 ```
 
 ---
 
-## **5. Example Walkthrough**
+## 5. **Example Explained**
 
-### **Example 1**
-Input: `n = 1002`
+Let's use **Example 1**:
 
-- Let's find all k:
+### Tree:
+```
+      4
+     / \
+    8   5
+   / \   \
+  0   1   6
+```
+#### Manually Traverse:
 
-#### `k = 1`
-- `lo = 10^3 = 1,000`
-- `hi = min(1002, 10^6-1=999,999) = 1002`
-- So numbers: 1000, 1001, 1002
-- Total = (1002 - 1000 + 1) = 3
-- Each has 1 comma: **3 * 1 = 3**
+1. **Leaves**:
+   - Node 0: subtree sum=0, count=1, avg=0/1=0, node=0 → count++
+   - Node 1: subtree sum=1, count=1, avg=1/1=1, node=1 → count++
+   - Node 6: subtree sum=6, count=1, avg=6/1=6, node=6 → count++
 
-#### `k = 2`
-- `lo = 10^6 = 1,000,000` > n
-- Loop breaks.
+2. **Parents**:
+   - Node 8: subtree=[8,0,1], sum=8+0+1=9, count=3, avg=9/3=3, node=8 → not counted
+   - Node 5: subtree=[5,6], sum=5+6=11, count=2, avg=11/2=5, node=5 → count++
 
-**Output: 3**
+3. **Root (4)**: entire tree sum=4+8+0+1+5+6=24, count=6, avg=24/6=4, node=4 → count++
 
-
----
-
-### **Summary**
-
-- Count total numbers in each digit-group that get the same number of commas.
-- For each group, multiply size by number of commas, add to total.
-- Efficiently works for very large `n`.
+**Total:** 5 nodes (0, 1, 6, 5, 4)
 
 ---
 
-Let me know if you have questions or need further clarifications!
+## **Conclusion**
+
+With a recursive postorder DFS, we can compute the sum and count of each subtree and check the condition in O(N) time for any binary tree. The provided code applies this logic cleanly.
