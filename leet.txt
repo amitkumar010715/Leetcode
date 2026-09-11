@@ -1,122 +1,92 @@
-Let's break down the solution step by step:
+Sure! Let's go step by step:
 
 ---
 
-## 1. **Short Summary**
+### 1. **Short summary**
 
-Given a binary tree, **find how many nodes are equal to the *average* of the values in their subtree** (including themselves). The average is always rounded down to the nearest integer.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-### Constraints:
-- Number of nodes: **1 to 1000**
-- Node values: **0 to 1000**
-
-### Edge Cases:
-- Tree with only **one node** (root)
-- Tree with all nodes having the **same value**
-- Skewed tree (all left or all right children)
-- Nodes where average may not be an integer (average is floored)
+Given an array of digits (`digits`), count the **number of distinct 3-digit even numbers** that can be formed, using each `digits[i]` at most once per number, and avoiding leading zeros.
 
 ---
 
-## 3. **Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-### Approach: **DFS + Postorder traversal**
-
-We want the sum and count of nodes for every subtree (including the current node itself). We'll use recursion (DFS):
-
-- For every node:
-  - Recursively compute sum and count in left and right subtrees.
-  - Compute subtree sum and count at current node:
-    - `subtree_sum = left_sum + right_sum + node.val`
-    - `subtree_count = left_count + right_count + 1`
-  - Compute the floored average: `avg = subtree_sum / subtree_count`
-  - If `avg == node.val`, increment the answer.
-- Return count of such nodes.
-
-### Complexity:
-- **Time:** O(N) (Each node visited once)
-- **Space:** O(H) for recursion stack (H = tree height, worst O(N) for skewed)
+- **Length**: `digits.length` between 3 and 10.
+- **Value Range**: Each digit between 0 and 9.
+- **Leading Zeros**: Numbers like 012 are not valid (leading zeros not allowed).
+- **Even Numbers**: Last digit must be even (0,2,4,6,8).
+- **Duplicates Allowed**: Input digits can repeat, but each occurrence used once per number.
+- **All Digits Odd**: If only odd digits given, output is 0.
+- **For repeated digits**: Need to ensure enough occurrences for numbers with repeated digits.
 
 ---
 
-## 4. **Clean C++ Solution**
+### 3. **Optimal Algorithm**
+
+- **Brute Force is Fine**: Since all possible 3-digit numbers (100-999) is just 900 possibilities and `digits` is max 10 elements, we can check each possibility.
+- **Steps**:
+    1. Count the frequency of each digit in the input.
+    2. For each even 3-digit number from 100 to 998 (step 2):
+        - Split number into its digits: hundreds, tens, units.
+        - Check that for each digit, enough occurrence exists in `digits`.
+        - If yes, add to a result set (to guarantee uniqueness).
+    3. Return the size of the result set.
+
+- **Why NOT backtracking permutations?**:
+  We want uniqueness, but the number of possible 3-digit even numbers is just 900, manageable for a simple check per candidate.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
-/**
- * Definition for a binary tree node.
- * struct TreeNode {
- *     int val;
- *     TreeNode *left;
- *     TreeNode *right;
- *     TreeNode() : val(0), left(nullptr), right(nullptr) {}
- *     TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
- *     TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
- * };
- */
+#include <vector>
+#include <unordered_map>
+#include <unordered_set>
+using namespace std;
 
 class Solution {
 public:
-    int result = 0;
+    int countEven3DigitNumbers(vector<int>& digits) {
+        unordered_map<int, int> freq;
+        for (int d: digits) freq[d]++;
 
-    // returns {sum, count}
-    pair<int, int> dfs(TreeNode* node) {
-        if (!node) return {0, 0};
+        unordered_set<int> uniqueNums;
 
-        auto [left_sum, left_count] = dfs(node->left);
-        auto [right_sum, right_count] = dfs(node->right);
+        // Loop over all 3-digit numbers from 100 to 999 (inclusive)
+        for (int num = 100; num <= 999; num++) {
+            if ((num % 2) != 0) continue; // Must be even
 
-        int curr_sum = left_sum + right_sum + node->val;
-        int curr_count = left_count + right_count + 1;
+            int a = num / 100, b = (num / 10) % 10, c = num % 10;
+            unordered_map<int, int> need;
+            need[a]++; need[b]++; need[c]++;
 
-        int avg = curr_sum / curr_count;
-        if (avg == node->val) result++;
+            bool valid = true;
+            for (auto& [digit, cnt] : need)
+                if (freq[digit] < cnt) { valid = false; break; }
 
-        return {curr_sum, curr_count};
-    }
-
-    int averageOfSubtree(TreeNode* root) {
-        result = 0;
-        dfs(root);
-        return result;
+            if (valid)
+                uniqueNums.insert(num);
+        }
+        return uniqueNums.size();
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+### 5. **Example Explanation**
 
-Let's use **Example 1**:
+**Input:** `digits = [0,2,2]`
 
-### Tree:
-```
-      4
-     / \
-    8   5
-   / \   \
-  0   1   6
-```
-#### Manually Traverse:
+- Possible 3-digit even numbers:
+    - All 3-digit numbers with these digits, must be even, and no leading zero.
+    - List all possible non-leading zero permutations:
+        - 202 (digits used: 2,0,2)
+        - 220 (digits used: 2,2,0)
+    - Only these two numbers are possible.
 
-1. **Leaves**:
-   - Node 0: subtree sum=0, count=1, avg=0/1=0, node=0 → count++
-   - Node 1: subtree sum=1, count=1, avg=1/1=1, node=1 → count++
-   - Node 6: subtree sum=6, count=1, avg=6/1=6, node=6 → count++
-
-2. **Parents**:
-   - Node 8: subtree=[8,0,1], sum=8+0+1=9, count=3, avg=9/3=3, node=8 → not counted
-   - Node 5: subtree=[5,6], sum=5+6=11, count=2, avg=11/2=5, node=5 → count++
-
-3. **Root (4)**: entire tree sum=4+8+0+1+5+6=24, count=6, avg=24/6=4, node=4 → count++
-
-**Total:** 5 nodes (0, 1, 6, 5, 4)
+**Output:** `2`
 
 ---
 
-## **Conclusion**
-
-With a recursive postorder DFS, we can compute the sum and count of each subtree and check the condition in O(N) time for any binary tree. The provided code applies this logic cleanly.
+If any clarification or more sample explanations are needed, feel free to ask!
