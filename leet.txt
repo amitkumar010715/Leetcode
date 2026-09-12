@@ -1,92 +1,211 @@
-Sure! Let's go step by step:
+Let's walk through each requirement with full clarity:
 
 ---
 
-### 1. **Short summary**
+## 1. **Summary**
 
-Given an array of digits (`digits`), count the **number of distinct 3-digit even numbers** that can be formed, using each `digits[i]` at most once per number, and avoiding leading zeros.
-
----
-
-### 2. **Constraints & Edge Cases**
-
-- **Length**: `digits.length` between 3 and 10.
-- **Value Range**: Each digit between 0 and 9.
-- **Leading Zeros**: Numbers like 012 are not valid (leading zeros not allowed).
-- **Even Numbers**: Last digit must be even (0,2,4,6,8).
-- **Duplicates Allowed**: Input digits can repeat, but each occurrence used once per number.
-- **All Digits Odd**: If only odd digits given, output is 0.
-- **For repeated digits**: Need to ensure enough occurrences for numbers with repeated digits.
+Given up to 50,000 intervals, each with a `[start, end, weight]`, **pick up to four non-overlapping intervals with maximum total weight**. If multiple sets achieve this, return the *lexicographically smallest* array of indices (from the original list) that achieves it.
 
 ---
 
-### 3. **Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-- **Brute Force is Fine**: Since all possible 3-digit numbers (100-999) is just 900 possibilities and `digits` is max 10 elements, we can check each possibility.
-- **Steps**:
-    1. Count the frequency of each digit in the input.
-    2. For each even 3-digit number from 100 to 998 (step 2):
-        - Split number into its digits: hundreds, tens, units.
-        - Check that for each digit, enough occurrence exists in `digits`.
-        - If yes, add to a result set (to guarantee uniqueness).
-    3. Return the size of the result set.
-
-- **Why NOT backtracking permutations?**:
-  We want uniqueness, but the number of possible 3-digit even numbers is just 900, manageable for a simple check per candidate.
+- **Size:** 1 ≤ intervals.length ≤ 50,000 (can't check all subsets!).
+- **Interval boundaries:** 1 ≤ l ≤ r ≤ 1e9 (large values).
+- **Weight:** 1 ≤ weight ≤ 1e9.
+- **Up to 4 intervals:** You can choose 1, 2, 3, or 4 non-overlapping intervals (cannot choose 0).
+- **Non-overlapping:** Even touching at endpoints is NOT allowed (`[a,b]` and `[b,c]` *overlap*).
+- **Lexicographical order:** If more than one way, smallest indices should come first (i.e., prefer smaller index when in doubt).
 
 ---
 
-### 4. **C++ Solution**
+## 3. **Optimal Algorithm**
+
+This problem is a **weighted interval selection** problem, but instead of any number of intervals, *up to* 4, and we want the lexicographically smallest selection of indices.
+
+**Observations:**
+
+- Intervals can be sorted by their end point.
+- For each interval, we can find the previous interval (not overlapping) efficiently via binary search.
+- For each possible size (1..4 intervals), we can use DP:
+    - dp[i][k] = best selection (of up to k intervals) among the first i intervals.
+
+But to do **lexicographically smallest** result, the DP must store the *indices* of the chosen intervals -- the minimal array breaking ties by index sequence.
+
+### **High-level Steps:**
+
+1. **Sort intervals by end time, but keep track of original indices.**
+
+2. **For each interval, do a binary search to find the last non-overlapping interval that ends before the current one's start.**  
+   (So for each interval i: we can compute `prev_i`.)
+
+3. **DP State:**  
+   - dp[i][k]: Best weight sum for intervals 0..i (ending at or before i), selecting up to k intervals; store also their chosen indices.
+
+   Since k ≤ 4, we can do this efficiently.  
+   For each interval, in processing order:
+   - Option 1: Do not take interval i.  
+   - Option 2: Take interval i, and add its weight to the optimal selection for k-1 intervals among intervals ending before i.
+
+   Track the corresponding array of indices to select the lex smallest.
+
+4. **After all, among all selections of k=1..4, return the lex smallest indices with the maximal sum.**
+
+### **Details:**
+
+- Since the number of intervals is large, but k is small, we process efficiently:  
+  For each interval i, update dp[i][k] via max of:
+    - not taking i: dp[i-1][k]
+    - taking i: dp[prev_i][k-1], with i appended
+
+- To get lex-smallest, when weights tie, compare vectors of indices.
+
+- **Implementation tip:**  
+  You can use an array to maintain "best up to here for k intervals" as you go.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <unordered_map>
-#include <unordered_set>
+#include <algorithm>
 using namespace std;
 
-class Solution {
-public:
-    int countEven3DigitNumbers(vector<int>& digits) {
-        unordered_map<int, int> freq;
-        for (int d: digits) freq[d]++;
+// Helper to compare two index arrays lexicographically
+bool is_lex_smaller(const vector<int>& a, const vector<int>& b) {
+    if (a.empty()) return false;
+    if (b.empty()) return true;
+    return a < b;
+}
 
-        unordered_set<int> uniqueNums;
-
-        // Loop over all 3-digit numbers from 100 to 999 (inclusive)
-        for (int num = 100; num <= 999; num++) {
-            if ((num % 2) != 0) continue; // Must be even
-
-            int a = num / 100, b = (num / 10) % 10, c = num % 10;
-            unordered_map<int, int> need;
-            need[a]++; need[b]++; need[c]++;
-
-            bool valid = true;
-            for (auto& [digit, cnt] : need)
-                if (freq[digit] < cnt) { valid = false; break; }
-
-            if (valid)
-                uniqueNums.insert(num);
-        }
-        return uniqueNums.size();
-    }
+struct DP {
+    long long sum;
+    vector<int> idxs;
+    DP(long long s=0, vector<int> id=vector<int>{}): sum(s), idxs(id) {}
 };
+
+vector<int> maximumWeightIntervals(vector<vector<int>>& intervals) {
+    int n = intervals.size();
+    vector<tuple<int, int, int, int>> arr; // {end, start, weight, original index}
+    for (int i = 0; i < n; ++i) {
+        arr.emplace_back(intervals[i][1], intervals[i][0], intervals[i][2], i);
+    }
+    sort(arr.begin(), arr.end()); // Sort by end time
+
+    // For each interval, find prev non-overlapping using binary search
+    vector<int> ends; // Sorted end times
+    for (auto& [e, s, w, idx] : arr) ends.push_back(e);
+
+    vector<int> prev(n, -1);
+    for (int i = 0; i < n; ++i) {
+        int s = get<1>(arr[i]);
+        // Find rightmost pos with end < s
+        int lo = 0, hi = i-1, ans = -1;
+        while (lo <= hi) {
+            int mid = (lo + hi) / 2;
+            if (ends[mid] < s) {
+                ans = mid;
+                lo = mid+1;
+            } else {
+                hi = mid-1;
+            }
+        }
+        prev[i] = ans;
+    }
+
+    // dp[i][k]: best for first i intervals with exactly k intervals chosen (i included or not)
+    // At each level k, we only need to keep prev state
+    vector<vector<DP>> dp(n, vector<DP>(5, DP()));
+    for (int i = 0; i < n; ++i) {
+        long long w = get<2>(arr[i]);
+        int idx = get<3>(arr[i]);
+        // For all k = 1..4
+        for (int k = 1; k <= 4; ++k) {
+            // Option 1: Don't take i
+            if (i > 0) dp[i][k] = dp[i-1][k];
+            // Option 2: Take i
+            if (k == 1) {
+                // Just one interval: current
+                DP cand(w, vector<int>{idx});
+                if (cand.sum > dp[i][k].sum || (cand.sum == dp[i][k].sum && is_lex_smaller(cand.idxs, dp[i][k].idxs)))
+                    dp[i][k] = cand;
+            } else {
+                int j = prev[i];
+                if (j >= 0) {
+                    DP prior = dp[j][k-1];
+                    if (!prior.idxs.empty() && prior.idxs.size() == k-1) {
+                        // Append current
+                        auto tmp = prior.idxs;
+                        tmp.push_back(idx);
+                        DP cand(prior.sum + w, tmp);
+                        if (cand.sum > dp[i][k].sum ||
+                            (cand.sum == dp[i][k].sum && is_lex_smaller(cand.idxs, dp[i][k].idxs)))
+                            dp[i][k] = cand;
+                    }
+                }
+            }
+        }
+    }
+
+    // Find best among n-1, k = 1..4
+    DP best;
+    for (int k = 1; k <= 4; ++k) {
+        DP cand = dp[n-1][k];
+        if ((cand.idxs.size() == k) &&
+            (cand.sum > best.sum ||
+             (cand.sum == best.sum && is_lex_smaller(cand.idxs, best.idxs))))
+            best = cand;
+    }
+    sort(best.idxs.begin(), best.idxs.end()); // Sorted for lexicographical order
+    return best.idxs;
+}
 ```
 
 ---
 
-### 5. **Example Explanation**
+## 5. **Example**
 
-**Input:** `digits = [0,2,2]`
+> **Input:**  
+> `intervals = [[1,3,2],[4,5,2],[1,5,5],[6,9,3],[6,7,1],[8,9,1]]`
 
-- Possible 3-digit even numbers:
-    - All 3-digit numbers with these digits, must be even, and no leading zero.
-    - List all possible non-leading zero permutations:
-        - 202 (digits used: 2,0,2)
-        - 220 (digits used: 2,2,0)
-    - Only these two numbers are possible.
+Indexed:
+- 0: [1,3,2]
+- 1: [4,5,2]
+- 2: [1,5,5]
+- 3: [6,9,3]
+- 4: [6,7,1]
+- 5: [8,9,1]
 
-**Output:** `2`
+**Step 1:** Find highest sum using up to 4 non-overlapping intervals.
+
+- Interval 2: [1,5,5]
+- Next non-overlapping after it would be 3: [6,9,3]
+
+So taking [2] and [3] gives 5 + 3 = 8.
+
+Can we do better with more intervals? Let's try some:
+
+- [0] + [1] is 2 + 2 = 4 (needs [1,3,2],[4,5,2] which are non-overlapping)
+  But in this case, [2] already covers both of those and is heavier.
+- [1] and [3] and [5]? [4,5,2] and [6,9,3] and [8,9,1]  
+  But 3 and 5 overlap at [8,9,x] (since touching counts as overlapping).
+- [2,3] is best sum 8.
+
+**Lex smallest indices:** [2,3]
+
+> **Output:** [2,3]
 
 ---
 
-If any clarification or more sample explanations are needed, feel free to ask!
+### **Summary Table**
+
+| Strategy         | Intervals                | Indices | Sum |
+|------------------|-------------------------|--------:|----:|
+| Single max       | [2]                     |   [2]   |  5  |
+| Best two         | [2],[3]                 | [2,3]   |  8  |
+| Try 4-way combo  | — All overlap or sum < 8|         |     |
+
+---
+
+Let me know if you need a Python version as well!
