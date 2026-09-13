@@ -1,211 +1,132 @@
-Let's walk through each requirement with full clarity:
+Let's address your requirements step by step:
 
 ---
 
-## 1. **Summary**
+## 1. Short Summary
 
-Given up to 50,000 intervals, each with a `[start, end, weight]`, **pick up to four non-overlapping intervals with maximum total weight**. If multiple sets achieve this, return the *lexicographically smallest* array of indices (from the original list) that achieves it.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Size:** 1 ≤ intervals.length ≤ 50,000 (can't check all subsets!).
-- **Interval boundaries:** 1 ≤ l ≤ r ≤ 1e9 (large values).
-- **Weight:** 1 ≤ weight ≤ 1e9.
-- **Up to 4 intervals:** You can choose 1, 2, 3, or 4 non-overlapping intervals (cannot choose 0).
-- **Non-overlapping:** Even touching at endpoints is NOT allowed (`[a,b]` and `[b,c]` *overlap*).
-- **Lexicographical order:** If more than one way, smallest indices should come first (i.e., prefer smaller index when in doubt).
+**Problem:**  
+Given two `n x n` binary matrices (`img1`, `img2`), you can "slide" one grid over the other (only in up, down, left, right - no rotation), and your goal is to maximize the overlap, i.e., maximize the number of positions where both images have `1` after translation.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-This problem is a **weighted interval selection** problem, but instead of any number of intervals, *up to* 4, and we want the lexicographically smallest selection of indices.
+### **Constraints**
+- `1 <= n <= 30`
+- Both matrices are `n x n` square.
+- Matrix elements are either `0` or `1`.
 
-**Observations:**
-
-- Intervals can be sorted by their end point.
-- For each interval, we can find the previous interval (not overlapping) efficiently via binary search.
-- For each possible size (1..4 intervals), we can use DP:
-    - dp[i][k] = best selection (of up to k intervals) among the first i intervals.
-
-But to do **lexicographically smallest** result, the DP must store the *indices* of the chosen intervals -- the minimal array breaking ties by index sequence.
-
-### **High-level Steps:**
-
-1. **Sort intervals by end time, but keep track of original indices.**
-
-2. **For each interval, do a binary search to find the last non-overlapping interval that ends before the current one's start.**  
-   (So for each interval i: we can compute `prev_i`.)
-
-3. **DP State:**  
-   - dp[i][k]: Best weight sum for intervals 0..i (ending at or before i), selecting up to k intervals; store also their chosen indices.
-
-   Since k ≤ 4, we can do this efficiently.  
-   For each interval, in processing order:
-   - Option 1: Do not take interval i.  
-   - Option 2: Take interval i, and add its weight to the optimal selection for k-1 intervals among intervals ending before i.
-
-   Track the corresponding array of indices to select the lex smallest.
-
-4. **After all, among all selections of k=1..4, return the lex smallest indices with the maximal sum.**
-
-### **Details:**
-
-- Since the number of intervals is large, but k is small, we process efficiently:  
-  For each interval i, update dp[i][k] via max of:
-    - not taking i: dp[i-1][k]
-    - taking i: dp[prev_i][k-1], with i appended
-
-- To get lex-smallest, when weights tie, compare vectors of indices.
-
-- **Implementation tip:**  
-  You can use an array to maintain "best up to here for k intervals" as you go.
+### **Edge Cases**
+- Both matrices are all zeros (overlap is 0).
+- Both matrices are all ones (maximum overlap is n * n).
+- Only one '1' in each, potentially at different coordinates (overlap is at most 1 after alignment).
+- Sparse matrices (more zeros), so translating might only match a few positions.
+- The solution must handle every possible translation (from complete left/up to complete right/down within bounds).
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+### **Naive Brute Force**
+
+For each possible translation (shift right/left and up/down), shift `img1` over `img2` and count the overlap. Given both matrices are at most 30x30, the total number of possible translations is `(2n-1)` for rows and `(2n-1)` for columns, making at most `O(n^4)` operations for a naïve implementation—acceptable as `30^4 = 810,000`.
+
+### **Optimized Idea**
+
+Instead of checking every translation with nested loops, we can:
+- Precompute coordinates of all 1's in both matrices.
+- For each pair of 1's (`(i1, j1)` from `img1` and `(i2, j2)` from `img2`), compute translation vector `(dx, dy) = (i2 - i1, j2 - j1)`.
+- For each such vector, count how many align in that way (using a hash map).
+- The answer is the maximum count among all translation vectors.
+
+This reduces time complexity to **O(K^2)** where K is the number of 1's (which never exceeds 900), so it's very efficient.
+
+#### **Steps**
+1. Record coordinates of 1's in both images as two arrays (`ones1`, `ones2`).
+2. For every pair, compute difference `(dx, dy)`.
+3. Count frequencies of all such diffs using a map.
+4. The maximum frequency is the solution.
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 #include <vector>
-#include <algorithm>
+#include <unordered_map>
 using namespace std;
 
-// Helper to compare two index arrays lexicographically
-bool is_lex_smaller(const vector<int>& a, const vector<int>& b) {
-    if (a.empty()) return false;
-    if (b.empty()) return true;
-    return a < b;
-}
+class Solution {
+public:
+    int largestOverlap(vector<vector<int>>& img1, vector<vector<int>>& img2) {
+        int n = img1.size();
+        vector<pair<int, int>> ones1, ones2;
 
-struct DP {
-    long long sum;
-    vector<int> idxs;
-    DP(long long s=0, vector<int> id=vector<int>{}): sum(s), idxs(id) {}
+        // Collect coordinates of 1s in both images
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                if (img1[i][j] == 1) ones1.push_back({i, j});
+                if (img2[i][j] == 1) ones2.push_back({i, j});
+            }
+        }
+
+        unordered_map<long long, int> counter;
+        int maxOverlap = 0;
+
+        // For each pair of 1's, count the translation vector
+        for (auto &p1 : ones1) {
+            for (auto &p2 : ones2) {
+                // Offset so that negative shifts become positive as map key
+                int dx = p2.first - p1.first;
+                int dy = p2.second - p1.second;
+                // Encode (dx, dy) into a single long long
+                long long key = ((long long)dx << 32) | ((unsigned int)dy);
+                counter[key]++;
+                maxOverlap = max(maxOverlap, counter[key]);
+            }
+        }
+
+        return maxOverlap;
+    }
 };
-
-vector<int> maximumWeightIntervals(vector<vector<int>>& intervals) {
-    int n = intervals.size();
-    vector<tuple<int, int, int, int>> arr; // {end, start, weight, original index}
-    for (int i = 0; i < n; ++i) {
-        arr.emplace_back(intervals[i][1], intervals[i][0], intervals[i][2], i);
-    }
-    sort(arr.begin(), arr.end()); // Sort by end time
-
-    // For each interval, find prev non-overlapping using binary search
-    vector<int> ends; // Sorted end times
-    for (auto& [e, s, w, idx] : arr) ends.push_back(e);
-
-    vector<int> prev(n, -1);
-    for (int i = 0; i < n; ++i) {
-        int s = get<1>(arr[i]);
-        // Find rightmost pos with end < s
-        int lo = 0, hi = i-1, ans = -1;
-        while (lo <= hi) {
-            int mid = (lo + hi) / 2;
-            if (ends[mid] < s) {
-                ans = mid;
-                lo = mid+1;
-            } else {
-                hi = mid-1;
-            }
-        }
-        prev[i] = ans;
-    }
-
-    // dp[i][k]: best for first i intervals with exactly k intervals chosen (i included or not)
-    // At each level k, we only need to keep prev state
-    vector<vector<DP>> dp(n, vector<DP>(5, DP()));
-    for (int i = 0; i < n; ++i) {
-        long long w = get<2>(arr[i]);
-        int idx = get<3>(arr[i]);
-        // For all k = 1..4
-        for (int k = 1; k <= 4; ++k) {
-            // Option 1: Don't take i
-            if (i > 0) dp[i][k] = dp[i-1][k];
-            // Option 2: Take i
-            if (k == 1) {
-                // Just one interval: current
-                DP cand(w, vector<int>{idx});
-                if (cand.sum > dp[i][k].sum || (cand.sum == dp[i][k].sum && is_lex_smaller(cand.idxs, dp[i][k].idxs)))
-                    dp[i][k] = cand;
-            } else {
-                int j = prev[i];
-                if (j >= 0) {
-                    DP prior = dp[j][k-1];
-                    if (!prior.idxs.empty() && prior.idxs.size() == k-1) {
-                        // Append current
-                        auto tmp = prior.idxs;
-                        tmp.push_back(idx);
-                        DP cand(prior.sum + w, tmp);
-                        if (cand.sum > dp[i][k].sum ||
-                            (cand.sum == dp[i][k].sum && is_lex_smaller(cand.idxs, dp[i][k].idxs)))
-                            dp[i][k] = cand;
-                    }
-                }
-            }
-        }
-    }
-
-    // Find best among n-1, k = 1..4
-    DP best;
-    for (int k = 1; k <= 4; ++k) {
-        DP cand = dp[n-1][k];
-        if ((cand.idxs.size() == k) &&
-            (cand.sum > best.sum ||
-             (cand.sum == best.sum && is_lex_smaller(cand.idxs, best.idxs))))
-            best = cand;
-    }
-    sort(best.idxs.begin(), best.idxs.end()); // Sorted for lexicographical order
-    return best.idxs;
-}
 ```
 
 ---
 
-## 5. **Example**
+## 5. Example Explanation
 
-> **Input:**  
-> `intervals = [[1,3,2],[4,5,2],[1,5,5],[6,9,3],[6,7,1],[8,9,1]]`
+### Example 1
 
-Indexed:
-- 0: [1,3,2]
-- 1: [4,5,2]
-- 2: [1,5,5]
-- 3: [6,9,3]
-- 4: [6,7,1]
-- 5: [8,9,1]
+```
+img1 = [[1,1,0],
+        [0,1,0],
+        [0,1,0]]
 
-**Step 1:** Find highest sum using up to 4 non-overlapping intervals.
+img2 = [[0,0,0],
+        [0,1,1],
+        [0,0,1]]
+```
 
-- Interval 2: [1,5,5]
-- Next non-overlapping after it would be 3: [6,9,3]
-
-So taking [2] and [3] gives 5 + 3 = 8.
-
-Can we do better with more intervals? Let's try some:
-
-- [0] + [1] is 2 + 2 = 4 (needs [1,3,2],[4,5,2] which are non-overlapping)
-  But in this case, [2] already covers both of those and is heavier.
-- [1] and [3] and [5]? [4,5,2] and [6,9,3] and [8,9,1]  
-  But 3 and 5 overlap at [8,9,x] (since touching counts as overlapping).
-- [2,3] is best sum 8.
-
-**Lex smallest indices:** [2,3]
-
-> **Output:** [2,3]
+**Step by Step:**
+- The largest overlap happens when you shift `img1` right by 1 and down by 1:
+    - All 1's in `img1` that land on a 1 in `img2`:
+        - At position `(1,1)` in both (center)
+        - At position `(2,1)` in `img1` lands at `(3,2)`, which is out of bounds, so overlap is only possible for points within the bounds.
+        - At position `(0,1)` in `img1` lands at `(1,2)` in `img2`, which is 1.
+        - At position `(0,0)` in `img1` lands at `(1,1)` in `img2`, which is 1.
+    - Total overlap = **3**.
 
 ---
 
 ### **Summary Table**
 
-| Strategy         | Intervals                | Indices | Sum |
-|------------------|-------------------------|--------:|----:|
-| Single max       | [2]                     |   [2]   |  5  |
-| Best two         | [2],[3]                 | [2,3]   |  8  |
-| Try 4-way combo  | — All overlap or sum < 8|         |     |
+| Step              | Description                  |
+|-------------------|-----------------------------|
+| Preprocess ones   | O(n^2) per image            |
+| Count all shifts  | O(K^2), K = number of 1's   |
+| Memory            | O(K^2)                      |
+| Handles all cases | Efficiently                 |
 
 ---
 
-Let me know if you need a Python version as well!
+**This approach is optimal for the given constraints and easy to implement.**
