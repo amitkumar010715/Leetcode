@@ -1,42 +1,54 @@
-Let's address the problem step by step:
+Let's break it down as requested:
 
 ---
 
 ## 1. **Short Summary**
-
-Select the **maximum number** of **non-overlapping palindromic substrings** of length **at least k** from string `s`. Return how many you can pick.
+Given `n` points on a line, count the number of ways to select **exactly** `k` **non-overlapping** line segments, each covering at least two points (so endpoints are integers and segments can share endpoints but not overlap intervals). Return the count modulo 1e9+7.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
-
-- **String length**: Up to 2000, so algorithms up to **O(N²)** are acceptable.
-- **k is at least 1**, and at most the length of `s`.
-- Characters are lowercase only.
-- **Edge cases**:
-  - No palindromes of length ≥ k: Return 0.
-  - The whole string is a palindrome & length ≥ k: Can select whole string (just 1 substring).
-  - Multiple overlapping palindromes: Must pick a set of non-overlapping ones maximizing the count.
+- **Constraints**:
+    - `2 <= n <= 1000`
+    - `1 <= k <= n-1`
+- **Edge Cases**:
+    - **k = 1**: All pairs (i, j) with `0 <= i < j < n` are valid single segments (must be at least 2 apart i.e., `j-i >= 1`).
+    - **k = n-1**: You can only have 1-segments (max fitting).
+    - **Minimal n**: For `n=2`, the only segment is (0,1), only possible for `k=1`.
+    - **Segments can share endpoints**: e.g., (0,2) and (2,3). The problem allows this.
+    - **No overlap**: Segments cannot cover any common *internal* points (they do not overlap intervals in the interior, but can touch at endpoints).
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm Explanation**
 
-### Step-by-step plan:
+Let **dp[i][j]** = number of ways to select **j** non-overlapping segments among the **first i points** (`0..i-1`).
 
-#### A. **Find all palindromic substrings of length ≥ k**
-- Use **DP approach** (`isPalindrome[l][r]`) or **Expand Around Center** for `O(N²)`.
+### **Base Cases:**
+- `dp[p][0] = 1` for any `p` (0 segments on any subset is 1 way).
 
-#### B. **Collect all intervals as [l, r] for palindromic substrings of length ≥ k**
+### **Recursive Formula:**
 
-#### C. **Select maximum number of non-overlapping intervals**
-- This becomes a classic **interval scheduling** (activity selection) problem. Sort intervals by end index, and greedily pick ones where the current's start is **after** the last picked interval's end.
+For every `i: 0..n`, `j: 0..k`:
+- We either:
+  - **Don't use the i-1th point**: All ways to set `j` segments among the first `i-1` points: `dp[i-1][j]`
+  - **End a segment at i-1**: Let's make a segment `[l,i-1]` where `0 <= l < i-1`:
+    - This is legal if there is a segment ending at `i-1` starting at `l` (segment length at least 2).
+    - For the subproblem, before the new segment, there are `dp[l][j-1]` ways to select `j-1` non-overlapping segments among the first `l` points.
 
-#### D. **Implementation Details**
-1. For all possible centers, expand to check palindrome and save intervals of length ≥ k.
-2. For each palindrome substring, record its `[start, end]` positions.
-3. Sort all intervals by end.
-4. Greedily select intervals: Whenever `start` > previous `end`, count it and update.
+So our recurrence is:
+- `dp[i][j] = dp[i-1][j] + sum_{l=0}^{i-2} dp[l][j-1]`
+
+But, for performance, we can **precompute prefix sums** for the sum:
+- Let `presum[i][j] = dp[0][j] + ... + dp[i][j]`, for all i, j.
+
+So,
+- `dp[i][j] = dp[i-1][j] + presum[i-2][j-1]` (if `i-2 >= 0`, else `0`).
+
+### **Implementation Details:**
+- Size of DP: O(n*k)
+- Each DP computation: O(1) (with prefix sum optimization)
+- Total: O(n*k)
 
 ---
 
@@ -44,50 +56,39 @@ Select the **maximum number** of **non-overlapping palindromic substrings** of l
 
 ```cpp
 #include <vector>
-#include <string>
-#include <algorithm>
-
 using namespace std;
 
 class Solution {
 public:
-    int maxPalindromes(string s, int k) {
-        int n = s.size();
-        vector<vector<bool>> isPal(n, vector<bool>(n, false));
-        vector<pair<int,int>> intervals;
-
-        // Odd and Even length palindromes, expand around center
-        for (int center = 0; center < n; ++center) {
-            // Odd length
-            int l = center, r = center;
-            while (l >= 0 && r < n && s[l] == s[r]) {
-                if (r - l + 1 >= k)
-                    intervals.emplace_back(l, r);
-                --l, ++r;
+    int numberOfSets(int n, int k) {
+        const int MOD = 1e9 + 7;
+        // dp[i][j]: #ways to choose j segments among first i points (0..i-1)
+        vector<vector<long long>> dp(n + 1, vector<long long>(k + 1, 0));
+        vector<vector<long long>> presum(n + 1, vector<long long>(k + 1, 0));
+        
+        // base case: 0 segments, 1 way for any i
+        for (int i = 0; i <= n; ++i)
+            dp[i][0] = 1;
+        
+        for (int j = 0; j <= k; ++j)
+            presum[0][j] = dp[0][j];
+        
+        for (int i = 1; i <= n; ++i) {
+            for (int j = 1; j <= k; ++j) {
+                // Don't use point i-1 as an end
+                dp[i][j] = dp[i-1][j];
+                // Add all ways of ending a segment at i-1, with start l in 0..i-2 (length >= 2)
+                // Which is sum_{l=0}^{i-2} dp[l][j-1]
+                if (i-2 >= 0) {
+                    dp[i][j] = (dp[i][j] + presum[i-2][j-1]) % MOD;
+                }
             }
-            // Even length
-            l = center, r = center + 1;
-            while (l >= 0 && r < n && s[l] == s[r]) {
-                if (r - l + 1 >= k)
-                    intervals.emplace_back(l, r);
-                --l, ++r;
-            }
-        }
-
-        // Greedy selection of non-overlapping intervals (activity selection)
-        sort(intervals.begin(), intervals.end(), [](auto &a, auto &b) {
-            return a.second < b.second;
-        });
-
-        int res = 0;
-        int lastEnd = -1;
-        for (auto &it : intervals) {
-            if (it.first > lastEnd) {
-                res++;
-                lastEnd = it.second;
+            for (int j = 0; j <= k; ++j) {
+                if (i==0) presum[i][j] = dp[i][j];
+                else presum[i][j] = (presum[i-1][j] + dp[i][j]) % MOD;
             }
         }
-        return res;
+        return (int)dp[n][k];
     }
 };
 ```
@@ -96,24 +97,30 @@ public:
 
 ## 5. **Example Explanation**
 
-**Example 1:**
-- `s = "abaccdbbd"`, `k = 3`
-- Palindromic substrings length ≥ 3:
-    - `"aba"` at [0,2]
-    - `"acca"` (not a palindrome)
-    - `"ccd"` (not a palindrome)
-    - `"dbbd"` at [5,8]
-- Picking `[0,2]` and `[5,8]`, they do not overlap (`2 < 5`).
-- Can't pick any others without overlap.
-- **Return 2.**
+**Example: n = 4, k = 2**
+
+Points: 0, 1, 2, 3
+
+Let’s enumerate all possible sets of 2 non-overlapping segments:
+
+- **(0,1) and (1,2)**
+- **(0,1) and (1,3)**
+- **(0,1) and (2,3)**
+- **(0,2) and (2,3)**
+- **(1,2) and (2,3)**
+
+All segments are non-overlapping (can touch at endpoints). So answer is **5.**
 
 ---
 
-## **Recap**
+## **Summary Table**
 
-1. Find all palindromic substrings of length ≥ k.
-2. Turn into interval scheduling for non-overlapping selection.
-3. Greedily select by earliest end point.
+| n | k | Output | Explanation |
+|---|---|--------|-------------|
+| 4 | 2 |    5   | (see above) |
 
-**Time Complexity:** O(N²)  
-**Space Complexity:** O(N²) (mainly for interval storage)
+---
+
+**This DP is efficient for n up to 1000 and k up to n-1.**
+
+Let me know if you want a step-by-step visualization for the DP table!
