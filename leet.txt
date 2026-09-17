@@ -1,126 +1,130 @@
-Let's break it down as requested:
+Sure! Let's tackle the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
-Given `n` points on a line, count the number of ways to select **exactly** `k` **non-overlapping** line segments, each covering at least two points (so endpoints are integers and segments can share endpoints but not overlap intervals). Return the count modulo 1e9+7.
+
+You are given an array and a target sum. You must find **two non-overlapping subarrays** (contiguous) whose **sum is exactly the target**. Among all such possible pairs, **minimize the sum of their lengths**. If it's not possible, return -1.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
-- **Constraints**:
-    - `2 <= n <= 1000`
-    - `1 <= k <= n-1`
-- **Edge Cases**:
-    - **k = 1**: All pairs (i, j) with `0 <= i < j < n` are valid single segments (must be at least 2 apart i.e., `j-i >= 1`).
-    - **k = n-1**: You can only have 1-segments (max fitting).
-    - **Minimal n**: For `n=2`, the only segment is (0,1), only possible for `k=1`.
-    - **Segments can share endpoints**: e.g., (0,2) and (2,3). The problem allows this.
-    - **No overlap**: Segments cannot cover any common *internal* points (they do not overlap intervals in the interior, but can touch at endpoints).
+
+**Constraints:**
+- Array length up to 1e5 (100,000).  
+- All elements and target are positive (1 to 1000 for elements, up to 1e8 for target).  
+- O(N²) solutions will not pass; need O(N) or O(N log N).
+
+**Edge cases:**
+- Multiple possible pairs (must choose pair with minimal total length).
+- No possible subarrays with sum = target (return -1).
+- Subarrays can't overlap, but can be adjacent.
+- Input like `[target, target]` → output `2`
+- Cases where the shortest possible is to use single elements `[3,2,2,4,3] target=3` → [3], [3]
 
 ---
 
-## 3. **Optimal Algorithm Explanation**
+## 3. **Optimal Algorithm**
 
-Let **dp[i][j]** = number of ways to select **j** non-overlapping segments among the **first i points** (`0..i-1`).
+### **Approach**
+We need to be able to, for every possible subarray with sum = target, efficiently find a non-overlapping second subarray with sum = target whose length is minimized.
 
-### **Base Cases:**
-- `dp[p][0] = 1` for any `p` (0 segments on any subset is 1 way).
+#### **Sliding Window + Dynamic Tracking**
 
-### **Recursive Formula:**
+**Step 1:**
+- Use sliding window to find all subarrays with sum = target.
+- For each, track its starting and ending indices and length.
 
-For every `i: 0..n`, `j: 0..k`:
-- We either:
-  - **Don't use the i-1th point**: All ways to set `j` segments among the first `i-1` points: `dp[i-1][j]`
-  - **End a segment at i-1**: Let's make a segment `[l,i-1]` where `0 <= l < i-1`:
-    - This is legal if there is a segment ending at `i-1` starting at `l` (segment length at least 2).
-    - For the subproblem, before the new segment, there are `dp[l][j-1]` ways to select `j-1` non-overlapping segments among the first `l` points.
+**Step 2:**
+- As we slide, we want to know: "At index i, what is the shortest *previous* subarray [0..i] ending at or before i with sum=target?"
 
-So our recurrence is:
-- `dp[i][j] = dp[i-1][j] + sum_{l=0}^{i-2} dp[l][j-1]`
+**Step 3:**
+- While finding subarrays, for each ending at `j`, check if there is a previous disjoint interval ending before i.
+- Use a `minLenLeft[i]` array:  
+  At each position, what's the minimal length *ending at or before* `i` with sum = target.
 
-But, for performance, we can **precompute prefix sums** for the sum:
-- Let `presum[i][j] = dp[0][j] + ... + dp[i][j]`, for all i, j.
+**Step 4:**
+- For every subarray `[i, j]` with sum = target:
+  - Look at `minLenLeft[i-1]`.
+  - If it's not inf, then we have two non-overlapping subarrays - sum their lengths.
+  - Update result if minimal.
 
-So,
-- `dp[i][j] = dp[i-1][j] + presum[i-2][j-1]` (if `i-2 >= 0`, else `0`).
+**Step 5:**
+- After checking, update `minLenLeft[j]` to keep track of the minimal so far.
 
-### **Implementation Details:**
-- Size of DP: O(n*k)
-- Each DP computation: O(1) (with prefix sum optimization)
-- Total: O(n*k)
+**Why O(N)?**
+- Each index is processed sequentially; at most O(N).
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
+#include <algorithm>
+#include <climits>
 using namespace std;
 
 class Solution {
 public:
-    int numberOfSets(int n, int k) {
-        const int MOD = 1e9 + 7;
-        // dp[i][j]: #ways to choose j segments among first i points (0..i-1)
-        vector<vector<long long>> dp(n + 1, vector<long long>(k + 1, 0));
-        vector<vector<long long>> presum(n + 1, vector<long long>(k + 1, 0));
-        
-        // base case: 0 segments, 1 way for any i
-        for (int i = 0; i <= n; ++i)
-            dp[i][0] = 1;
-        
-        for (int j = 0; j <= k; ++j)
-            presum[0][j] = dp[0][j];
-        
-        for (int i = 1; i <= n; ++i) {
-            for (int j = 1; j <= k; ++j) {
-                // Don't use point i-1 as an end
-                dp[i][j] = dp[i-1][j];
-                // Add all ways of ending a segment at i-1, with start l in 0..i-2 (length >= 2)
-                // Which is sum_{l=0}^{i-2} dp[l][j-1]
-                if (i-2 >= 0) {
-                    dp[i][j] = (dp[i][j] + presum[i-2][j-1]) % MOD;
+    int minSumOfLengths(vector<int>& arr, int target) {
+        int n = arr.size();
+        vector<int> minLenLeft(n, INT_MAX);
+        int left = 0, sum = 0;
+        int minLen = INT_MAX;
+        int res = INT_MAX;
+
+        // First pass: sliding window, for each end pos, track minimal length up to this point
+        for (int right = 0; right < n; ++right) {
+            sum += arr[right];
+            // Shrink window if sum too big
+            while (sum > target && left <= right) {
+                sum -= arr[left++];
+            }
+            // Found a subarray with target sum
+            if (sum == target) {
+                int len = right - left + 1;
+                // If possible, combine with earlier interval's minimal length
+                if (left > 0 && minLenLeft[left-1] != INT_MAX) {
+                    res = min(res, minLenLeft[left-1] + len);
                 }
+                minLen = min(minLen, len); // update min length up to now
             }
-            for (int j = 0; j <= k; ++j) {
-                if (i==0) presum[i][j] = dp[i][j];
-                else presum[i][j] = (presum[i-1][j] + dp[i][j]) % MOD;
-            }
+            // Propagate the minimal length up to index right
+            minLenLeft[right] = minLen;
         }
-        return (int)dp[n][k];
+        return res == INT_MAX ? -1 : res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Explain One Example**
 
-**Example: n = 4, k = 2**
+Let's use **Example 1**:
 
-Points: 0, 1, 2, 3
+**Input:**  
+`arr = [3,2,2,4,3], target = 3`  
 
-Let’s enumerate all possible sets of 2 non-overlapping segments:
+**Step by step:**  
+- **Subarrays with sum=3:**  
+  - `[3]` at 0  
+  - `[3]` at 4
 
-- **(0,1) and (1,2)**
-- **(0,1) and (1,3)**
-- **(0,1) and (2,3)**
-- **(0,2) and (2,3)**
-- **(1,2) and (2,3)**
+- As sliding window progresses:
+  - At index 0: `[3]` (length=1)
+    - minLenLeft[0]=1
+  - At indices 1,2,3: sum != 3, so minLenLeft propagates
+  - At index 4: `[3]` (from 4 to 4, length=1)
+    - The last valid (non-overlapping) left for a pair is at index 3.
+    - minLenLeft[3]=1, so current result = 1 (for previous) + 1 (now) = 2
 
-All segments are non-overlapping (can touch at endpoints). So answer is **5.**
-
----
-
-## **Summary Table**
-
-| n | k | Output | Explanation |
-|---|---|--------|-------------|
-| 4 | 2 |    5   | (see above) |
+**So answer is `2`.**
 
 ---
 
-**This DP is efficient for n up to 1000 and k up to n-1.**
-
-Let me know if you want a step-by-step visualization for the DP table!
+**In summary:**
+- We use a sliding window to find all subarrays with sum=target.
+- At each step, we track min lengths up to point to efficiently pair any later subarray with the best previous, non-overlapping one.
+- The solution is efficient O(N) and can handle the input size constraints.
