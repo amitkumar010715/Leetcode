@@ -1,130 +1,147 @@
-Sure! Let's tackle the problem step by step:
+Let's address the problem step-by-step as requested:
 
 ---
 
 ## 1. **Short Summary**
 
-You are given an array and a target sum. You must find **two non-overlapping subarrays** (contiguous) whose **sum is exactly the target**. Among all such possible pairs, **minimize the sum of their lengths**. If it's not possible, return -1.
+Given a string `s`, you need to find the **maximum number of non-overlapping non-empty substrings**, so that for any character in any substring, *all* of its occurrences in `s` must lie *within* that substring. Among all such possible sets of substrings, return the set with minimal total length.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- Array length up to 1e5 (100,000).  
-- All elements and target are positive (1 to 1000 for elements, up to 1e8 for target).  
-- O(N²) solutions will not pass; need O(N) or O(N log N).
-
-**Edge cases:**
-- Multiple possible pairs (must choose pair with minimal total length).
-- No possible subarrays with sum = target (return -1).
-- Subarrays can't overlap, but can be adjacent.
-- Input like `[target, target]` → output `2`
-- Cases where the shortest possible is to use single elements `[3,2,2,4,3] target=3` → [3], [3]
+- **String Length**: Up to 10<sup>5</sup> (Must be O(N) or O(N log N))
+- **Characters**: Only lowercase English letters ('a'-'z')
+- **Edge Cases**:
+  - All letters unique: each letter can be a substring.
+  - All identical: only 1 substring (the whole string).
+  - Must take care of overlapping intervals.
+  - Letters appearing in non-contiguous blocks force substrings to contain both appearances.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Approach**
-We need to be able to, for every possible subarray with sum = target, efficiently find a non-overlapping second subarray with sum = target whose length is minimized.
+This is an **interval covering** + **greedy selection** problem; the key insight is to:
+- For every character, find its **leftmost** and **rightmost** position.
+- For each letter, try to expand its interval (`[l, r]` as the span of a single letter) **outward** if any character inside the interval extends beyond it (repeat until the interval stabilizes).
+- Collect all such "minimal covering substrings" (intervals that are precisely tight—cannot shrink further and contain all of their characters' appearances).
+- **Sort** these intervals by finishing index, and pick **greedily** (earliest finishing time, classic interval-scheduling) to maximize quantity while avoiding overlap.
+- Because we construct the tightest intervals possible per letter, the result will also have the minimal total length.
 
-#### **Sliding Window + Dynamic Tracking**
+### Step-by-Step
 
-**Step 1:**
-- Use sliding window to find all subarrays with sum = target.
-- For each, track its starting and ending indices and length.
-
-**Step 2:**
-- As we slide, we want to know: "At index i, what is the shortest *previous* subarray [0..i] ending at or before i with sum=target?"
-
-**Step 3:**
-- While finding subarrays, for each ending at `j`, check if there is a previous disjoint interval ending before i.
-- Use a `minLenLeft[i]` array:  
-  At each position, what's the minimal length *ending at or before* `i` with sum = target.
-
-**Step 4:**
-- For every subarray `[i, j]` with sum = target:
-  - Look at `minLenLeft[i-1]`.
-  - If it's not inf, then we have two non-overlapping subarrays - sum their lengths.
-  - Update result if minimal.
-
-**Step 5:**
-- After checking, update `minLenLeft[j]` to keep track of the minimal so far.
-
-**Why O(N)?**
-- Each index is processed sequentially; at most O(N).
+1. For all 26 letters, store first and last occurrence.
+2. For every letter that appears, try to build its minimal valid interval:
+    - Start with `[first, last]`, and for every position in `[first, last]`, ensure that the interval also covers `[first[char], last[char]]` for each character inside (repeat until no expansion).
+    - To ensure result intervals are minimal (cannot be reduced), only add intervals that match this process and are not inside other intervals.
+3. After harvesting all valid intervals, **greedily** choose the maximum-sized subset of non-overlapping intervals (sort by right endpoint, select those whose start is after the last chosen end).
+4. Output the substrings corresponding to these intervals.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
+#include <string>
 #include <algorithm>
-#include <climits>
 using namespace std;
 
 class Solution {
 public:
-    int minSumOfLengths(vector<int>& arr, int target) {
-        int n = arr.size();
-        vector<int> minLenLeft(n, INT_MAX);
-        int left = 0, sum = 0;
-        int minLen = INT_MAX;
-        int res = INT_MAX;
-
-        // First pass: sliding window, for each end pos, track minimal length up to this point
-        for (int right = 0; right < n; ++right) {
-            sum += arr[right];
-            // Shrink window if sum too big
-            while (sum > target && left <= right) {
-                sum -= arr[left++];
-            }
-            // Found a subarray with target sum
-            if (sum == target) {
-                int len = right - left + 1;
-                // If possible, combine with earlier interval's minimal length
-                if (left > 0 && minLenLeft[left-1] != INT_MAX) {
-                    res = min(res, minLenLeft[left-1] + len);
-                }
-                minLen = min(minLen, len); // update min length up to now
-            }
-            // Propagate the minimal length up to index right
-            minLenLeft[right] = minLen;
+    vector<string> maxNumOfSubstrings(string s) {
+        int n = s.length();
+        vector<int> l(26, n), r(26, -1);
+        // 1. Find first & last occurrence of each char
+        for (int i = 0; i < n; ++i) {
+            int idx = s[i] - 'a';
+            l[idx] = min(l[idx], i);
+            r[idx] = max(r[idx], i);
         }
-        return res == INT_MAX ? -1 : res;
+
+        vector<pair<int, int>> intervals;
+
+        // 2. For each char, expand its covering interval if needed
+        for (int i = 0; i < 26; ++i) {
+            if (l[i] == n) continue; // char not present
+            int start = l[i], end = r[i];
+            // Try to expand [start, end] by checking chars inside it
+            bool valid = true;
+            int j = start;
+            while (j <= end) {
+                int c = s[j] - 'a';
+                if (l[c] < start) {
+                    start = l[c];
+                    j = start; // restart from new start
+                    continue;
+                }
+                if (r[c] > end) {
+                    end = r[c];
+                    // no need to restart, just continue
+                }
+                ++j;
+            }
+            // Now check if the interval is minimal (that is, start == l[i])
+            // so no strict covers for sub-intervals
+            if (start == l[i])
+                intervals.emplace_back(end, start);  // store as (end, start) for sorting
+        }
+
+        // 3. Greedy interval selection (by ending time)
+        sort(intervals.begin(), intervals.end());
+        vector<string> res;
+        int last_end = -1;
+        for (auto& e : intervals) {
+            int end = e.first, start = e.second;
+            if (start > last_end) {
+                res.push_back(s.substr(start, end - start + 1));
+                last_end = end;
+            }
+        }
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Explain One Example**
+## 5. **Example Explanation**
 
-Let's use **Example 1**:
+**Input:** `s = "adefaddaccc"`
 
-**Input:**  
-`arr = [3,2,2,4,3], target = 3`  
+Let's trace the process:
 
-**Step by step:**  
-- **Subarrays with sum=3:**  
-  - `[3]` at 0  
-  - `[3]` at 4
+- Find intervals for each letter:
+  - 'a': l = 0, r = 7  (`a` at 0,3,5,7)
+  - 'd': l = 1, r = 6  (`d` at 1,4,6)
+  - 'e': l = 2, r = 2
+  - 'f': l = 3, r = 3
+  - 'c': l = 8, r = 10 (`c` at 8,9,10)
 
-- As sliding window progresses:
-  - At index 0: `[3]` (length=1)
-    - minLenLeft[0]=1
-  - At indices 1,2,3: sum != 3, so minLenLeft propagates
-  - At index 4: `[3]` (from 4 to 4, length=1)
-    - The last valid (non-overlapping) left for a pair is at index 3.
-    - minLenLeft[3]=1, so current result = 1 (for previous) + 1 (now) = 2
+Let's process (expand) each:
+- For 'a': [0,7]
+  - All 'a', 'd', 'e', and 'f' inside [0,7] have their whole appearances inside [0,7], so this is a valid interval.
+- For 'd': [1,6]
+  - 'a' occurs at 0 (less than 1), so extend left to 0 and cover 'a' fully; now same as 'a's interval above. So not unique.
+- For 'e': [2,2]
+  - 'e' appears only at index 2; its whole appearance is within [2,2]. Valid.
+- For 'f': [3,3]
+  - 'f' at 3 only; valid.
+- For 'c': [8,10]
+  - All 'c's are in [8,10]; valid.
 
-**So answer is `2`.**
+So intervals:
+- [0,7], [2,2], [3,3], [8,10]
+
+Greedy selection for max non-overlapping:
+- [2,2]: "e"
+- [3,3]: "f"
+- [8,10]: "ccc"
+  (Can't pick [0,7] since it overlaps others and would allow only picking one substring.)
+
+**Output:** `["e","f","ccc"]`
 
 ---
 
-**In summary:**
-- We use a sliding window to find all subarrays with sum=target.
-- At each step, we track min lengths up to point to efficiently pair any later subarray with the best previous, non-overlapping one.
-- The solution is efficient O(N) and can handle the input size constraints.
+**Let me know if you want a fully commented version or more details on the expansion logic!**
