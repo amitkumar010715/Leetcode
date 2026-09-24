@@ -1,127 +1,93 @@
-Sure! Let's break it down step by step.
+Let's address each part of your request step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. Short Summary
 
-Given an array `nums` and an integer `x`, the task is to find the minimum number of operations to reduce `x` to exactly zero by **repeatedly removing** elements from either the left or the right end of `nums` and subtracting their value from `x`. If it's not possible, return `-1`.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-### Constraints
-- `1 <= nums.length <= 10^5` (array can be large)
-- `1 <= nums[i] <= 10^4`
-- `1 <= x <= 10^9`
-
-**Implications**:
-  - Need an algorithm that works in linear time (`O(n)`).
-  - `nums` can have large sums; `x` can be any value up to a billion.
-
-### Edge Cases
-- `x` is larger than the total sum of `nums`: impossible, must return `-1`.
-- `x` equals the total sum of `nums`: must remove all elements (the answer is `n`).
-- A solution may involve combining removals from both sides, e.g., first 2 and last 3, not just a prefix or suffix.
-- Some elements may need to be kept (the inner window), rather than all chopped from the ends.
+Given an array `nums`, we are to find the *smallest index* `i` such that the **sum of the digits** of `nums[i]` equals `i`. If no such index exists, return `-1`.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-### **Problem Restatement in Complement**
-
-Removing elements from the ends is like **keeping a subarray (window) in the middle** such that the sum of the remaining elements is `totalSum - x`. The minimum operations = total number of elements - size of largest such window.
-
-- **Find the longest subarray whose sum equals `totalSum - x`.**
-
-### Steps
-
-1. Compute `totalSum = sum(nums)`.
-2. Compute `target = totalSum - x`.
-   - If target is negative: not possible, return `-1`.
-   - If target is zero: need to keep 0 elements, answer is `n`.
-3. Use a sliding window to find the **longest subarray** with sum `target`.
-4. If such window found, answer = `n - longest_window_length`.
-5. Else, return `-1`.
-
-### **Why is this optimal?**
-- You must remove numbers from the ends. Keeping the largest block (in the middle) is the only way to minimize operations.
-- Only one pass with sliding window gives O(n).
+- **Constraints:**
+  - `1 <= nums.length <= 100` &rarr; small array, so linear search is fine.
+  - `0 <= nums[i] <= 1000` &rarr; values are at most 4 digits.
+- **Edge Cases:**
+  - All `nums[i]` have a digit sum not equal to index &rarr; Output should be `-1`.
+  - More than one index matches &rarr; Return the smallest index.
+  - `nums[i]` could be `0` (digit sum is `0`).
+  - Array of length `1` (minimal case).
+  - `nums[i]` with leading zeros isn't possible (no such representation for int).
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+Given small constraints, a linear search is acceptable.
+
+**Algorithm:**
+1. For each index `i`, compute digit sum of `nums[i]`.
+2. If digit sum == `i`, return `i` immediately.
+3. If none found, return -1.
+
+Digit-sum can be calculated using:
+```cpp
+int digitSum(int x) {
+    int sum = 0;
+    while (x > 0) { sum += x % 10; x /= 10; }
+    return sum;
+}
+```
+But for `x == 0`, ensure it returns 0.
+
+**Time Complexity:**  
+O(n · d), where n = length of `nums`, d = number of digits (≤4), so overall O(n).
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
-#include <vector>
-#include <unordered_map>
-using namespace std;
-
 class Solution {
 public:
-    int minOperations(vector<int>& nums, int x) {
+    int digitSum(int x) {
+        int sum = 0;
+        if (x == 0) return 0;    // Handle single zero case
+        while (x > 0) {
+            sum += x % 10;
+            x /= 10;
+        }
+        return sum;
+    }
+    
+    int smallestEqual(vector<int>& nums) {
         int n = nums.size();
-        int total = 0;
-        for (int num : nums) total += num;
-        int target = total - x;
-
-        if (target == 0) return n; // have to remove all numbers
-        if (target < 0) return -1; // impossible
-
-        int maxlen = -1;
-        int currSum = 0;
-        int left = 0;
-
-        for (int right = 0; right < n; ++right) {
-            currSum += nums[right];
-            while (currSum > target && left <= right) {
-                currSum -= nums[left++];
-            }
-            if (currSum == target) {
-                maxlen = max(maxlen, right - left + 1);
+        for (int i = 0; i < n; ++i) {
+            if (digitSum(nums[i]) == i) {
+                return i;
             }
         }
-        return (maxlen == -1) ? -1 : (n - maxlen);
+        return -1;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. Example Explanation
 
-Let's use **Example 3**:
-```
-nums = [3,2,20,1,1,3]
-x = 10
-```
-- `totalSum = 3 + 2 + 20 + 1 + 1 + 3 = 30`
-- `target = totalSum - x = 30 - 10 = 20`
+Take **Example 2**:
 
-**Goal:** Find the *longest contiguous subarray* with sum 20.
+**Input:** `nums = [1,10,11]`
 
-Slide window:
-- Try [20]: at index 2 only, that's a subarray of length 1, from index 2 to 2.
-- No longer window gives sum 20, only single element 20.
+We look at each index:
+- i = 0: `nums[0] = 1` → digit sum is 1 ≠ 0
+- i = 1: `nums[1] = 10` → digit sum is 1 + 0 = 1 == 1 → This matches!  
+- i = 2: `nums[2] = 11` → digit sum is 1 + 1 = 2 == 2 (also matches, but index is larger)
 
-So, keep [20], which has size = 1. The rest (5 elements) must be removed from ends.
-- **Answer:** `n - maxlen = 6 - 1 = 5`
-
-Indeed, remove first two (3,2), and last three (1,1,3).
-They sum to 3+2+1+1+3=10, which is x.
+Since we want the **smallest index**, the answer is **1**.
 
 ---
 
-### **Summary Table**
-
-| Step                       | Value     |
-|----------------------------|-----------|
-| totalSum                   | 30        |
-| target                     | 20        |
-| Longest subarray w/sum 20  | [20]      |
-| Operations needed          | 5         |
-
----
-
-If you need further clarification or a Python version, just ask!
+Let me know if you want further detailed explanations or edge case explorations!
