@@ -1,153 +1,94 @@
-Sure! Let’s break down the **Brace Expansion II** problem and deliver on all requirements.
+Let's break down the solution as requested:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given a string expression with letters (‘a’-‘z’), braces ‘{’, ‘}’, and commas ‘,‘, you are to expand the expression per the described grammar rules, returning all distinct words it represents, sorted lexicographically. The operation involves *cartesian products* for concatenations and *unions* for braces and commas, respecting precedence.
+Given a string `s` containing substrings in round brackets (e.g., `(name)`) and a list of key-value mappings called `knowledge`, we need to replace every bracketed key in `s` with its mapped value (or with `?` if no mapping exists). There is **no bracket nesting**, and all keys in bracket pairs are non-empty.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Expression Length:** Up to 60, so brute-force parsing is feasible.
-- **Valid Format:** The input is always valid per the grammar; you can assume no malformed input.
+- **Input Lengths:** Up to 1e5 for both `s` and `knowledge` (so efficiency is critical).
+- **Key-Value:** All keys/values are lowercase and of length <= 10.
+- **No Nesting:** Bracket pairs do not nest (e.g., `"(a(b))"` will not appear).
 - **Edge Cases:**
-    - Nested braces, like `{{a,b},{b,c}}`.
-    - Repeated words (output must be unique).
-    - Simple words (no braces).
-    - Multiple levels of concatenations.
-    - Words of varying lengths.
+  - A bracketed key not in `knowledge` (should output '?').
+  - Consecutive or overlapping bracket pairs.
+  - Brackets at the start or end of string.
+  - No brackets at all.
 
 ---
 
-## 3. **Optimal Algorithm (Recursive Descent Parsing with Sets)**
+## 3. **Optimal Algorithm Approach**
 
-- Parse the expression from left to right, handing off control to recursive helper functions for:
-    - **Unions:** `{ ... , ... }` and separating by commas.
-    - **Concatenations:** Concatenating two expressions (including implicit, e.g. `a{b,c}`).
-    - **Single Letters:** Base case.
-- Use `set<string>` to automatically deduplicate and maintain order until the end.
-- **Parsing Steps:**
-    1. **parseExpr:** Union-split at the comma (',').
-    2. **parseTerm:** Concatenate several factors (even implicit).
-    3. **parseFactor:** Either a letter or a brace group.
-    4. **parseGroup:** If brace found, recursively parse inside.
-
-This pattern is standard for such expression grammars and handles operator precedence natively.
+1. **Preprocess `knowledge` into a Hash Map** (unordered_map) for fast O(1) key lookups.
+2. **Iterate through `s` once**, building the output string as you go:
+     - If a `'('` is found, record the content until the next `')'`, look it up in the map, and output the value or '?'.
+     - Otherwise, just append the current character to the result.
+3. **Time Complexity:** O(|s| + |knowledge|)—linear in the input sizes.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <set>
 #include <string>
+#include <vector>
+#include <unordered_map>
 using namespace std;
 
 class Solution {
 public:
-    string s;
-    int i, n;
-
-    // Forward declarations
-    set<string> parseExpr();
-    set<string> parseTerm();
-    set<string> parseFactor();
-
-    vector<string> braceExpansionII(string expr) {
-        s = expr;
-        i = 0;
-        n = s.size();
-        auto result = parseExpr();
-        return vector<string>(result.begin(), result.end());
-    }
-
-    // Parse comma-separated union expressions
-    set<string> parseExpr() {
-        set<string> res = parseTerm();
-        while (i < n && s[i] == ',') {
-            ++i; // skip comma
-            set<string> next = parseTerm();
-            res.insert(next.begin(), next.end());
+    string evaluate(string s, vector<vector<string>>& knowledge) {
+        unordered_map<string, string> dict;
+        for (const auto& pair : knowledge) {
+            dict[pair[0]] = pair[1];
         }
-        return res;
-    }
-
-    // Parse concatenation (implicit, e.g. ab, a{b,c})
-    set<string> parseTerm() {
-        set<string> res = {""}; // Identity for concatenation
-        while (i < n && (isalpha(s[i]) || s[i] == '{')) {
-            set<string> next = parseFactor();
-            set<string> tmp;
-            for (const auto& left : res) {
-                for (const auto& right : next) {
-                    tmp.insert(left + right);
+        string res;
+        int n = s.size();
+        for (int i = 0; i < n; ) {
+            if (s[i] == '(') {
+                int j = i + 1;
+                // find closing ')'
+                while (j < n && s[j] != ')') ++j;
+                string key = s.substr(i + 1, j - i - 1);
+                if (dict.count(key)) {
+                    res += dict[key];
+                } else {
+                    res += '?';
                 }
+                i = j + 1; // move after ')'
+            } else {
+                res += s[i];
+                ++i;
             }
-            res = move(tmp);
         }
         return res;
-    }
-
-    // Parse a single letter or a brace group
-    set<string> parseFactor() {
-        if (s[i] == '{') {
-            ++i; // skip '{'
-            set<string> res = parseExpr();
-            ++i; // skip '}'
-            return res;
-        } else { // single letter
-            string letter(1, s[i++]);
-            return {letter};
-        }
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-**Input:**  
-`expression = "{a,b}{c,{d,e}}"`
+**Example 1:**
 
-**Processing Step-by-step:**
-- `{a,b}` parses to `["a", "b"]`.
-- `{d,e}` parses to `["d", "e"]`.
-- Now `{c, {d,e}}` parses to `["c", "d", "e"]`.
-- The whole expression is a concatenation of `["a", "b"]` and `["c", "d", "e"]`.
-- Cartesian product of those sets gives:  
-    - "a" + "c" = "**ac**"
-    - "a" + "d" = "**ad**"
-    - "a" + "e" = "**ae**"
-    - "b" + "c" = "**bc**"
-    - "b" + "d" = "**bd**"
-    - "b" + "e" = "**be**"
-- Sort them:  
-  `["ac", "ad", "ae", "bc", "bd", "be"]`
+- `s = "(name)is(age)yearsold"`
+- `knowledge = [["name","bob"],["age","two"]]`
+  
+**Step by Step:**
+- Start parsing: see '(', extract "name", lookup: found "bob".
+- Output so far: "bob"
+- Next part: "is" (not in brackets), append as is.
+- Next: '(', extract "age", lookup: found "two".
+- Output so far: "bobis" + "two"
+- Remaining: "yearsold", append as is.
 
-**Output:**  
-`["ac","ad","ae","bc","bd","be"]`
+**Final output:** `"bobistwoyearsold"`
 
 ---
 
-### **Summary Table**
-
-| Step         | Set Result       |
-|--------------|-----------------|
-| `{a,b}`      | a, b            |
-| `{d,e}`      | d, e            |
-| `{c,{d,e}}}` | c, d, e         |
-| Concatenation| ac, ad, ae, bc, bd, be (sorted)  |
-
----
-
-## **Conclusion**
-
-- We used recursive parsing for grammar rules, using sets for deduplication.
-- Handles all nested/edge cases thanks to proper operator precedence parsing.
-- Sorts results implicitly by using a set.
-
-Let me know if you want further clarifications or a Python version!
+Let me know if you'd like a step-by-step trace for more examples!
