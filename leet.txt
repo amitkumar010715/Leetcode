@@ -1,52 +1,61 @@
-Let's go step-by-step as requested.
+Let's break down the problem and build up the solution step by step:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-We're given an `m x n` grid filled with `'('` and `')'`. We can only move down or right from the top-left to the bottom-right corner. We want to check if **any such path** can spell out a *valid parentheses string* by concatenating the characters along the path.
-
-- **Valid parentheses string** rules follow the usual "well-formed" parentheses, i.e., every close matches an open, and at no point can there be more `)` than `(`.
+Given a **valid parentheses string** (`seq`), split its characters into two sequences `A` and `B` (by assigning each character to 0 or 1). Each must form a valid parentheses string themselves. Assign so that  
+**max(depth(A), depth(B))** is minimized. Output an array marking the assignment (`0` for `A`, `1` for `B`).  
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- `1 <= m, n <= 100`: Grid can be as large as 100x100.
-- Each cell: `'('` or `')'`.
-- Must check all possible down/right paths from `(0,0)` to `(m-1,n-1)`.
-- **Edge cases:**
-  - The top-left cell is `')'`: Not possible to start a valid string, return `false`.
-  - The total path length is odd: No valid string; valid parentheses strings have even length.
-  - At any time along the path, if more `)` than `(`, the partial string is invalid.
+- **Constraints:**
+  - `1 <= seq.size <= 10000`
+  - Only '(' and ')' characters
+  - Input string is guaranteed to be valid (properly matched and nested)
+- **Edge Cases:**
+  - Nested parentheses (e.g. `"(((())))"`)
+  - Only one pair (e.g. `"()"`)
+  - Alternating patterns (`"()()()"`)
+  - All open then all close (`"((()))"`)
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm & Explanation**
 
-### Approach
+The **key observation**:  
+If we alternate which group (A/B) gets each level of nesting, both group depths will be almost equal (one may be at most 1 higher than the other).
 
-This is a **grid DP with state** problem:
+### **How to Assign?**
+- **Track current nesting depth** as you iterate.
+- For an opening `(`, increment depth *before* assignment.
+    - For closing `)`, assign based on current depth, then decrement depth.
+- **Assign group**: assign `depth % 2` for each character. (`0` for even, `1` for odd).  
+  This splits alternating levels between `A` and `B`.
 
-- At _any grid cell_ `(i, j)`, **the only state we care about is the net balance** (number of `'('` minus number of `')'`) up to this point. Let's call it `bal`.
-- A state `(i, j, bal)` is **invalid** if:
-    - `bal < 0` (cannot have more `)` than `(` at any point).
-    - `bal > <maximum possible>` (for pruning, but usually not necessary).
-- Starting at `(0, 0, bal0)`, we're looking for if **there's any path to `(m-1, n-1, 0)`** (i.e., the final balance is zero).
-- Each move (down or right) increments or decrements the balance, depending on the cell content.
+**Reason**: This guarantees the load (nesting) is "evenly split", minimizing the maximum depth of either group.
 
-### DP memoization
+### **Why this works?**
+When the nesting level changes, flipping assignment by depth's parity ensures the two groups interleave:  
+- If level 0: assign to `A`
+- If level 1: assign to `B`
+- If level 2: assign to `A` (and so on...)
 
-- Use **top-down DP**: `dp[i][j][bal] = true/false`.
-    - There are ~100x100x(max balance) states.
-    - Max balance can be up to all steps, i.e., up to `m+n` (worst case all `'('`). So in practice, O(m*n*(m+n)) memory and computation.
-- Prune:
-    - If balance < 0: invalid state.
-    - If balance > path length remaining: invalid (cannot close more open brackets than steps left).
+Thus, no group has a depth more than half the original string's depth (rounded up).
 
-### Base Case
+**Algorithm:**
+- Initialize: `depth = 0`
+- For each character:
+    - If `'('`:
+        - `depth += 1`
+        - Assign: `answer[i] = depth % 2`
+    - If `')'`:
+        - Assign: `answer[i] = depth % 2`
+        - `depth -= 1`
 
-- At bottom-right: if `bal == 0`, then true; else, false.
+**(Implementation tweaks: sometimes the assignment and depth change are swapped, but this order is consistent as above.)**
 
 ---
 
@@ -59,96 +68,56 @@ using namespace std;
 
 class Solution {
 public:
-    int m, n;
-    vector<vector<string>> grid;
-    vector<vector<vector<int>>> memo;
-
-    bool dfs(int i, int j, int bal) {
-        // Prune: out of bounds
-        if(i >= m || j >= n) return false;
-        // Update balance
-        if(grid[i][j][0] == '(') bal++;
-        else bal--;
-
-        // Prune: more closing than opening at any point, or balance negative
-        if(bal < 0 || bal > (m + n) / 2) return false;
-
-        // If at the end
-        if(i == m-1 && j == n-1) {
-            return bal == 0;
+    vector<int> maxDepthAfterSplit(string seq) {
+        vector<int> res;
+        int depth = 0;
+        for (char c : seq) {
+            if (c == '(') {
+                // Assign first, then increase depth (for 1-based depth, ('(' increases)
+                depth++;
+                res.push_back(depth % 2);
+            } else {
+                // For ')', the matching '(' is the *last* character with current depth, then closing
+                res.push_back(depth % 2);
+                depth--;
+            }
         }
-
-        // Memoization
-        int &res = memo[i][j][bal];
-        if(res != -1) return res;
-
-        // Move down or right
-        bool ans = dfs(i+1, j, bal) || dfs(i, j+1, bal);
-        res = ans;
-        return ans;
-    }
-
-    bool hasValidPath(vector<vector<char>>& gridIn) {
-        m = gridIn.size();
-        n = gridIn[0].size();
-        grid.resize(m, vector<string>(n));
-        for(int i=0;i<m;i++)
-            for(int j=0;j<n;j++)
-                grid[i][j] = string(1, gridIn[i][j]);
-        // Maximum balance is path length (m+n-1)
-        memo = vector<vector<vector<int>>>(m, vector<vector<int>>(n, vector<int>((m+n+1), -1)));
-        // The first char must be '('
-        if(grid[0][0][0] == ')') return false;
-        return dfs(0, 0, 0);
+        return res;
     }
 };
 ```
-
-### Points:
-
-- We convert `gridIn` (vector<vector<char>>) to the type expected for the code (vector<vector<string>>), or you can adjust to just `grid[i][j] == '('`.
-- Memoization: `memo[i][j][bal]` is the solution for cell `(i,j)` with current `bal`.
-- Pruning is essential for efficiency.
 
 ---
 
 ## 5. **Example Walkthrough**
 
-**Example:**  
-```
-grid = [["(","(","("],
-        [")","("," )"],
-        ["(","("," )"],
-        ["(","("," )"]]
+Let's use **Example 1**:  
+`seq = "(()())"`
 
-2 valid paths in the example diagram:
-- One path: R, D, R, D, R, D (route spelling "()(())")
-- Let's see how balance changes for "()(())":
+Going step by step:
 
-Steps:
-0. At (0,0): '(', bal=1
-1. (0,1): '(', bal=2
-2. (1,1): '(', bal=3
-3. (2,1): '(', bal=4
-4. (3,1): '(', bal=5
-5. (3,2): ')', bal=4
-6. (2,2): ')', bal=3
-7. (1,2): ')', bal=2
-8. (0,2): '(', bal=3
+| Index | Char | Depth change | Depth after | Assign (`depth % 2`) |
+|-------|------|-------------|------------|----------------------|
+|   0   | '('  | +1          |    1       | 1                    |
+|   1   | '('  | +1          |    2       | 0                    |
+|   2   | ')'  | assign(0),-1|    1       | 0                    |
+|   3   | '('  | +1          |    2       | 0                    |
+|   4   | ')'  | assign(0),-1|    1       | 0                    |
+|   5   | ')'  | assign(1),-1|    0       | 1                    |
 
-But, in every prefix, `bal >= 0`, and at the end, with a correct path, the balance will land back to zero.
+The output here is `[1,0,0,0,0,1]`.  
+But see in the LeetCode example, `[0,1,1,1,1,0]`.  
+This is also valid—since which group is "0" or "1" is arbitrary!
 
-Also, our DP merges all the possible paths efficiently and checks if *any* can form a valid string.
+### **Explanation**:  
+Your solution could return either variant, as long as the nesting is distributed as evenly as possible between the two groups.
 
 ---
 
-## **Recap**
+## **Conclusion**
 
-- This is a DP (memoization) on `(i,j,balance)`, allowed as per constraints.
-- Prune with `bal < 0` and extra open parens exceeding possible closings.
-- Start only with `'('` in top-left.
-- Return true if can reach bottom-right with `balance == 0`.
+- Split by assigning parentheses at *even* and *odd* nesting depths to different groups.
+- C++ solution: O(N) time and space
+- Both the assignments `[0,1,1,1,1,0]` and `[1,0,0,0,0,1]` are valid—they're complements.
 
----
-
-**Let me know if you want the code in another language or want to see further explanation of another sample!**
+Let me know if you have any questions!
