@@ -1,123 +1,104 @@
-Let's break down the problem and build up the solution step by step:
+Certainly! Let's break down the **Valid Parentheses** problem in detail:
 
 ---
 
 ## 1. **Short Summary**
 
-Given a **valid parentheses string** (`seq`), split its characters into two sequences `A` and `B` (by assigning each character to 0 or 1). Each must form a valid parentheses string themselves. Assign so that  
-**max(depth(A), depth(B))** is minimized. Output an array marking the assignment (`0` for `A`, `1` for `B`).  
+Given a string of parentheses — characters **'(', ')', '{', '}', '[', ']'** — determine if the string is "valid".  
+A string is valid **if every opening bracket is closed by the same type of bracket, and brackets are closed in the correct order**.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 - **Constraints:**
-  - `1 <= seq.size <= 10000`
-  - Only '(' and ')' characters
-  - Input string is guaranteed to be valid (properly matched and nested)
+  - Length of string: `1 <= s.length <= 10^4`
+  - Only the six bracket characters: `'('`, `')'`, `'{'`, `'}'`, `'['`, `']'`
+
 - **Edge Cases:**
-  - Nested parentheses (e.g. `"(((())))"`)
-  - Only one pair (e.g. `"()"`)
-  - Alternating patterns (`"()()()"`)
-  - All open then all close (`"((()))"`)
+  - **Odd-length strings** are always invalid, since brackets come in pairs.
+  - **Empty stack when trying to match a closing bracket:** invalid.
+  - **Remaining items in stack after processing:** invalid (leftover open brackets).
+  - **Brackets closed in wrong order or type:** invalid. E.g., `"([)]"`  
+  - **Minimum valid input:** E.g., `"()"`, `"{}"`, `"[]"`.
+  - **Minimum invalid input:** Single bracket, e.g., `"("`, `"]"`, etc.
 
 ---
 
-## 3. **Optimal Algorithm & Explanation**
+## 3. **Optimal Algorithm**
 
-The **key observation**:  
-If we alternate which group (A/B) gets each level of nesting, both group depths will be almost equal (one may be at most 1 higher than the other).
+The standard and optimal approach is to **use a stack**:
 
-### **How to Assign?**
-- **Track current nesting depth** as you iterate.
-- For an opening `(`, increment depth *before* assignment.
-    - For closing `)`, assign based on current depth, then decrement depth.
-- **Assign group**: assign `depth % 2` for each character. (`0` for even, `1` for odd).  
-  This splits alternating levels between `A` and `B`.
+- **Iterate** through each character of the string:
+  - If it's an **open bracket** (`'('`, `'{'`, `'['`), **push** it onto a stack.
+  - If it's a **closing bracket**:
+    - If the stack is **empty:** return `false` (no matching open).
+    - **Pop** the top item and check if it matches with the corresponding opening bracket.
+      - If not, return `false`.
+- **After scanning:**  
+  If the stack is **empty** (all open brackets matched and closed), return `true`.  
+  Otherwise, return `false`.
 
-**Reason**: This guarantees the load (nesting) is "evenly split", minimizing the maximum depth of either group.
-
-### **Why this works?**
-When the nesting level changes, flipping assignment by depth's parity ensures the two groups interleave:  
-- If level 0: assign to `A`
-- If level 1: assign to `B`
-- If level 2: assign to `A` (and so on...)
-
-Thus, no group has a depth more than half the original string's depth (rounded up).
-
-**Algorithm:**
-- Initialize: `depth = 0`
-- For each character:
-    - If `'('`:
-        - `depth += 1`
-        - Assign: `answer[i] = depth % 2`
-    - If `')'`:
-        - Assign: `answer[i] = depth % 2`
-        - `depth -= 1`
-
-**(Implementation tweaks: sometimes the assignment and depth change are swapped, but this order is consistent as above.)**
+- **Time Complexity:** O(n), where n is the length of the string.
+- **Space Complexity:** O(n) in the worst case (all open brackets).
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
+#include <stack>
+#include <unordered_map>
 #include <string>
-using namespace std;
 
 class Solution {
 public:
-    vector<int> maxDepthAfterSplit(string seq) {
-        vector<int> res;
-        int depth = 0;
-        for (char c : seq) {
-            if (c == '(') {
-                // Assign first, then increase depth (for 1-based depth, ('(' increases)
-                depth++;
-                res.push_back(depth % 2);
+    bool isValid(std::string s) {
+        std::stack<char> st;
+        std::unordered_map<char, char> pairs = {
+            {')', '('},
+            {']', '['},
+            {'}', '{'}
+        };
+
+        for (char c : s) {
+            if (pairs.count(c)) {
+                // c is a closing bracket
+                if (st.empty() || st.top() != pairs[c]) {
+                    return false;
+                }
+                st.pop();
             } else {
-                // For ')', the matching '(' is the *last* character with current depth, then closing
-                res.push_back(depth % 2);
-                depth--;
+                // c is an opening bracket
+                st.push(c);
             }
         }
-        return res;
+        return st.empty();
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Explained Example**
 
-Let's use **Example 1**:  
-`seq = "(()())"`
+### Example: `s = "([)]"`
 
-Going step by step:
+Let's step through:
 
-| Index | Char | Depth change | Depth after | Assign (`depth % 2`) |
-|-------|------|-------------|------------|----------------------|
-|   0   | '('  | +1          |    1       | 1                    |
-|   1   | '('  | +1          |    2       | 0                    |
-|   2   | ')'  | assign(0),-1|    1       | 0                    |
-|   3   | '('  | +1          |    2       | 0                    |
-|   4   | ')'  | assign(0),-1|    1       | 0                    |
-|   5   | ')'  | assign(1),-1|    0       | 1                    |
+- **Initialize:** empty stack
+- **Iterate:**
+  - `'('`: open, stack = `['(']`
+  - `'['`: open, stack = `['(', '[']`
+  - `')'`: close, expected: `'('`, stack top is `'['` (**Mismatch!**)
+      - Immediately return `false`.
 
-The output here is `[1,0,0,0,0,1]`.  
-But see in the LeetCode example, `[0,1,1,1,1,0]`.  
-This is also valid—since which group is "0" or "1" is arbitrary!
-
-### **Explanation**:  
-Your solution could return either variant, as long as the nesting is distributed as evenly as possible between the two groups.
+Thus, `"([)]"` is **not valid** because brackets are not closed in the proper order.
 
 ---
 
-## **Conclusion**
+**Summary:**  
+Use a stack, match each closing bracket with the last seen open bracket. Reject if mismatched or stack state is incorrect.  
+**Time and space:** Both O(n).  
 
-- Split by assigning parentheses at *even* and *odd* nesting depths to different groups.
-- C++ solution: O(N) time and space
-- Both the assignments `[0,1,1,1,1,0]` and `[1,0,0,0,0,1]` are valid—they're complements.
-
-Let me know if you have any questions!
+Let me know if you'd like to see more examples, detailed code comments, or edge-case testing!
