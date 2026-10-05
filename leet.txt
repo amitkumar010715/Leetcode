@@ -1,72 +1,71 @@
-Let's break down the **"Valid Parenthesis String"** problem from LeetCode:
+Sure! Here’s a full breakdown and solution for **Score of Parentheses**.
 
 ---
 
 ## 1. **Short Summary**
 
-Given a string containing `'('`, `')'`, and `'*'`, determine if it can represent a valid parentheses sequence, where `'*'` can be interpreted as `'('`, `')'`, or empty.
+You're given a balanced parentheses string. Using special rules, you need to compute its **score**:
+- `"()"` has score 1.
+- Concatenation (like AB) adds their scores.
+- Wrapping with parentheses doubles the inner score: `(A)` is `2 * score(A)`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= s.length <= 100` (string is small, so we can afford O(N) solutions)
-  - Valid characters: `'('`, `')'`, `'*'`.
+**Constraints:**
+- `2 <= s.length <= 50`
+- Only contains `'('` and `')'`
+- The string is always **balanced**
 
-- **Edge Cases:**
-  - String with only stars, eg `****` (always valid: treat all as empty)
-  - String with unbalanced parentheses, eg `'('`, `')'`, `(()'`, etc.
-  - Stars at beginning or end, eg `'*)'`, `'(*'`.
-  - Consecutive stars and parentheses, eg `"(*))"`, `"*(*)"`.
+**Edge Cases:**
+- Minimal case: `"()"` (should return 1)
+- Nested: `"(())"` (should return 2)
+- Multiple simple pairs: `"()()"` (should return 2)
+- Deeply nested: `"(((())))"` (score doubles at each nesting)
+- Mixed: `(()())(()())`
+- Should not receive invalid strings
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Greedy Two-Pass Algorithm**
+**Approach:**  
+Use a **stack** to keep track of the score at each nesting level.
 
-We can use a greedy approach by keeping track of the possible range of open parentheses using two counters:
-- `low` = minimum possible number of open '(' (treat `'*'` as ')')
-- `high` = maximum possible number of open '(' (treat `'*'` as '(')
-
-Process the string from left to right:
-- For `'('`: increase both `low` and `high`
-- For `')'`: decrease both `low` and `high`
-- For `'*'`: decrease `low` (treat as ')') and increase `high` (treat as '(')
-
-**At any point:**
-- If `high` drops below 0: too many `')'`, return false.
-- Keep `low` at `>= 0` (if negative, set to 0) because negative `low` means too many `')'` already.
-
-At the end, if `low == 0`, it's valid (meaning all left parentheses have matches).
+**Algorithm Steps:**
+1. Initialize a stack, push `0` as the base score.
+2. For each character `c` in the string:
+   - If `'('`: push `0` onto the stack (start new frame).
+   - If `')'`:
+     - Pop top element `v` from stack (score inside current pair).
+     - If `v` is `0`, this was a `"()"`, so current layer's score = 1.
+     - Else, it's a wrapping pair `(A)`, so current layer's score = 2 * v.
+     - Pop previous score, add current layer's score to it, push back.
+3. At the end, the stack's top element is the answer.
 
 **Time Complexity:** O(N)
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 class Solution {
 public:
-    bool checkValidString(string s) {
-        int low = 0, high = 0; // min and max open '(' count
+    int scoreOfParentheses(string s) {
+        stack<int> stk;
+        stk.push(0); // base score
         for (char c : s) {
             if (c == '(') {
-                low++;
-                high++;
-            } else if (c == ')') {
-                low--;
-                high--;
-            } else { // '*'
-                low--;  // treat '*' as ')'
-                high++; // treat '*' as '('
+                stk.push(0); // new score for new '('
+            } else {
+                int v = stk.top(); stk.pop();
+                int score = (v == 0) ? 1 : 2 * v; // "()" or nested
+                stk.top() += score; // add to previous frame
             }
-            if (high < 0) return false; // too many ')'
-            if (low < 0) low = 0;       // can't have negative open '('
         }
-        return low == 0;
+        return stk.top();
     }
 };
 ```
@@ -75,20 +74,18 @@ public:
 
 ## 5. **Example Explanation**
 
-**Example Input:** `"(*))"`
+Let's explain **Example 2: `"(())"`**.
 
-- Step 1: `'('`
-  - low = 1, high = 1
-- Step 2: `'*'`
-  - low = 0  (if `'*'` is `')'`)
-  - high = 2 (if `'*'` is `'('`)
-- Step 3: `')'`
-  - low = -1 => set to 0, high = 1
-- Step 4: `')'`
-  - low = -1 => set to 0, high = 0
+Step by step:
+- Stack: `[0]`
+- See `'('`: push `0` → `[0,0]`
+- See `'('`: push `0` → `[0,0,0]`
+- See `')'`: pop `0`, since it's `"()"`, so score is `1`, previous score is `0`, add: `[0,1]`
+- See `')'`: pop `1`, it's not `0`, so score is `2*1 = 2`, previous score is `0`, add: `[2]`
+- Final result is `2`
 
-At the end, `low == 0` and never had `high < 0`, so it's **valid**.
+**Thus, the output is `2`.**
 
 ---
 
-**This greedy interval approach ensures we efficiently consider every possible role that `'*'` could play, without explicit backtracking.**
+Let me know if you'd like a stack-free approach or further explanations!
