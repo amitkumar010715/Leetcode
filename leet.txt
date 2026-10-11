@@ -1,96 +1,49 @@
-Let's tackle the problem step by step!
+Let's break down the problem step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given two arrays `nums1` and `nums2`, and modification budgets `k1` and `k2`, you can change elements of `nums1` by at most `k1` steps (+1 or -1), and elements of `nums2` by `k2` steps. After all moves, find the minimal possible sum of squared differences:  
-$\sum_{i=0}^{n-1} (nums1[i] - nums2[i])^2$.
-
-This involves "spending" your budget to reduce the largest differences greedily, because reducing large differences has the biggest impact on the overall sum.
+We’re given a 1-indexed array `nums` of length `n`. For all `i` such that `i` divides `n` (i.e., `n % i == 0`), add `nums[i] * nums[i]` to the result. Return the total sum.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Array size `n` can be up to $10^5$**: Need $O(n \log n)$ or better per test.
-- **Modification budgets `k1, k2` up to $10^9$**: You may have more changes than needed: after all, differences can reach zero, but not negative.
-- **Numbers can be $0 \ldots 10^5$**: But modifying can make them negative if necessary — that's OK.
-- **If modification budget is huge**: You may be able to nullify all differences to zero.
-- **If `k1` and `k2` are zero**: No changes, just compute direct squared differences.
+- **Constraints:**
+  - `1 <= n <= 50` (small array, we can brute force)
+  - `1 <= nums[i] <= 50`
+- **Edge Cases:**
+  - `n = 1` (only one element; must always be included)
+  - All values the same
+  - Only some divisors; e.g., for prime `n`, special only `1` and `n`
+  - Very small or large `nums` values
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Observations**
-- The **difference array** $d_i = |nums1[i] - nums2[i]|$ tells us how much we want to reduce at each index.
-- To minimize the final sum, **reduce the largest differences first** (since $(d-1)^2 - d^2 = -2d+1$ decreases more as $d$ increases).
-- At each "operation", you reduce the current maximum difference by 1 (until it becomes 0).
+Since `n` is at most `50`, we can:
+- For all `i` in `1..n`:
+  - If `n % i == 0` (i divides n), add `nums[i-1] * nums[i-1]` to the result (`nums` is 1-indexed).
 
-### **Efficient Solution**
-1. **Count differences.**  
-   For all $i$, compute $d_i = |nums1[i] - nums2[i]|$ and, for each value $d$, store its frequency. The maximum $d$ can be $10^5$.
-
-2. **Use a "descending bucket" approach.**  
-   Since $d$ values are within a fixed range ($[0, 10^5]$), counts can be stored in an array (`counts[MAX_D+1]`), so reducing differences is like moving elements from bucket $d$ to $d-1$.
-
-3. **While you have remaining operations, reduce the highest non-zero differences.**  
-   For the highest current $d > 0$:
-   - You can "spend" up to $counts[d]$ to reduce all by 1, or as many steps as budget allows.
-   - If you can reduce all occurrences, decrease $d$ by 1 for these items.
-   - If not, split: some stay at $d$, some move to $d-1$.
-
-4. **Stop when budget runs out, or all differences are zero.**
-
-5. **Sum the squares: $\sum_{d=0}^{MAX_D} counts[d] \cdot d^2$.**
-
-### **Time Complexity**
-- **$O(n + MAX\_D)$**, since we only sweep through the difference buckets at most $MAX\_D$ times, and $n$ for initial difference calculation.
+**Time Complexity:** \
+O(n)
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-#include <numeric>
-using namespace std;
-
-typedef long long ll;
-
 class Solution {
 public:
-    long long minSumSquareDiff(vector<int>& nums1, vector<int>& nums2, int k1, int k2) {
-        int n = nums1.size();
-        vector<int> diff(n);
-        int maxd = 0;
-        for(int i = 0; i < n; ++i) {
-            diff[i] = abs(nums1[i] - nums2[i]);
-            maxd = max(maxd, diff[i]);
-        }
-        
-        vector<ll> count(maxd + 2); // count[d] = number of diffs with value d
-        for(int d : diff) count[d]++;
-        
-        ll k = (ll)k1 + (ll)k2;
-        for(int d = maxd; d > 0 && k > 0; --d) {
-            if(count[d] == 0) continue;
-            ll use = min(k, count[d]);
-            count[d] -= use;
-            count[d-1] += use;
-            k -= use;
-            if(count[d]) {
-                // Some left at this distance, but budget gone, stop
-                // Could also be: if k==0, break
-                // continue looping just in case
+    int sumOfSquares(vector<int>& nums) {
+        int n = nums.size();
+        int res = 0;
+        for (int i = 1; i <= n; ++i) {
+            if (n % i == 0) {
+                res += nums[i-1] * nums[i-1];
             }
-        }
-        
-        ll res = 0;
-        for(int d = 0; d <= maxd; ++d) {
-            res += count[d] * d * d;
         }
         return res;
     }
@@ -99,40 +52,24 @@ public:
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-Let's use **Example 2** from the prompt:
+**Example 1:**  
+Input: `nums = [1,2,3,4]`  
+`n = 4`
 
-**Input:**  
-`nums1 = [1,4,10,12]`  
-`nums2 = [5,8,6,9]`  
-`k1 = 1`, `k2 = 1`
+All `i in 1..n`:
+- `i=1`: 4 % 1 == 0 → include `nums[0] = 1` → 1² = 1
+- `i=2`: 4 % 2 == 0 → include `nums[1] = 2` → 2² = 4
+- `i=3`: 4 % 3 == 1 → *skip*
+- `i=4`: 4 % 4 == 0 → include `nums[3] = 4` → 4² = 16
 
-1. **Compute initial diffs:**  
-   `|1-5|=4`, `|4-8|=4`, `|10-6|=4`, `|12-9|=3`  
-   So diffs = `[4, 4, 4, 3]`.
-
-2. **Make moves (k = 2):**
-   - Reduce one of the `4` to `3` (first operation).
-   - Reduce another `4` to `3` (second operation).
-   - Now diffs: `[3, 3, 4, 3]` (order may vary).
-
-3. **Sum of squares:**  
-   $3^2 + 3^2 + 4^2 + 3^2 = 9 + 9 + 16 + 9 = 43$
-
-This matches the expected output.
+Sum: 1 + 4 + 16 = **21**
 
 ---
 
-## **Summary Table**
+**In summary:**  
+- Find all indices dividing `n` (1-based).
+- Square corresponding values and sum.
 
-| Step              | Operation                      | diffs          | Budget (remaining) |
-|-------------------|-------------------------------|----------------|--------------------|
-| initial           | -                             | [4,4,4,3]      | 2                  |
-| after 1 reduction | Reduce 1st '4' to '3'         | [3,4,4,3]      | 1                  |
-| after 2 reduction | Reduce 2nd '4' to '3'         | [3,3,4,3]      | 0                  |
-| sum of squares    | $3^2 + 3^2 + 4^2 + 3^2 = 43$  |                |                    |
-
----
-
-If you need a version with more comments, or a Python equivalent, let me know!
+**C++ solution is optimal for the constraints.**
