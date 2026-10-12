@@ -1,75 +1,148 @@
-Let's break down the problem step by step:
+Let's tackle the **Apply Operations on Array to Maximize Sum of Squares** problem step by step.
 
 ---
 
-## 1. **Short Summary**
+## 1. Summary
 
-We’re given a 1-indexed array `nums` of length `n`. For all `i` such that `i` divides `n` (i.e., `n % i == 0`), add `nums[i] * nums[i]` to the result. Return the total sum.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints:**
-  - `1 <= n <= 50` (small array, we can brute force)
-  - `1 <= nums[i] <= 50`
-- **Edge Cases:**
-  - `n = 1` (only one element; must always be included)
-  - All values the same
-  - Only some divisors; e.g., for prime `n`, special only `1` and `n`
-  - Very small or large `nums` values
+Given an array and an operation (for any two distinct indices, set one to `(nums[i] & nums[j])` and the other to `(nums[i] | nums[j])`), apply any sequence of these operations, then select `k` elements from the final array to maximize the **sum of their squares**.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-Since `n` is at most `50`, we can:
-- For all `i` in `1..n`:
-  - If `n % i == 0` (i divides n), add `nums[i-1] * nums[i-1]` to the result (`nums` is 1-indexed).
+- `1 <= k <= nums.length <= 1e5`
+- `1 <= nums[i] <= 1e9`
+- Need an **O(n log n)** or **O(n)** solution due to large `n`.
 
-**Time Complexity:** \
-O(n)
+**Edge Cases:**
+- `k == n`: Must use all elements.
+- All elements already have similar or disjoint bits.
+- Maximum value can be very large; use modulo `1e9+7`.
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm & Insight
+
+### **Key Observations**
+
+- Every operation only **redistributes bits between two numbers**; their bitwise combined count (sum) is unchanged.
+- **The sum of all bits' counts in the array is invariant**.
+- The operation (AND/OR) only 'moves' bits; it can't create or destroy them.
+- **Squaring favours numbers with more set bits combined**; to maximize sum of squares, **concentrate as many set bits as possible into as few numbers as possible**.
+
+### **How to Maximize the Sum of Squares?**
+
+- Distribute the total set bits in all numbers such that the top `k` numbers have as **many set bits as possible**, the rest are minimized (ideally 0).
+    - *Equivalently*, form `k` new numbers whose bitwise representation collects all the set bits in nums (preserving the per-bit total counts).
+
+#### **Concrete Steps**
+
+1. For each bit position `b` (up to 30 for 1e9), **count** how many times the bit is set in the entire array (`cnt[b]`).
+2. To maximize the sum of squares, **assign the bits to the top k numbers as evenly as possible**:
+    - For each bit, distribute `cnt[b]` times among the k, i.e., if `cnt[b]>=k` then each gets one, remaining get extra as appropriate.
+
+#### **Implementation:**
+- For k numbers, build an array `[0, 0, ..., 0]` of size k.
+- For each bit from 0 to 30:
+    - Distribute the set bits for that bit among the k numbers round-robin.
+- When done, sum up the squares of these k numbers.
+
+**This approach is O(n + k*maxbit) = O(n)**, since generally, k <= n and 32 bits at most.
+
+#### **Why this works**
+- You can "gather" bits using the allowed operation.
+- The key to maximize the sum of squares is to concentrate bits into as few numbers as possible.
+
+---
+
+## 4. C++ Solution
 
 ```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    int sumOfSquares(vector<int>& nums) {
+    int maximumSumOfSquares(vector<int>& nums, int k) {
+        const int MOD = 1e9+7;
+        const int MAXB = 30;
         int n = nums.size();
-        int res = 0;
-        for (int i = 1; i <= n; ++i) {
-            if (n % i == 0) {
-                res += nums[i-1] * nums[i-1];
+        vector<int> bitCount(MAXB+1, 0);
+
+        // Count bits
+        for (int num : nums) {
+            for (int b = 0; b <= MAXB; ++b) {
+                if ((num >> b) & 1) bitCount[b]++;
             }
         }
-        return res;
+
+        // The k numbers we're building
+        vector<long long> vals(k, 0);
+
+        // Distribute bits (from high to low for large numbers, but order doesn't matter)
+        for (int b = 0; b <= MAXB; ++b) {
+            int cnt = bitCount[b];
+            for (int i = 0; i < cnt; ++i) {
+                vals[i % k] |= (1LL << b);
+            }
+        }
+
+        // Sum squares
+        long long ans = 0;
+        for (long long v : vals) {
+            ans = (ans + v * v % MOD) % MOD;
+        }
+        return (int)ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. Example Explanation
 
-**Example 1:**  
-Input: `nums = [1,2,3,4]`  
-`n = 4`
+**Example Input:**  
+`nums = [2, 6, 5, 8], k = 2`
 
-All `i in 1..n`:
-- `i=1`: 4 % 1 == 0 → include `nums[0] = 1` → 1² = 1
-- `i=2`: 4 % 2 == 0 → include `nums[1] = 2` → 2² = 4
-- `i=3`: 4 % 3 == 1 → *skip*
-- `i=4`: 4 % 4 == 0 → include `nums[3] = 4` → 4² = 16
+1. **Bit counts:**
+    - 2: 0010
+    - 6: 0110
+    - 5: 0101
+    - 8: 1000
 
-Sum: 1 + 4 + 16 = **21**
+    Bit 0: count = 1 (5)  
+    Bit 1: count = 3 (2,6,5)  
+    Bit 2: count = 2 (6,5)  
+    Bit 3: count = 1 (8)  
+
+2. **Distribute bits to two numbers:**
+    - Bits for vals[0]: b1(1), b3(1)
+    - Bits for vals[1]: b0(1), b2(1)
+    - Next, as you distribute counts round robin, you'll get:
+      - vals[0]: get first of each bit count, vals[1]: next set, etc.
+
+    You end up with:
+    - vals[0] = 15 (1111)
+    - vals[1] = 6 (0110)
+
+3. Squares:
+    - 15^2 = 225
+    - 6^2 = 36
+    - Total = 261
+
+**Which matches the problem example.**
 
 ---
 
-**In summary:**  
-- Find all indices dividing `n` (1-based).
-- Square corresponding values and sum.
+### **Summary Table**
 
-**C++ solution is optimal for the constraints.**
+| Step | What        | Example | Result         |
+|------|------------|---------|---------------|
+|  1   | Bit counts | [2,6,5,8] | See above     |
+|  2   | Distribute | To 2 vals | vals = [15,6] |
+|  3   | Square sum |          | 225+36=261    |
+
+---
+
+**This method is efficient, optimal, and achieves the maximal possible sum of squares.**
