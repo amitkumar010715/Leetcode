@@ -1,79 +1,55 @@
-### 1. **Summary**
-
-Given an integer array `nums`, you can rearrange its elements. Define the **alternating score** as  
-`arr[0]^2 - arr[1]^2 + arr[2]^2 - arr[3]^2 + ...`  
-You must return the **maximum possible value** of this alternating sum of squares after any rearrangement.
+Let's address each requirement:
 
 ---
 
-### 2. **Constraints & Edge Cases**
+## 1. **Short Summary**
 
-- Array size: `1 <= nums.length <= 1e5` ⇒ Solution must be **O(n log n)** or **O(n)**
-- Values: `-4e4 <= nums[i] <= 4e4`
-- **Edge cases:**
-    - Array of size 1
-    - Array of all positive, all negative, or all zeros
-    - Mix of both positives and negatives
+Given two positive integers `num` and `sum`, construct a number with exactly `num` digits (possibly with leading zeros, as seen in the example "30"), whose digits sum exactly to `sum`, such that the sum of the squares of its digits is maximized.  
+Among numbers achieving the maximum, return the lexicographically largest (i.e., the numerically largest) as a string. If impossible, return an empty string.
 
 ---
 
-### 3. **Optimal Algorithm**
+## 2. **Constraints & Edge Cases**
 
-**Observation:**
-- The sum is:  
-  `arr[0]^2 - arr[1]^2 + arr[2]^2 - arr[3]^2 + ...`  
-- For even indices the square is **added**, for odd indices it is **subtracted**.
-- You can rearrange the array as you like.
-
-#### **Key Insight**
-Suppose we select two numbers `a` for an even index and `b` for the following odd index. Their combined contribution is:
-```
-a^2 - b^2 = (a - b) * (a + b)
-```
-For a fixed pair, to maximize sum over all pairs, you want:
-- The **biggest possible number** at positions where the square is **added** (even indices)
-- The **smallest possible number** at positions where the square is **subtracted** (odd indices)
-
-This is equivalent to:
-- Sort the numbers by **decreasing absolute value**
-- Alternate assignment: assign the current number to an even index (add its square), next to odd index (subtract its square), etc.
-
-#### **Why Decreasing Absolute Value?**
-- Bigger squares contribute more regardless of sign, and you want the biggest squares to be **added**, not subtracted.
-
-#### **Algorithm Steps**
-1. Sort `nums` by decreasing absolute value.
-2. Traverse:
-   - For each even index, add its square to the answer.
-   - For each odd index, subtract its square from the answer.
-3. Return the final value.
-
-**Time Complexity:** O(n log n) for sorting, O(n) for traversal.
+- **num** can be up to 2e5, **sum** up to 2e6, so brute-force is impossible.
+- If `sum > 9*num` (since each digit ≤ 9), it's impossible.
+- If `sum < 1` and `num > 1`, it's not possible since leading zeros are allowed based on the examples, but for `num=1, sum=0` only "0" is allowed.
+- Prefer to use larger digits first for max score and lex max.
 
 ---
 
-### 4. **C++ Solution**
+## 3. **Optimal Algorithm**
+
+For each digit position from **left to right** (most to least significant), greedily assign the largest possible digit (up to 9 or sum left), to maximize both the score and lexicographic value.
+
+### Steps:
+1. If `sum > 9*num`, return `""`.
+2. For each position `i` from `0` to `num-1`:
+    - Pick digit `d = min(9, sum)`.  
+    - Append `d` to result.
+    - Subtract `d` from sum.
+3. After all positions, if sum is not zero, return `""` (incomplete).
+4. Else, convert list of digits to string and return.
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <algorithm>
-#include <cmath>
+#include <string>
 using namespace std;
 
 class Solution {
 public:
-    long long maximumAlternatingSumOfSquares(vector<int>& nums) {
-        // Sort by descending absolute value
-        sort(nums.begin(), nums.end(),
-            [](int a, int b) { return abs(a) > abs(b); });
-        long long res = 0;
-        for (int i = 0; i < nums.size(); ++i) {
-            long long sq = 1LL * nums[i] * nums[i];
-            if (i % 2 == 0)
-                res += sq;
-            else
-                res -= sq;
+    string maximizeSumOfSquares(int num, int sum) {
+        if(sum > 9 * num) return "";
+        string res;
+        for(int i = 0; i < num; ++i) {
+            int d = min(9, sum);
+            res += char('0' + d);
+            sum -= d;
         }
+        if(sum > 0) return ""; // impossible, not enough digits to distribute sum
         return res;
     }
 };
@@ -81,392 +57,27 @@ public:
 
 ---
 
-### 5. **Example Explanation**
-
-**Example:** `nums = [1,2,3]`
-
-1. **Sort by absolute value:** [3,2,1]
-2. **Assign:**
-   - Index 0 (even): +3² = +9
-   - Index 1 (odd):  -2² = -4
-   - Index 2 (even): +1² = +1
-3. **Sum:** 9 - 4 + 1 = **6**
-
-But the sample says **12** is possible!
-
-What is the issue? Let's check their sample:
-
-They use `[2,1,3]` ⇒ 2² - 1² + 3² = 4 - 1 + 9 = 12.
-
-Let’s try our approach:
-
-If we place [3,2,1]: `3² - 2² + 1² = 9 - 4 + 1 = 6`
-If we place [2,1,3]: `2² - 1² + 3² = 4 - 1 + 9 = 12` OK
-
-#### **So the issue is: Should we always start with the largest (by abs)?**
-
-Let’s generalize:
-- Let `A` in positions 0,2,4,...
-- Let `B` in positions 1,3,5,...
-
-For maximal value, you want every odd term's square to be **smaller** than the even term surrounding it.
-
-However, if any negative numbers exist, their squared values are same as positive.
-
-But if negatives and positives are involved, **sign does not matter to maximizing the sum**, only absolute value matters because square eliminates sign.
-
-But the problem wants us to rearrange for `a^2 - b^2 + c^2 - d^2 ...` to be maximum.
-
-**Actually, the issue is that the two largest numbers should not be adjacent if that would cause one of them to be subtracted.**
-- **Try pairing smaller numbers in the subtracted (odd) positions, and larger numbers at the added (even) positions.**
-
-So, **the optimal arrangement is to place the k largest numbers in the even positions; the rest in the odd positions, with their squares all subtracted**.
-
-Let’s suppose n = 3, nums = [1,2,3]:
-- n = 3, so even positions: 0,2 (2 positions)
-- Sorted descending: 3,2,1
-- Put 3 and 2 in even positions (0,2), 1 in odd (1):
-
-Order: [3,1,2]
-Sum: 3² - 1² + 2² = 9 - 1 + 4 = **12**
-
-But this is not [2,1,3] as in sample, but the sum is also 12.
-
-**So our solution:**
-- Sort `nums` descending by value,
-- Alternate large-small assignment: put the k largest in even positions, the rest in odd positions.
-
-But what if there are negative numbers?
-
-Let's check their sample with negatives:  
-`nums = [1,-1,2,-2,3,-3]`
-
-Sorted by absolute: [3, -3, 2, -2, 1, -1]
-
-Even positions: [3, 2, 1]  
-Odd positions: [-3, -2, -1]
-
-Sum: 3² - (-3)² + 2² - (-2)² + 1² - (-1)²  
-     = 9 - 9 + 4 - 4 + 1 - 1 = 0
-
-But their sample says the result should be 16. Their order: [-3,-1,-2,1,3,2]:
-
-Odd position: [ -1, 1, 2 ]  
-Even: [ -3, -2, 3 ]
-
-Now compute:
-- -3^2 - (-1)^2 + (-2)^2 - (1)^2 + 3^2 - (2)^2
-- 9 - 1 + 4 - 1 + 9 - 4 = 16
-
-So the issue is that we need to maximize the sum, not of the squares of the largest **values**, but rather **assign each pair (even, odd) to maximize (even^2 - odd^2)**. For maximizing sum of (even^2 - odd^2), for each pair, pair the largest and smallest numbers together.
-
-Let’s suppose `nums` sorted: x1 <= x2 <= ... <= xn
-
-- For i=0,...,floor((n-1)/2):
-    - Pair x_{n-i} (largest not yet paired) and x_{i} (smallest not yet paired)
-    - Assign largest to even, smallest to odd:
-
-So the arrangement: [x_{n}, x_{1}, x_{n-1}, x_{2}, x_{n-2}, x_{3}, ...]  
-- For even indices: descending (largest)
-- For odd indices: ascending (smallest)
-
-This ensures that every (even^2 - odd^2) is maximized.
-
-**So algorithm is:**
-- Sort nums ascending.
-- For i = 0 to n/2:
-    - if even, pick nums[n-1-i]
-    - if odd, pick nums[i]
-
-Let me formalize:
-
-```cpp
-vector<int> arranged;
-int n = nums.size();
-
-sort(nums.begin(), nums.end());
-int left = 0, right = n-1;
-while (left <= right) {
-    arranged.push_back(nums[right--]);
-    if (left <= right)
-        arranged.push_back(nums[left++]);
-}
-```
-
-Then compute alternating score for arranged.
-
-Let’s check with the sample:
-
-nums = [1,-1,2,-2,3,-3] (after sort: -3, -2, -1, 1, 2, 3)
-
-Build:
-right=5: arranged[3]
-left=0:  arranged[-3]
-right=4: arranged[2]
-left=1:  arranged[-2]
-right=3: arranged[1]
-left=2:  arranged[-1]
-Result: [3,-3,2,-2,1,-1]
-
-Now compute score: 3^2 - (-3)^2 + 2^2 - (-2)^2 + 1^2 - (-1)^2
-That is: 9 - 9 + 4 - 4 + 1 - 1 = 0
-
-But their sample expects 16, with arrangement [-3,-1,-2,1,3,2]
-
-So, our pairing is NOT always optimal for negative values.
-
-What if, instead, we try all possible starts? Try flipping the order: put the smallest on even, largest on odd.
-
-So, try both orders.
-
-But the additive symmetry of squaring means that the sign doesn't affect the magnitude. So, what drives the optimal solution?
-
-#### **Correct Generalization**
-- For each **pair** in the final arrangement, to maximize `even^2 - odd^2`, maximize their difference in magnitude and square the larger one.
-- What about mixing signs? Try all possible permutations is too slow.
-- The "alternate from both ends" above is the best guess, as for the classical "maximize sum of a_i - b_i" problem, but due to the squaring, negative numbers may contribute more.
-
-Look at the difference:
-- `a^2 - b^2 = (a-b)(a+b)`
-- To maximize this, for each pair, pick the pair (p, q) with maximum (p-q) * (p+q)
-
-But over the whole array, the greedy alternation (largest absolute units in even pos) matches the method for "max alternating sum".
-
-Thus, **simplest optimal solution is**:
-- Sort by absolute value descending.
-- Add the squared value if even index, subtract if odd.
-
-That is our original guess!
-
-Let us check with the sample.
-
-**nums = [1,-1,2,-2,3,-3]**
-by abs descending: [3, -3, 2, -2, 1, -1]
-positions:
-0: 3 (+9)
-1: -3 (-9)
-2: 2 (+4)
-3: -2 (-4)
-4: 1 (+1)
-5: -1 (-1)
-
-Sum: 9 - 9 + 4 - 4 + 1 - 1 == 0
-
-But the sample gives 16, so this strategy fails. Thus, the absolute value alternation is NOT always optimal when negative numbers are present.
-
-**Let’s try a different greedy:**
-- Put the largest positive numbers at even indexes, the smallest (most negative) at odd indexes (to minimize subtracted squares).
-
-Sort nums:
-- negative: [-3, -2, -1]
-- positive: [1,2,3]
-
-Even positions: fill with positives in descending
-Odd positions: fill with negatives in ascending (closest to zero first, so that their negative square is smaller)
-
-Assign: [3, -3, 2, -2, 1, -1]
-
-Yields the same as previous ([3, -3, 2, -2, 1, -1]), so again, zero.
-
-But the *sample* with `[-3, -1, -2, 1, 3, 2]` yields sum 16.
-
-Let’s examine what happens there:
-index:    0   1   2   3   4   5
-array:   -3  -1  -2   1   3   2
-
-Score:  (-3)^2 - (-1)^2 + (-2)^2 - (1)^2 + (3)^2 - (2)^2
-        9 - 1 + 4 - 1 + 9 - 4 = 8 + 3 + 5 = 16
-
-What is the difference with our attempted arrangement?
-
-The difference is that both even and odd positions can have negative or positive numbers.
-
-### **Refined Insight (Optimal pairing should maximize: sum even index squares - sum odd index squares)**
-- To maximize S = x1^2 - x2^2 + x3^2 - x4^2 + ...,
-- Place the *largest* numbers at even positions (whether positive or negative),
-- Place the *smallest* numbers at odd positions (again, both positive or negative).
-
-- That is: sort nums **decreasing**, assign even positions from the start, odd positions from the end.
-
-**Algorithm:**
-- Sort nums in **descending** order.
-- Two pointers: i = 0 (start), j = n-1 (end)
-- Even position: nums[i++]
-- Odd position: nums[j--]
-
-Let’s apply this to [1, -1, 2, -2, 3, -3]:
-
-Sorted: 3, 2, 1, -1, -2, -3
-Positions:
-even:  0                     2                    4
-odd:        1                    3                    5
-
-arranged: [3, -3, 2, -2, 1, -1]
-
-Score: (as before) 9 - 9 + 4 - 4 + 1 - 1 = 0
-
-Sample wants: `[-3, -1, -2, 1, 3, 2]`, which seems to indicate the *oddest arrangement*.
-
-Try another permutation: arrange all negatives in even, positives in odd: [-3,1,-2,2,-1,3]
-score: (-3)^2 - (1)^2 + (-2)^2 - (2)^2 + (-1)^2 - (3)^2 = 9-1+4-4+1-9 = 9-1+0 +1 -9 = 8 + 1 - 9 = 9 - 9 = 0
-
-Still not matching 16.
-
-#### **Enumerate all possible pairings to maximize even^2 - odd^2, for each consecutive pair**
-
-The optimal alternation appears to be: for each alternation, pair biggest negative with smallest positive, or vice versa.
-
-But brute-forcing for n=1e5 is not feasible.
-
-#### **Try this approach:**
-- Sort all numbers.
-- Place the largest in odd positions, smallest in even positions.
-
-Try [-3, -2, -1, 1, 2, 3]:
-
-Even: 0,2,4
-Odd:  1,3,5
-
-Fill even: left to right,
-Odd: right to left.
-
-arranged: [-3,3,-2,2,-1,1]
-
-compute: (-3)^2 - 3^2 + (-2)^2 - 2^2 + (-1)^2 - 1^2
-         9-9 + 4-4 + 1-1 = 0
-
-#### **Check sample permutation: [-3, -1, -2, 1, 3, 2]**
-
-What order is this?
-- -3 (even 0)
-- -1 (odd 1)
-- -2 (even 2)
-- +1 (odd 3)
-- +3 (even 4)
-- +2 (odd 5)
-
-So, even positions: [-3,-2,3]
-odd positions: [-1,1,2]
-
-Sum: 9-1+4-1+9-4=8+3+5=16
-
-So, the optimal seems to be: partition into two groups: all negatives and all non-negatives.
-
-- Distribute larger-magnitude numbers (in terms of square, regardless of sign) onto even indices, smaller-magnitude numbers onto odd.
-
-But in the sample, -3^2 (even 0), -2^2 (even 2), 3^2 (even 4): all largest (in abs value).
-
-So perhaps, the **optimal is* to choose a subset of k elements (k = ceil(n/2)) with the largest squares, and assign them to the even positions in any order. The remainder to the odd indices.
-
-Let's formalize:
-
-- For n numbers:
-    - Assign, among all possible subsets of size `ceil(n/2)`, the largest squared values to even indices.
-    - The answer is: sum of squares of k largest numbers (in magnitude), minus sum of squares of the k' smallest numbers (rest).
-    - Since squares are always positive, just pick top ceil(n/2) squares for even positions, rest for odd.
-
-**Thus:**
-- Sort `nums` by square (descending).
-- For i = 0 to n-1:
-    - if i < ceil(n/2): even → add to result
-    - else: odd → subtract from result
-
-But in the sample, they don't pick in this way, since -3, -2, 3 are even indices, but -1,1,2 are odd indices.
-
-In the sample, the three largest squares are assigned to even: -3, -2, 3.
-
-So, let's try that way:
-- Find the largest **ceil(n/2)** numbers (by square), assign to even positions.
-- The rest to odd.
-
-So for `[1,-1,2,-2,3,-3]` ⇒ squares: (sorted high to low)
-3:9, -3:9, 2:4, -2:4, 1:1, -1:1
-
-Pick three largest squares (`n=6`, ceil(6/2)=3): 9,9,4
-Assign to even positions: pick three of these, rest to odd indices
-
-But in the sample, it's -3 (9), -2 (4), 3 (9) at even positions
-
-So sum_even = 9+4+9 = 22
-sum_odd = 1+1+4 = 6
-
-Score = 22 - 6 = **16** (matches sample!)
-
-**Now, for [1,2,3]:**
-Squares: 9,4,1
-n=3, even positions=2, so pick two largest squares: 9,4 for even positions, rest for odd
-
-Sum_even = 9+4=13
-Sum_odd = 1
-
-Score=13-1=12 (matches sample!)
-
-**Final algorithm:**
-
-1. For nums, compute squares.
-2. Sort squares in descending order.
-3. For first ceil(n/2) squares, sum to even_sum.
-4. Sum rest to odd_sum.
-5. Return even_sum - odd_sum.
-
-**This is the optimal, working for all cases.**
-
----
-
-### 6. **Clean C++ Solution**
-
-```cpp
-#include <vector>
-#include <algorithm>
-using namespace std;
-
-class Solution {
-public:
-    long long maximumAlternatingSumOfSquares(vector<int>& nums) {
-        int n = nums.size();
-        vector<long long> squares;
-        for (int x : nums) {
-            squares.push_back(1LL * x * x);
-        }
-        sort(squares.rbegin(), squares.rend()); // Descending sort
-        long long res = 0;
-        int half = (n + 1) / 2; // ceil(n/2)
-        for (int i = 0; i < n; ++i) {
-            if (i < half) res += squares[i];
-            else res -= squares[i];
-        }
-        return res;
-    }
-};
-```
-
----
-
-### 7. **Example Explanation**
-
-#### nums = [1, -1, 2, -2, 3, -3]
-
-- Compute squares: [1,1,4,4,9,9]
-- Descending: [9,9,4,4,1,1]
-- n = 6, so k = 3 (since ceil(6/2) = 3)
-- Add top 3: 9 + 9 + 4 = 22
-- Subtract the rest: 4 + 1 + 1 = 6
-- Result: 22 - 6 = **16**
-
-Matches the sample's expected output!  
-**Key is to maximize the sum of squares assigned to even indices.**
+## 5. **Example Explanation**
+
+**Example: num = 2, sum = 3**
+
+- We need a two-digit number where the digits sum to 3.
+- Start at first digit: max is 3 (since 3 <= 9). Place 3, sum=0 left.
+- Second digit: nothing left to allocate, so 0.
+- Number: "30"
+- Its score: 3² + 0² = 9.
+- "30" is the lexicographically largest among all valid options ("12", "21", "30"), and has the max square sum.
 
 ---
 
 ## **Summary Table**
 
-| Step | Action       | Details                                                                 |
-|------|-------------|-------------------------------------------------------------------------|
-| 1    | Square      | Compute x^2 for each x in nums                                          |
-| 2    | Sort        | Descending order by x^2                                                  |
-| 3    | Even/Odd    | Add top ceil(n/2) to sum, subtract rest                                  |
-| 4    | Output      | Result is sum_even - sum_odd with ceil(n/2) at even indices              |
+| Input         | Output | Explanation                                          |
+|---------------|--------|-----------------------------------------------------|
+| num = 2, sum = 3  | "30"      | 3²+0²=9, and 30 is the largest with sum=3.  |
+| num = 2, sum = 17 | "98"      | 9+8=17, "98" largest, score=9²+8²=145         |
+| num = 1, sum = 10 | ""        | No 1-digit number can sum to 10               |
 
 ---
 
-**This algorithm is O(n log n) and optimal.**
+Let me know if you want the code with comments or more edge case explanations!
