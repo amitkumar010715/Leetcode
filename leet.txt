@@ -1,83 +1,132 @@
-Let's address each requirement:
+Let's break down the problem and provide a thorough solution:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given two positive integers `num` and `sum`, construct a number with exactly `num` digits (possibly with leading zeros, as seen in the example "30"), whose digits sum exactly to `sum`, such that the sum of the squares of its digits is maximized.  
-Among numbers achieving the maximum, return the lexicographically largest (i.e., the numerically largest) as a string. If impossible, return an empty string.
+Given an array `nums`, for each possible subarray, count the number of distinct (unique) elements. For all subarrays, **sum up the squares** of each distinct count. Return the total.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **num** can be up to 2e5, **sum** up to 2e6, so brute-force is impossible.
-- If `sum > 9*num` (since each digit ≤ 9), it's impossible.
-- If `sum < 1` and `num > 1`, it's not possible since leading zeros are allowed based on the examples, but for `num=1, sum=0` only "0" is allowed.
-- Prefer to use larger digits first for max score and lex max.
+- **Constraints:**
+  - Array length \( 1 \leq n \leq 100 \) (small!)
+  - Elements in \( [1, 100] \)
+
+- **Edge Cases:**
+  - All elements the same ⇒ every subarray has distinct count 1.
+  - All distinct ⇒ maximum distinct count per subarray.
+  - Minimum/smallest input: nums = [x] (single-element array).
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-For each digit position from **left to right** (most to least significant), greedily assign the largest possible digit (up to 9 or sum left), to maximize both the score and lexicographic value.
+Since \( n \leq 100 \), an **O(n^3)** solution is feasible.
 
-### Steps:
-1. If `sum > 9*num`, return `""`.
-2. For each position `i` from `0` to `num-1`:
-    - Pick digit `d = min(9, sum)`.  
-    - Append `d` to result.
-    - Subtract `d` from sum.
-3. After all positions, if sum is not zero, return `""` (incomplete).
-4. Else, convert list of digits to string and return.
+**Approach:**
+- For every possible subarray [i..j]:
+    - Use a set or frequency array to count how many unique numbers in [i..j].
+    - Add (distinct_count)^2 to the total sum.
+
+**Implementation Details:**
+- Two nested loops for start (`i`) and end (`j`) of subarray.
+- Use array `cnt[101]` or a `set` to track elements in current subarray.
+- For single elements: count = 1
+- For longer subarrays, build up as you extend `j`.
+
+**Time complexity:** \( O(n^2 \times k) \), where \( k \) is cost to add/check a number (worst case 100).
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <string>
+#include <vector>
+#include <unordered_set>
 using namespace std;
 
 class Solution {
 public:
-    string maximizeSumOfSquares(int num, int sum) {
-        if(sum > 9 * num) return "";
-        string res;
-        for(int i = 0; i < num; ++i) {
-            int d = min(9, sum);
-            res += char('0' + d);
-            sum -= d;
+    int sumCounts(vector<int>& nums) {
+        int n = nums.size();
+        int ans = 0;
+        for (int i = 0; i < n; ++i) {
+            unordered_set<int> seen;
+            for (int j = i; j < n; ++j) {
+                seen.insert(nums[j]);
+                int cnt = seen.size();
+                ans += cnt * cnt;
+            }
         }
-        if(sum > 0) return ""; // impossible, not enough digits to distribute sum
-        return res;
+        return ans;
+    }
+};
+```
+
+**Extras:**
+- Instead of `unordered_set<int>`, you could use `int freq[101]` to further optimize, but here, clarity is preferred.
+
+---
+
+## 5. **Example Explanation**
+
+Let's use **Example 1**:  
+`nums = [1, 2, 1]`
+
+List all subarrays and distinct counts:
+
+| Subarray  | Distinct Values | Square |
+|-----------|----------------|--------|
+| [1]       | {1}    | 1^2 = 1 |
+| [1,2]     | {1,2}  | 2^2 = 4 |
+| [1,2,1]   | {1,2}  | 2^2 = 4 |
+| [2]       | {2}    | 1^2 = 1 |
+| [2,1]     | {2,1}  | 2^2 = 4 |
+| [1]       | {1}    | 1^2 = 1 |
+
+Sum: 1 + 4 + 4 + 1 + 4 + 1 = **15**
+
+Which matches the output.
+
+---
+
+## **Summary Table**
+
+|           | Value |
+|-----------|-------|
+| Time      | O(n^3) (acceptable for n=100) |
+| Space     | O(n) per subarray, but reused |
+| Technique | Brute-force all subarrays, hash set for distincts |
+
+---
+
+**If you want a pure array solution (for even faster code):**
+
+```cpp
+class Solution {
+public:
+    int sumCounts(vector<int>& nums) {
+        int n = nums.size();
+        int ans = 0;
+        for (int i = 0; i < n; ++i) {
+            int freq[101] = {0};
+            int distinct = 0;
+            for (int j = i; j < n; ++j) {
+                if (++freq[nums[j]] == 1) distinct++;
+                ans += distinct * distinct;
+            }
+        }
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## **Summary**
 
-**Example: num = 2, sum = 3**
-
-- We need a two-digit number where the digits sum to 3.
-- Start at first digit: max is 3 (since 3 <= 9). Place 3, sum=0 left.
-- Second digit: nothing left to allocate, so 0.
-- Number: "30"
-- Its score: 3² + 0² = 9.
-- "30" is the lexicographically largest among all valid options ("12", "21", "30"), and has the max square sum.
-
----
-
-## **Summary Table**
-
-| Input         | Output | Explanation                                          |
-|---------------|--------|-----------------------------------------------------|
-| num = 2, sum = 3  | "30"      | 3²+0²=9, and 30 is the largest with sum=3.  |
-| num = 2, sum = 17 | "98"      | 9+8=17, "98" largest, score=9²+8²=145         |
-| num = 1, sum = 10 | ""        | No 1-digit number can sum to 10               |
-
----
-
-Let me know if you want the code with comments or more edge case explanations!
+- Brute-force all subarrays; for each, count unique elements and sum up squares.
+- Reasonable due to small bounds.
+- Supports all edge cases.
