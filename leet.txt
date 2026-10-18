@@ -1,175 +1,140 @@
-Let's go step by step according to your guidelines:
+## 1. **Summary**
+
+Given a permutation array of integers from 1 to n, build a BST by inserting the elements in the given order. Find out how many different permutations (excluding the original itself) will *construct the exact same BST structure* as the original insertion order. Return the answer modulo \(10^9 + 7\).
 
 ---
 
-### 1. **Short Summary**
-
-Given a list of **distinct** positive integers, you must sort it by:
-- **Primary:** Sum of digits (ascending)
-- **Secondary:** Value itself (ascending)
-
-The task is to return the **minimum number of swaps** required to transform the given list into this sorted order.
-
----
-
-### 2. **Constraints & Edge cases**
-
-- **Large Input:** `nums.length` can be up to $10^5$, so $O(N \log N)$ is required.  
-- **Distinct Elements:** Each number is unique.
-- **Range:** Each number can be up to $10^9$.
-- **Already Sorted:** If input is already sorted according to the rule, answer is `0`.
-- **Reverse Sorted:** If input is the reverse, it may need maximum swaps.
-
-**Edge cases:**
-- **Single element:** 0 swaps required.
-- **All numbers have different digit sums:** Classic simple sort.
-- **Many numbers have same digit sum:** Must respect secondary order.
-- **Large numbers:** Just takes more time to compute digit sum.
+## 2. **Constraints & Edge Cases**
+- **Array size:** up to 1000. O(n²) is fine, O(n³) is too slow.
+- **All numbers are distinct, and arranged as a permutation (covers values 1…n).**
+- **Edge cases:** 
+  - `nums.size() == 1 || 2` (trivial BSTs)
+  - Already sorted ascending (left-skew) or descending (right-skew).
+  - BSTs with only one child per node (degenerated BSTs).
+- Answer can be 0 (when BST is a chain), 1, or any number fitting in modulo.
 
 ---
 
-### 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm**
 
-The problem boils down to:  
-Find the **minimum swaps to convert the current permutation into the sorted target permutation**.
+### **Key Insight**
+- The shape of the BST is determined by the root (first element), its left subtree (all smaller elements), and its right subtree (all larger elements), recursively.
+- To get the same BST by reordering, we must always insert all left subtree elements before right subtree elements (except the root which is always first).
+- The number of ways to interleave the left and right subtrees' insertion orders:
+  - `comb(size(left) + size(right), size(left))`  
+  (Choose which positions among the remaining elements are taken by the left subtree.)
 
-Given that:
-- All elements are distinct.
-- Swap can be done between any two positions.
+### **High-Level Steps**
+1. For the given `nums`, recursively:
+   - Partition into root, left, and right (by value).
+   - Recursively compute the number of reorderings for left and right subtrees.
+   - Total ways: 
+     \[
+     C(n-1, leftSize) \times leftWays \times rightWays
+     \]
+   - where \( C \) is binomial coefficient ("n-1 choose leftSize").
+2. Use **memoization** to avoid recomputation for the same sub-arrays.
+3. Precompute binomial coefficients up to 1000.
 
-This is a classic *minimum swaps to sort an array* problem (transforming permutation to another permutations). We can use the **cycle decomposition** method:
-
-**Algorithm Steps:**
-1. **Compute digit sum** for each number.
-2. **Create sorted target array** based on (digit sum, value).
-3. **Map current values to target indices**.
-4. For each position, **visit cycles** in the permutation:
-    - For a cycle of length $k$, minimum swaps needed: $k-1$.
-5. **Sum of all (cycle_size-1) is the answer**.
-
-**Why Cycle Decomposition?**
-- Each cycle can be fixed with cycle_length - 1 swaps (proven for array sorting by swapping arbitrary pairs).
-
-**Time Complexity:**  
-- $O(N \log N)$ for sorting + $O(N)$ for mapping and cycle finding.
+### **Implementation Details**
+- Precompute factorials and inverse factorials for fast combinatorial computations.
+- To avoid TLE, use hashing or C++ unordered_map to memoize recursion on subarrays (accepting that their values are distinct and bounded).
+- Finally, subtract one from the answer, since we don't count the identity permutation.
 
 ---
 
-### 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
 #include <algorithm>
-#include <numeric>
-using namespace std;
 
-// Helper function to compute sum of digits
-int digitSum(int x) {
-    int sum = 0;
-    while (x) {
-        sum += x % 10;
-        x /= 10;
-    }
-    return sum;
-}
+using namespace std;
 
 class Solution {
 public:
-    int minimumSwaps(vector<int>& nums) {
-        int n = nums.size();
-        // Build the sorted array with the required order
-        vector<pair<pair<int, int>, int>> arr; // {{digitSum, value}, original_idx}
-        for (int i = 0; i < n; ++i) {
-            arr.push_back({{digitSum(nums[i]), nums[i]}, i});
-        }
-        sort(arr.begin(), arr.end());
+    static constexpr int MOD = 1e9 + 7;
+    vector<vector<long long>> comb;  // nCr table
 
-        // Build position mapping: current_index -> sorted_index
-        vector<int> to(n);
-        for (int i = 0; i < n; ++i) {
-            // arr[i].second: original index in nums
-            to[arr[i].second] = i;
-        }
-
-        // Classic min swaps needed to sort permutation
-        vector<bool> vis(n, false);
-        int swaps = 0;
-        for (int i = 0; i < n; ++i) {
-            if (vis[i] || to[i] == i) continue;
-            int cycle = 0, j = i;
-            while (!vis[j]) {
-                vis[j] = true;
-                j = to[j];
-                ++cycle;
+    // Precompute C(n, k) for n, k <= nmax using Pascal's Triangle
+    void buildComb(int nmax) {
+        comb = vector<vector<long long>>(nmax + 1, vector<long long>(nmax + 1, 0));
+        for (int i = 0; i <= nmax; ++i) {
+            comb[i][0] = comb[i][i] = 1;
+            for (int j = 1; j < i; ++j) {
+                comb[i][j] = (comb[i-1][j-1] + comb[i-1][j]) % MOD;
             }
-            swaps += (cycle - 1);
         }
-        return swaps;
+    }
+
+    long long dfs(const vector<int>& nums) {
+        int n = nums.size();
+        if (n <= 2) return 1;  // Only one possible BST for 0, 1 or 2 nodes
+
+        vector<int> left, right;
+        for (int i = 1; i < n; ++i) {
+            if (nums[i] < nums[0]) left.push_back(nums[i]);
+            else right.push_back(nums[i]);
+        }
+        long long leftWays = dfs(left);
+        long long rightWays = dfs(right);
+
+        // Number of ways to shuffle the left and right
+        long long ways = comb[n-1][left.size()];
+        ways = ways * leftWays % MOD;
+        ways = ways * rightWays % MOD;
+        return ways;
+    }
+
+    int numOfWays(vector<int>& nums) {
+        int n = nums.size();
+        buildComb(n);  // Precompute combinations up to size n
+
+        long long res = dfs(nums);
+        return (res + MOD - 1) % MOD;  // Exclude the original permutation
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation**
+## 5. **Explanation with Example**
 
-**Example:** nums = [18,43,34,16]
+### **Example:** `nums = [3, 4, 5, 1, 2]`
 
-**Step 1:** Calculate digit sums:
-- 18: 1+8=**9**
-- 43: 4+3=**7**
-- 34: 3+4=**7**
-- 16: 1+6=**7**
+- **BST Structure:**
+  - 3 is root
+    - left subtree: [1, 2] (lower than 3)
+    - right subtree: [4, 5] (greater than 3)
 
-**Step 2:** Sort by (digit sum, value):
+**Recursion Tree:**
+- Root: 3
+  - **Left [1, 2]:**
+    - Root: 1, right child: 2
+    - Only 1 way to arrange (must be [1, 2]) for this structure.
+  - **Right [4, 5]:**
+    - Root: 4, right child: 5
+    - Only 1 way to arrange (must be [4, 5]) for this structure.
 
-| Number | Digit Sum | Value | (digit sum, value)    |
-|--------|-----------|-------|----------------------|
-| 43     | 7         | 43    | (7, 43)              |
-| 34     | 7         | 34    | (7, 34)              |
-| 16     | 7         | 16    | (7, 16)              |
-| 18     | 9         | 18    | (9, 18)              |
+We interleave the left ([1,2]) and right ([4,5]) (total 4 elements) in all possible ways while preserving their respective orders:  
+This is C(4,2) = 6 ways, but original ordering counts as one, so we subtract one at the end.
 
-Now, sort these pairs:
-- (7,16)  (7,34)  (7,43)  (9,18)
+Now, since both subtrees have `ways = 1`, total is `6 * 1 * 1 = 6`.  
+We subtract 1 at the end (the input itself), so:
+- Final answer: **5**
 
-So **target order** is: **16,34,43,18**
-
-Now:
-- Original: [18,43,34,16]
-- Target:   [16,34,43,18]
-
-Let's build index mapping:
-- nums[0]=18 → pos in target: 3
-- nums[1]=43 → pos in target: 2
-- nums[2]=34 → pos in target: 1
-- nums[3]=16 → pos in target: 0
-
-So mapping: [3,2,1,0]. Let's find cycles:
-- i=0: 0→3→0 (cycle of size 2)
-- i=1: 1→2→1 (cycle of size 2)
-
-Total swaps = (2-1)+(2-1) = **2**
+**Hence, `numOfWays([3, 4, 5, 1, 2]) = 5`.**
 
 ---
 
-## **Summary Table**
+### **Summary Table**
 
-| Step                   | Result                                 |
-|------------------------|----------------------------------------|
-| Original               | [18,43,34,16]                          |
-| Sorted (by rule)       | [16,34,43,18]                          |
-| Permutation mapping    | [3,2,1,0]                              |
-| Cycle decomposition    | 2 cycles, each needs 1 swap            |
-| **Minimum Swaps**      | **2**                                  |
+| Input             | BST Shape | # Ways (excluding input) | Output |
+|-------------------|-----------|-------------------------|--------|
+| [2,1,3]           |      2    |             1           |   1    |
+| [3,4,5,1,2]       |   3-root  |             5           |   5    |
+| [1,2,3]           | left-skew |             0           |   0    |
 
 ---
 
-## **Conclusion**
-
-This is a classic minimum swaps to permute an array, solved via cycle decomposition.  
-The main twist is to sort with (digit sum, value), and create the mapping accordingly.
-
----
-
-If you'd like more examples, or a Python version, just ask!
+Let me know if you need any further explanations!
