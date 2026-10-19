@@ -1,140 +1,98 @@
-## 1. **Summary**
+Let's answer the requirements step-by-step:
 
-Given a permutation array of integers from 1 to n, build a BST by inserting the elements in the given order. Find out how many different permutations (excluding the original itself) will *construct the exact same BST structure* as the original insertion order. Return the answer modulo \(10^9 + 7\).
+---
+
+## 1. **Short Summary**
+
+Given an array `nums` and an integer `target`, return the indices (in the sorted array) where the value `target` appears. The indices should refer to the sorted version of `nums`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
-- **Array size:** up to 1000. O(n²) is fine, O(n³) is too slow.
-- **All numbers are distinct, and arranged as a permutation (covers values 1…n).**
-- **Edge cases:** 
-  - `nums.size() == 1 || 2` (trivial BSTs)
-  - Already sorted ascending (left-skew) or descending (right-skew).
-  - BSTs with only one child per node (degenerated BSTs).
-- Answer can be 0 (when BST is a chain), 1, or any number fitting in modulo.
+
+- **Constraints:**
+  - `1 <= nums.length <= 100`
+  - `1 <= nums[i], target <= 100`
+- **Edge Cases:**
+  - `target` does **not** exist in `nums` → return empty list.
+  - All nums are the same as `target` → return `[0, 1, ..., n-1]`.
+  - `nums` is already sorted/has repeated elements.
+  - Only one element.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Insight**
-- The shape of the BST is determined by the root (first element), its left subtree (all smaller elements), and its right subtree (all larger elements), recursively.
-- To get the same BST by reordering, we must always insert all left subtree elements before right subtree elements (except the root which is always first).
-- The number of ways to interleave the left and right subtrees' insertion orders:
-  - `comb(size(left) + size(right), size(left))`  
-  (Choose which positions among the remaining elements are taken by the left subtree.)
+**Simple O(n) algorithm (without sorting!):**
 
-### **High-Level Steps**
-1. For the given `nums`, recursively:
-   - Partition into root, left, and right (by value).
-   - Recursively compute the number of reorderings for left and right subtrees.
-   - Total ways: 
-     \[
-     C(n-1, leftSize) \times leftWays \times rightWays
-     \]
-   - where \( C \) is binomial coefficient ("n-1 choose leftSize").
-2. Use **memoization** to avoid recomputation for the same sub-arrays.
-3. Precompute binomial coefficients up to 1000.
+Let’s count how many elements are *less* than `target` (`countLess`) and how many elements are *equal* to `target` (`countEqual`).
 
-### **Implementation Details**
-- Precompute factorials and inverse factorials for fast combinatorial computations.
-- To avoid TLE, use hashing or C++ unordered_map to memoize recursion on subarrays (accepting that their values are distinct and bounded).
-- Finally, subtract one from the answer, since we don't count the identity permutation.
+- After sorting, all elements `< target` come first, then all `target` elements, then all `> target`.
+- Thus, the target values will lie at indices `countLess`, `countLess + 1`, ..., `countLess + countEqual - 1`.
+
+**Steps:**
+1. Initialize `countLess = 0`, `countEqual = 0`
+2. For each `num` in `nums`:
+   - If `num < target`, increment `countLess`
+   - If `num == target`, increment `countEqual`
+3. Build the list `[countLess, countLess+1, ..., countLess+countEqual-1]`, or an empty list if `countEqual == 0`.
+
+**Time Complexity:** O(n)
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
-
 using namespace std;
 
 class Solution {
 public:
-    static constexpr int MOD = 1e9 + 7;
-    vector<vector<long long>> comb;  // nCr table
-
-    // Precompute C(n, k) for n, k <= nmax using Pascal's Triangle
-    void buildComb(int nmax) {
-        comb = vector<vector<long long>>(nmax + 1, vector<long long>(nmax + 1, 0));
-        for (int i = 0; i <= nmax; ++i) {
-            comb[i][0] = comb[i][i] = 1;
-            for (int j = 1; j < i; ++j) {
-                comb[i][j] = (comb[i-1][j-1] + comb[i-1][j]) % MOD;
-            }
+    vector<int> targetIndices(vector<int>& nums, int target) {
+        int countLess = 0, countEqual = 0;
+        for (int num : nums) {
+            if (num < target) countLess++;
+            else if (num == target) countEqual++;
         }
-    }
-
-    long long dfs(const vector<int>& nums) {
-        int n = nums.size();
-        if (n <= 2) return 1;  // Only one possible BST for 0, 1 or 2 nodes
-
-        vector<int> left, right;
-        for (int i = 1; i < n; ++i) {
-            if (nums[i] < nums[0]) left.push_back(nums[i]);
-            else right.push_back(nums[i]);
+        vector<int> res;
+        for (int i = 0; i < countEqual; ++i) {
+            res.push_back(countLess + i);
         }
-        long long leftWays = dfs(left);
-        long long rightWays = dfs(right);
-
-        // Number of ways to shuffle the left and right
-        long long ways = comb[n-1][left.size()];
-        ways = ways * leftWays % MOD;
-        ways = ways * rightWays % MOD;
-        return ways;
-    }
-
-    int numOfWays(vector<int>& nums) {
-        int n = nums.size();
-        buildComb(n);  // Precompute combinations up to size n
-
-        long long res = dfs(nums);
-        return (res + MOD - 1) % MOD;  // Exclude the original permutation
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Explanation with Example**
+## 5. **Example Explanation**
 
-### **Example:** `nums = [3, 4, 5, 1, 2]`
+**Example 1:**
 
-- **BST Structure:**
-  - 3 is root
-    - left subtree: [1, 2] (lower than 3)
-    - right subtree: [4, 5] (greater than 3)
+Input: `nums = [1,2,5,2,3], target = 2`
 
-**Recursion Tree:**
-- Root: 3
-  - **Left [1, 2]:**
-    - Root: 1, right child: 2
-    - Only 1 way to arrange (must be [1, 2]) for this structure.
-  - **Right [4, 5]:**
-    - Root: 4, right child: 5
-    - Only 1 way to arrange (must be [4, 5]) for this structure.
+- Elements less than 2: `[1]` → `countLess = 1`
+- Elements equal to 2: `[2,2]` → `countEqual = 2`
+- In sorted array: `[1,2,2,3,5]`
+- Target 2 appears at indices `[1,2]`
 
-We interleave the left ([1,2]) and right ([4,5]) (total 4 elements) in all possible ways while preserving their respective orders:  
-This is C(4,2) = 6 ways, but original ordering counts as one, so we subtract one at the end.
-
-Now, since both subtrees have `ways = 1`, total is `6 * 1 * 1 = 6`.  
-We subtract 1 at the end (the input itself), so:
-- Final answer: **5**
-
-**Hence, `numOfWays([3, 4, 5, 1, 2]) = 5`.**
+**Output:** `[1,2]`
 
 ---
 
-### **Summary Table**
+**Summary Table for Example 1:**
 
-| Input             | BST Shape | # Ways (excluding input) | Output |
-|-------------------|-----------|-------------------------|--------|
-| [2,1,3]           |      2    |             1           |   1    |
-| [3,4,5,1,2]       |   3-root  |             5           |   5    |
-| [1,2,3]           | left-skew |             0           |   0    |
+| Index | Sorted Value | Is target?  |
+|-------|-------------|-------------|
+| 0     | 1           | No          |
+| 1     | 2           | Yes         |
+| 2     | 2           | Yes         |
+| 3     | 3           | No          |
+| 4     | 5           | No          |
+
+Target indices: **[1,2]**
 
 ---
 
-Let me know if you need any further explanations!
+**This approach achieves optimal performance without explicit sorting.**
