@@ -1,98 +1,146 @@
-Let's answer the requirements step-by-step:
+Let's break down and solve the problem step by step.
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given an array `nums` and an integer `target`, return the indices (in the sorted array) where the value `target` appears. The indices should refer to the sorted version of `nums`.
+Given an integer array `nums` of length `n`, a number `k` (**divisor of n**) is **sortable** if the array can be sorted into non-decreasing order by partitioning `nums` into contiguous subarrays of length `k` and (within each subarray) performing any number of **cyclic rotations**. Return the **sum of all possible sortable** k.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= nums.length <= 100`
-  - `1 <= nums[i], target <= 100`
-- **Edge Cases:**
-  - `target` does **not** exist in `nums` → return empty list.
-  - All nums are the same as `target` → return `[0, 1, ..., n-1]`.
-  - `nums` is already sorted/has repeated elements.
-  - Only one element.
+- Constraints:
+    - `1 <= n == nums.length <= 1e5`
+    - `1 <= nums[i] <= 1e5`
+- Edge Cases:
+    - `nums` is already sorted: all divisors of `n` are valid (because no work is needed).
+    - All elements are equal: same as above.
+    - `k = 1`: You can only rotate 1-element subarrays (which does nothing!), so unless `nums` is already sorted, `k=1` never works except for already sorted.
+    - `k = n`: The entire array can be rotated; so, it’s sortable if it can be made sorted by some rotation (i.e., array is “circularly sorted”).
+    - General `k`: Each contiguous k-length chunk can be independently cyclically permuted.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-**Simple O(n) algorithm (without sorting!):**
+### **Key Insight**
 
-Let’s count how many elements are *less* than `target` (`countLess`) and how many elements are *equal* to `target` (`countEqual`).
+Each k partitions the array into blocks of length k. You can rotate these blocks, but not reorder elements between different blocks.
 
-- After sorting, all elements `< target` come first, then all `target` elements, then all `> target`.
-- Thus, the target values will lie at indices `countLess`, `countLess + 1`, ..., `countLess + countEqual - 1`.
+After possibly rotating each block, the *only available* indices for each position in the final sorted array are the set of positions which are in the same block (i.e., same modulo k).
 
-**Steps:**
-1. Initialize `countLess = 0`, `countEqual = 0`
-2. For each `num` in `nums`:
-   - If `num < target`, increment `countLess`
-   - If `num == target`, increment `countEqual`
-3. Build the list `[countLess, countLess+1, ..., countLess+countEqual-1]`, or an empty list if `countEqual == 0`.
+Thus, to make the final sorted array, you must assign every sorted value to one position in its class `(i mod k)`.
 
-**Time Complexity:** O(n)
+That is, for sorting to succeed with mod-k blocks/rotations, the **multiset of values in all positions `i` with the same i%k in `nums` must match the multiset of values ending up in the same i%k class in the sorted array**.
+
+#### More formally:
+- Let S = sorted(nums)
+- For each r=0...k-1, `multiset of nums[i] with i%k==r` should match `multiset of S[i] with i%k==r`.
+
+That is, for each i (0...n-1), the *set of values assigned to residue class (i mod k)* in nums and in sorted(nums) must be the same.
+
+### **Algorithm Steps**
+
+1. For each divisor k of n (i.e., for all k such that n%k == 0):
+    1. For r = 0 to k-1:
+        - Collect a multiset (or, for performance, use counters or sorted lists) of nums[i] where i % k == r.
+        - Do the same for sorted(nums).
+    2. For all r, the two multisets must match exactly.
+    3. If so for all r, add k to answer.
+2. Return sum of all such k.
+
+#### **Efficiency**
+
+- For all divisors of n (about O(sqrt(n)) divisors).
+- For each, split into k groups of size n/k.
+- Comparing multisets (for each residue r), overall O(n log n + sum over k of k * (n/k log(n/k)) ). With precomputation and careful looping, this is fast for n<=1e5.
+
+### **Optimizations**
+
+- Precompute sorted(nums).
+- For each k, for all r, make a vector of the values indexed by i%k, for both nums and sorted(nums), and sort them for comparison.
+- Since the number of divisors of n is about ~300 max at n=1e5, this is efficient.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
+#include <algorithm>
+#include <numeric>
 using namespace std;
 
 class Solution {
 public:
-    vector<int> targetIndices(vector<int>& nums, int target) {
-        int countLess = 0, countEqual = 0;
-        for (int num : nums) {
-            if (num < target) countLess++;
-            else if (num == target) countEqual++;
+    int sumOfSortableIntegers(vector<int>& nums) {
+        int n = nums.size();
+        vector<int> sorted_nums(nums);
+        sort(sorted_nums.begin(), sorted_nums.end());
+        
+        // Find all divisors of n
+        vector<int> divisors;
+        for (int k = 1; k * k <= n; ++k) {
+            if (n % k == 0) {
+                divisors.push_back(k);
+                if (k != n / k) divisors.push_back(n / k);
+            }
         }
-        vector<int> res;
-        for (int i = 0; i < countEqual; ++i) {
-            res.push_back(countLess + i);
+        
+        int ans = 0;
+        for (int k : divisors) {
+            bool ok = true;
+            // For each remainder class mod k
+            for (int r = 0; r < k && ok; ++r) {
+                vector<int> v1, v2;
+                // Gather numbers at positions where i % k == r
+                for (int i = r; i < n; i += k) {
+                    v1.push_back(nums[i]);
+                    v2.push_back(sorted_nums[i]);
+                }
+                sort(v1.begin(), v1.end());
+                sort(v2.begin(), v2.end());
+                if (v1 != v2) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) ans += k;
         }
-        return res;
+        return ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-**Example 1:**
+### Example: `nums = [3, 1, 2]`
 
-Input: `nums = [1,2,5,2,3], target = 2`
+- `n = 3`
+- Divisors: 1, 3
 
-- Elements less than 2: `[1]` → `countLess = 1`
-- Elements equal to 2: `[2,2]` → `countEqual = 2`
-- In sorted array: `[1,2,2,3,5]`
-- Target 2 appears at indices `[1,2]`
+**k = 1:**
+- Each class: positions [0], [1], [2]
+    - `nums[0]=3`, `sorted[0]=1` ⇒ mismatch, so not sortable.
 
-**Output:** `[1,2]`
+**k = 3:**
+- Only one class (r=0): positions 0,1,2
+    - `nums = [3,1,2]`, `sorted = [1,2,3]`, as multisets both are {1,2,3}: possible!
+- Can you rotate [3,1,2] to [1,2,3]? Yes, rotate left once.
 
----
+**So only k=3 is sortable. Total sum: 3.**
 
-**Summary Table for Example 1:**
-
-| Index | Sorted Value | Is target?  |
-|-------|-------------|-------------|
-| 0     | 1           | No          |
-| 1     | 2           | Yes         |
-| 2     | 2           | Yes         |
-| 3     | 3           | No          |
-| 4     | 5           | No          |
-
-Target indices: **[1,2]**
 
 ---
 
-**This approach achieves optimal performance without explicit sorting.**
+**In summary:**
+- For each divisor k, check whether you can assign the sorted values to positions so each residue class modulo k matches in nums and sorted(nums).
+- That's tantamount to: for all r in 0..k-1, the multi-set of nums[i] for i%k==r == multiset of sorted(nums)[i] for i%k==r.
+- If for all r, this matches, include k.
+
+---
+
+**If you need a Python solution or more detailed breakdown of the C++ steps, let me know!**
