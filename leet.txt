@@ -1,146 +1,130 @@
-Sure! Let's break down the solution step-by-step:
+Let's break down the problem as requested:
 
 ---
 
-### 1. **Short Summary**
-Given a string `s`, in one operation you may **sort any non-entire substring** in non-descending order. Find the minimum operations needed to fully sort `s` in non-descending order, or return **-1 if impossible**.
+## 1. **Short Summary**
+
+Given a permutation of numbers from 0 to n-1, you can **only** rotate the array left by one or reverse the entire array. You must return the *minimum number of such moves* to sort the array in increasing order. If not possible, return -1.
 
 ---
 
-### 2. **Constraints & Edge Cases**
-- **Length:** `1 < s.length <= 1e5`
-- **Letters:** Only lowercase English letters.
-- **You cannot sort the whole string in one operation.**
-- **Edge Cases:**
-  - Already sorted: answer is `0`.
-  - String of length 2: only possible if already sorted (since substring can't be of length 2).
-  - Impossible cases: If sorting any non-entire substring can't help (see explanation below).
+## 2. **Constraints & Edge Cases**
+
+- **n** ≤ 100,000; solution must be O(n) or O(n log n).
+- Only two moves: *rotate left by one* and *reverse entire array*.
+- The array is always a permutation; all numbers from 0 to n-1 are present.
+- Not all permutations are reachable (not all can be sorted with these moves).
+- Important edge cases:
+   - The array is **already sorted** (`[0,1,...,n-1]`) → Output: 0.
+   - The array is **reverse sorted** (`[n-1, n-2, ..., 0]`) → Output: 1.
+   - The sorted array can be obtained by only **rotations** or only **(rotate(s) + reverse)**.
+   - Arrays with "wrecked" order (can't be rotated/reversed-rotated to sort) → Output: -1.
 
 ---
 
-### 3. **Optimal Algorithm & Observations**
+## 3. **Optimal Algorithm & Intuition**
 
-#### **Key Insights:**
-- **We can never select the entire string**: for `s` of length 2, the *only* possible substring is of length 1 (which is already sorted), so you can't change the string!
-- If `s` is already sorted, `0` operations.
-- **If s.length == 2:**
-  - If already sorted: `0`
-  - If not sorted: **no proper non-whole substring to choose (since both length-1 substrings are trivially sorted, sorting them has no effect)** → impossible, return `-1`.
-- For longer strings, notice: with each operation, you can *at most* resolve a single "out-of-order" point: you can't sort the whole thing at once, so generally you'll need one operation for every segment that's "out of order".
+### **Key Insights**
+- **Rotate left by k**: `[A, B, ..., Z]` → `[B, ..., Z, A]`. If you rotate X times, the relative order does not change; only the starting position does.
+- **Reverse**: Flips the array.
 
-#### **Minimal Number of Operations:**
-- **Key step:** The minimum #operations is the number of times the sorted string "jumps backwards" in order compared to the original string.
-- This is essentially the **number of "descending segments"** in the original string compared to the sorted version.
-- More concretely:
-    - Find the **length of the Longest Non-decreasing Subsequence (LNDS)** in `s`.
-    - The minimum #operations is:  
-      `min_operations = length(s) - LNDS`
-    - Because in each operation, you can “fix” all the out-of-order elements except those already forming an increasing sequence.
+**The only sequences you can generate:**
+- Any *rotation* of the original ("forward rotated" forms).
+- Any *rotation of the reversed array* ("reverse rotated" forms).
 
-#### **Why does this work?**
-- Every time a character is *not* part of an increasing subsequence in `s`, it will need to be sorted/moved (via an operation, possibly fixing multiple elements at once).
-- Each operation can "fix" multiple misplaced characters.
+#### To reach the sorted array `[0,1,...,n-1]`, `nums` must be:
+- **Either** a rotation of `[0,1,...,n-1]`,
+- **Or** a reversed and rotated version, i.e., a rotation of `[n-1, ..., 0]`.
 
-#### **Algorithm Steps:**
-1. **Already sorted? Return 0.**
-2. **If len(s)==2:**
-    - If not sorted: return -1.
-3. **Else:**
-    - Compute sorted string `t = sort(s)`.
-    - Find the **length of the Longest Common Subsequence (LCS)** between `s` and `t` (which will be the length of the ordered segments you don't need to fix).
-    - Return `len(s) - len(LCS)`
+#### **Approach**
+- For **rotations**:
+   - For each possible rotation k, if `nums` matches `[k, k+1, ..., n-1, 0,..., k-1]`, you can sort with k rotations.
+- For **reverse & rotations**:
+   - For each rotation k, if `nums` matches `[k, k-1, ..., 0, n-1, ..., k+1]` (i.e., one rotation of the *reversed* array), you can sort with k rotations + 1 reverse.
+- Try both directions and take the minimum.
 
-##### **Why LCS?**
-- LCS between `s` and sorted `s` tells us the **maximum number of characters already in correct order**.
-- All other characters (positions) need at least one operation to fix, so `len - len(LCS)`.
+#### **Efficient Implementation**
+- For **rotations**, the match occurs if `nums[i] == (i+start)%n` for all i.
+- For **reverse+rotation**, the match occurs if `nums[i] == (start-i+n)%n` for all i.
 
-- **Efficient LCS calculation:** Since string consists of lowercase letters, and `|s|` is big, use a **Patience Sorting/LNDS with coordinate compression**.
+To efficiently check, find the starting index of '0' (for rotation) and starting index of 'n-1' (for rotated-reverse), and verify the pattern. This is O(n).
 
 ---
 
-### 4. **Clean C++ Solution**
+## 4. **C++ Implementation**
 
 ```cpp
-#include <bits/stdc++.h>
+#include <vector>
+#include <algorithm>
 using namespace std;
 
 class Solution {
 public:
-    int minimumOperations(string s) {
-        int n = s.size();
-        string t = s;
-        sort(t.begin(), t.end());
-        if (s == t) return 0; // Already sorted
+    int minimumOperations(vector<int>& nums) {
+        int n = nums.size();
 
-        if (n == 2) return -1; // can't sort any non-whole substring
-        
-        // Map each character in the sorted string to positions
-        // For LCS between s and t (sorted s):
-        vector<vector<int>> pos(26);
-        for (int i = 0; i < n; ++i)
-            pos[t[i]-'a'].push_back(i);
-
-        vector<int> seq; // will store the positions in t as per order in s
-        vector<int> idx(26, 0);
+        // Try forward rotation route
+        int idx0 = find(nums.begin(), nums.end(), 0) - nums.begin();
+        bool good = true;
         for (int i = 0; i < n; ++i) {
-            int c = s[i]-'a';
-            if (idx[c] < pos[c].size()) {
-                seq.push_back(pos[c][idx[c]++]);
+            if (nums[(idx0 + i) % n] != i) {
+                good = false;
+                break;
             }
         }
+        int min_ops = good ? idx0 : INT_MAX;
 
-        // find the length of LIS in seq
-        vector<int> dp;
-        for (int x : seq) {
-            auto it = upper_bound(dp.begin(), dp.end(), x);
-            if (it == dp.end()) dp.push_back(x);
-            else *it = x;
+        // Try reverse-rotation route
+        int idxn1 = find(nums.begin(), nums.end(), n-1) - nums.begin();
+        good = true;
+        for (int i = 0; i < n; ++i) {
+            // for reversed, after rotating left by 'idxn1', the array should be decreasing
+            int pos = (idxn1 + i) % n;
+            if (nums[pos] != n-1 - i) {
+                good = false;
+                break;
+            }
         }
-        int lcs = dp.size();
-        return n - lcs;
+        if (good) min_ops = min(min_ops, idxn1 + 1); // need 1 reverse + idxn1 rotates
+
+        return (min_ops == INT_MAX) ? -1 : min_ops;
     }
 };
 ```
-**Note:** The use of `upper_bound` in the LIS is correct for non-decreasing sequences (since characters can repeat). If only strictly increasing, use `lower_bound`.
 
 ---
 
-### 5. **Example Explained**  
-Let's use: `s = "card"`
+## 5. **Example Explanation**
 
-- **Step 1:** Sorted target: `"acdr"`
-- **Step 2:** LCS = "cdr" (from "card", match c, then d, then r -- but "a" from original doesn't match)
-- But more formally:
-    - Consider matching from left:
-      - "c" matches at 0 in target.
-      - "a" matches at 1.
-      - "r" matches at 3.
-      - "d" matches at 2.
-      - LCS here is actually: "a", "d", or "a","r", etc. But the optimal LCS is of length 2 ("a","r" or "c","d"), not 3.
-    - So length `n = 4`
-    - Length of LCS = 2 (e.g., ("a","r"))
-- **Answer:** `4 - 2 = 2`
+**Example 1**:  
+`nums = [0,2,1]`  
+n = 3
 
-#### Let's breakdown the actual moves:
-- 1st operation: sort "car" → "acr": s = "acrd"
-- 2nd operation: sort "rd" → "dr": s = "acdr" (sorted)
-- **Total:** 2 operations (matches our calculated answer)!
+First, check if a rotation can sort the array:
+
+- Find idx of 0: 0 (already at start)
+- Check: is nums[i] == (i+0)%3?  
+  - nums[0] = 0 == 0 (good)  
+  - nums[1] = 2 == 1? (No), so doesn't match.  
+
+Try reverse+rotation path:
+
+- Find idx of 2 (`n-1`): idx = 1  
+- For each i:  
+    - nums[(1+0)%3] = nums[1] = 2 == 2? Yes  
+    - nums[(1+1)%3] = nums[2] = 1 == 1? Yes  
+    - nums[(1+2)%3] = nums[0] = 0 == 0? Yes  
+  All match.  
+- So, need 1 reverse + 1 rotation ⇒ **2 moves**
 
 ---
 
 ## **Summary Table**
-| Case       | Sorted Already | Length 2 Not Sorted | Else                                     |
-|------------|---------------|---------------------|-------------------------------------------|
-| Action     | Return 0      | Return -1           | Return n - len(LCS(s, sorted(s)))         |
 
+| Approach                   | Moves | Description              |
+|----------------------------|-------|--------------------------|
+| Rotate-only                | k     | If can match sorted by rotations |
+| Reverse + rotate           | k+1   | If can match sorted by rotated reversal |
+| Not possible               | -1    |                          |
 
 ---
-
-## **Conclusion**
-
-- For length 2, only already sorted is possible.
-- For others, compute LCS of `s` vs `sorted(s)`, answer is `n - lcs`.
-- Edge cases handled.
-- Efficient LNDS/LCS with patience sorting.
-
-Let me know if you want a more efficient LIS/LNDS version, or further clarifications!
