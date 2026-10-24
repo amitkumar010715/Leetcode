@@ -1,301 +1,103 @@
-Let's break down and solve the problem step by step as you requested.
+Let's answer each requirement step by step.
 
 ---
 
-## 1. **Short Summary**
+## **1. Short Summary**
 
-Given a permutation `nums` of `[0..n-1]`, you may swap indices `i` and `j` **only if** `nums[i] AND nums[j] == k`, for some chosen integer `k`. Find the **maximum** such `k` so that you can sort `nums` in non-decreasing order using any number of such allowed swaps. If already sorted, return `0`.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints:**
-  - `1 <= n = nums.length <= 1e5`
-  - `0 <= nums[i] <= n-1`
-  - Each value is *distinct* (it's a permutation).
-  - The AND operation restricts *which pairs* you can swap for a given `k`.
-
-- **Edge Cases:**
-  - **Already sorted:** Return 0.
-  - **n=1:** Already sorted (trivially), return 0.
-  - **Cannot sort at any k > 0:** Must support k=0 possibility.
-  - **All elements have high bits:** Max k could be high, if possible.
+Given 4 dates for Alice's and Bob's arrival and departure in Rome, **count how many days** (inclusive) both are present in the city at the same time. All dates are in "MM-DD" format in a non-leap year.
 
 ---
 
-## 3. **Optimal Algorithm**
+## **2. Constraints & Edge Cases**
 
-### Key Insights
-
-- For any fixed `k`, construct a *swap-graph*: an edge exists between positions `i` and `j` if `nums[i] & nums[j] == k`.
-- Swaps are only allowed within **connected components** in this graph. Within a connected component, all values can be permuted.
-- For `nums` to be sorted, **for every index `i`, its sorted value (`i`) must lie within its own component.** If there's a disjointness, sorting is impossible for that `k`.
-
-#### Efficient Plan
-
-- Observe for a given `k`, `nums[i] & nums[j] == k` — so for each value, partition the array into groups by values for which their `AND` with others hits `k`.
-- For efficiency:
-  - Realize that in practice, for a fixed `k`, only values which have at least the bits set in `k` can be grouped together (otherwise `AND < k`).
-  - For all indices `i` such that `nums[i] >= k` (i.e., has all `k`'s bits), group together.
-
-- **Approach:**
-  1. For every possible `k` from high to low, check if you can sort the array using swaps where `nums[i] & nums[j] == k`.
-  2. As soon as a valid `k` is found, return it.
-- The check for a candidate `k` requires:
-  - For each connected component (group), see if target values for sorting (`i`) are present within the same group.
-
-#### Optimization
-
-- There's an efficient way: Only try `k` values that are powers of two and their combinations up to the largest element, i.e., `nums` elements all in `[0..n-1]`, so at most 17 bits.
-- Thus, try all `k` from highest possible bitmask (17 bits) down to zero. For each `k`:
-  - For **each distinct bitmask**, compute its group (those elements whose AND with `k` equals `k`).
-
-- **Implementation:**
-  - For each `k` (in descending order): build a DSU (Union-Find) where for all values whose `AND` with `k` equals `k`, union their positions.
-  - Then, for each group, check if the set of indices in that component matches the set of target values needed there by sorting.
-
-**Time Complexity:**  
-Each check for `k` is O(n α(n)), but only up to 17 bits, so run up to **17** tries.
+- Each date is valid and within the same non-leap year.
+- Alice and Bob's own arrival date is *earlier than or equal to* the departure date.
+- The answer might be 0 if the intervals don't overlap at all.
+- Dates could be the same for both Alice and Bob.
+- Both intervals can be fully or partially overlapping.
+- Dates are *inclusive*.
 
 ---
 
-## 4. **C++ Solution**
+## **3. Optimal Algorithm**
+
+**Key Insight:**  
+For two date intervals `[a1, l1]` and `[a2, l2]`, their overlapping interval is  
+`[max(a1,a2), min(l1,l2)]`.  
+Days overlapped: `max(0, min(l1,l2) - max(a1,a2) + 1)`.
+
+We need to convert MM-DD to the "day-of-year" format for easy comparison.
+
+**Steps:**
+1. Convert each date ("MM-DD") to its day-of-year integer.
+2. Find the overlap as above.
+3. Return the length of overlap or 0 if non-overlapping.
+
+---
+
+## **4. C++ Solution**
 
 ```cpp
+#include <iostream>
 #include <vector>
-#include <numeric>
+#include <string>
 #include <algorithm>
-#include <map>
+
 using namespace std;
 
-class Solution {
-public:
-    // DSU/Union-Find
-    struct DSU {
-        vector<int> p;
-        DSU(int n): p(n) { iota(p.begin(), p.end(), 0); }
-        int find(int x) { return p[x]==x ? x : p[x]=find(p[x]); }
-        void unite(int x, int y) { p[find(x)] = find(y); }
-    };
+// helper: MM-DD to day-of-year
+int toDayOfYear(const string& date) {
+    // months days, 0-indexed: Jan=0
+    static vector<int> daysInMonth = 
+        {31,28,31,30,31,30,31,31,30,31,30,31};
+    int month = stoi(date.substr(0, 2));
+    int day = stoi(date.substr(3, 2));
+    int doy = day;
+    for(int m = 0; m < month - 1; ++m)
+        doy += daysInMonth[m];
+    return doy;
+}
 
-    int maximumK(vector<int>& nums) {
-        int n = nums.size();
-        // special case: already sorted
-        bool sorted = true;
-        for (int i=0; i<n; ++i) 
-            if (nums[i]!=i) sorted=false;
-        if (sorted) return 0;
+int countDaysTogether(string arriveAlice, string leaveAlice, string arriveBob, string leaveBob) {
+    int a1 = toDayOfYear(arriveAlice);
+    int l1 = toDayOfYear(leaveAlice);
+    int a2 = toDayOfYear(arriveBob);
+    int l2 = toDayOfYear(leaveBob);
 
-        // Try all bits (17 bits is enough for 1e5)
-        for (int bit=16; bit>=0; --bit) {
-            int k = 1<<bit;
-            // Try all combinations of higher bits as well (masks that fit nums)
-            // Try all possible k where num & k == k for some numbers
-            // So try all k in decreasing order
-            for (int mask = k; mask < (1<<17); mask |= (k-1), mask++) {
-                if ((mask & k) != k) continue;
-                // Do a DSU on all positions where nums[i] & k == k
-                // Actually, let's just try all possible k from the biggest down to 0.
-                // Alternatively, for all possible k from (1<<17)-1 downto 0
-            }
-        }
-        // Instead: brute force all k from (1<<17)-1 downto 0
-        for (int k = (1<<17)-1; k>=0; --k) {
-            DSU dsu(n);
-            // Build union-find graph
-            // For all pairs i, j with nums[i]&nums[j]==k, union them
-            // Instead, precompute all indices where nums[i]&k == k
-            map<int, vector<int>> groups;
-            for (int i=0; i<n; ++i) {
-                if ((nums[i]&k)==k) groups[nums[i]].push_back(i);
-            }
-            // Union all indices with same (nums[i])
-            vector<int> arr;
-            for (auto& [val, inds]: groups) {
-                for (size_t i=1; i<inds.size(); ++i) 
-                    dsu.unite(inds[i-1], inds[i]);
-            }
-            // Now for all pairs i, j: if nums[i]&nums[j]==k
-            // Just for each i, j: if (nums[i]&nums[j]==k), unite
-            // O(n^2): too slow
-            // Instead, for each i, look for j's with nums[j]&nums[i]==k
-            // Difficult but feasible for small k's.
-            // So instead, try to check if possible to sort with k.
-            // For all positions, for each sorted position i, 
-            // check if i is in same component as nums[i]
-            bool can = true;
-            for (int i=0; i<n; ++i) {
-                if (dsu.find(i)!=dsu.find(nums[i])) {
-                    can = false;
-                    break;
-                }
-            }
-            if (can) return k;
-        }
-        return 0; // fallback, should never reach here normally
-    }
-};
-```
-
-**(The above code is correct in intent but can be optimized for performance and clarity, see below for a _clean_ and efficient solution!)**
-
----
-
-### **Clean C++ Version**
-
-```cpp
-class Solution {
-public:
-    vector<int> par;
-    int find(int x) { return par[x]==x ? x : par[x]=find(par[x]); }
-    void unite(int x, int y) { par[find(x)] = find(y); }
-
-    bool canSort(vector<int>& nums, int k) {
-        int n = nums.size();
-        par.resize(n);
-        iota(par.begin(), par.end(), 0);
-
-        // Precompute for each possible value all indices where that value occurs
-        // Since nums is a permutation [0..n-1], we can use value->index mapping fast
-        vector<int> group;
-        for (int i = 0; i < n; ++i)
-            if ((nums[i] & k) == k)
-                group.push_back(i);
-        // Union all in group
-        for (int i = 1; i < group.size(); ++i)
-            unite(group[i], group[0]);
-        
-        // For all i: If position i (in sorted) and the position where i is found are union'ed
-        for (int i = 0; i < n; ++i) {
-            // For i: sorted_index = i, it's sorted value i is at position pos = whereInOriginal[i]
-            int pos = find(i);
-            int sortedVal = nums[i];
-            int sortedPos = find(sortedVal);
-            if (pos != sortedPos) return false;
-        }
-        return true;
-    }
-    
-    int maximumK(vector<int>& nums) {
-        int n = nums.size();
-        // Special: already sorted
-        bool sorted = true;
-        for (int i = 0; i < n; ++i)
-            if (nums[i] != i) { sorted = false; break; }
-        if (sorted) return 0;
-        
-        // Try all possible k from highest to lowest
-        for (int k = (1<<17)-1; k>=0; --k) {
-            if (canSort(nums, k)) return k;
-        }
-        return 0; // fallback
-    }
-};
-```
-
-**But this can be optimized to only check all the bits present in nums, instead of (1<<17)-1 down to 0:**
-
-Further optimized, **at most 17 bits** (`n <= 1e5`), try only all "bitmasks" for k with at least one bit.  
-But the brute force above is acceptable for a problem with up to 2e5 iterations and early break.
-
----
-
-## 5. **Example Walkthrough**
-
-**Example: `nums = [0, 3, 2, 1]`**
-
-- We want to find the largest `k` such that, by swapping only pairs `(i,j)` where `nums[i]&nums[j]==k`, the array can be sorted to `[0,1,2,3]`.
-
-Let’s check manually:
-
-**Try k = 2:**
-- Only pairs where `AND==2` can be swapped. The possible pairs:
-    - 3 & 2 = 2 (nums[1], nums[2]): swap allowed.
-- Let's see: can we sort using **only** such swaps?
-    - nums = [0,3,2,1], indices: 0 1 2 3
-    - swapping 3 & 2 -> [0,2,3,1]
-    - is it sorted now? No, 2 is at index 1, 3 at 2, 1 at 3.
-    - Swap 3 with 1? 3 & 1 = 1 ≠ 2 (not allowed).
-    - Cannot sort for k=2.
-
-**Try k = 1:**
-- Pairs with AND==1:
-    - 1 & 3 = 1 (nums[3], nums[1])
-- So swap nums[1] and nums[3]: [0,1,2,3], sorted!
-- Thus, **maximum k is 1**.
-
----
-
-## **Summary Table**
-
-| Step         | Description                                  |
-|--------------|----------------------------------------------|
-| Identify k   | Iterate k from max down to 0                 |
-| Build groups | Union positions where nums[i] & k == k       |
-| Check swap   | For every i, i and nums[i] must be connected |
-| Return       | Largest found k                              |
-
----
-
-## Final Clean C++ Solution
-
-```cpp
-class Solution {
-public:
-    vector<int> par;
-    int find(int x) { return par[x]==x ? x : par[x]=find(par[x]); }
-    void unite(int x, int y) { par[find(x)] = find(y); }
-
-    int maximumK(vector<int>& nums) {
-        int n = nums.size();
-        // Special case: already sorted
-        bool st = true;
-        for (int i = 0; i < n; ++i)
-            if (nums[i] != i) { st = false; break; }
-        if (st) return 0;
-
-        int maxBit = 0;
-        for (int x : nums)
-            maxBit = max(maxBit, x);
-        int maxK = 1, bits = 0;
-        while ((maxK<<1) <= maxBit) { maxK <<= 1; bits++; }
-
-        for (int k = (1<<17)-1; k >= 0; --k) {
-            // Build groups: for all i where nums[i] & k == k
-            par.assign(n, 0);
-            for (int i = 0; i < n; ++i) par[i] = i;
-            vector<int> group;
-            for (int i = 0; i < n; ++i)
-                if ((nums[i] & k) == k)
-                    group.push_back(i);
-            // Union all in group
-            for (int i = 1; i < group.size(); ++i)
-                unite(group[0], group[i]);
-            // For all i, i must be connected to the sorted value's location
-            bool ok = true;
-            for (int i = 0; i < n; ++i)
-                if (find(i) != find(nums[i])) { ok = false; break; }
-            if (ok) return k;
-        }
-        return 0;
-    }
-};
+    int start = max(a1, a2);
+    int end = min(l1, l2);
+    return max(0, end - start + 1);
+}
 ```
 
 ---
 
-## 🚩 **Example explained: nums = [0,3,2,1]**
+## **5. Example Explained**
 
-- Already covered above. With k=1, you can swap indices 1 and 3 (3 and 1), yielding `[0,1,2,3]` (sorted).
-- k=2 not enough (can't reach sorted state).
-- Thus, answer is **1**.
+**Example 1:**  
+`arriveAlice = "08-15", leaveAlice = "08-18"`  
+`arriveBob   = "08-16", leaveBob   = "08-19"`
+
+- Alice:  **Aug 15** to **Aug 18** (inclusive)
+- Bob:    **Aug 16** to **Aug 19** (inclusive)
+
+**Convert to day-of-year:**  
+- Aug: It's the 8th month. By July 31st: Jan(31) + Feb(28) + Mar(31) + Apr(30) + May(31) + Jun(30) + Jul(31) = 212
+- Aug 15: 212 + 15 = 227  
+- Aug 16: 212 + 16 = 228  
+- Aug 18: 212 + 18 = 230  
+- Aug 19: 212 + 19 = 231
+
+**Alice: 227 ~ 230**  
+**Bob:   228 ~ 231**
+
+Overlap = [max(227, 228), min(230, 231)] = [228, 230] = 3 days (**Aug 16, 17, 18**)
+
+**Output: 3**
 
 ---
 
-### **Summary of Approach:**
-1. For each possible `k` from large to small, union positions `i` where `nums[i]&k == k`.  
-2. If for every i, the place where `nums[i]` currently is and its sorted position are connected, we can sort.  
-3. Answer is largest such `k`.
-
-If you need further clarification or a code that offers more performance (using bits tricks), let me know!
+### **Summary**
+- Convert "MM-DD" to day-of-year.
+- Compute overlap as `[max(a1,a2), min(l1,l2)]`.
+- Return `max(0, end - start + 1)`.
