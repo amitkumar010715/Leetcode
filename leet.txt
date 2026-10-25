@@ -1,103 +1,124 @@
-Let's answer each requirement step by step.
+Let's proceed step by step:
 
 ---
 
-## **1. Short Summary**
+### 1. **Short Summary**
 
-Given 4 dates for Alice's and Bob's arrival and departure in Rome, **count how many days** (inclusive) both are present in the city at the same time. All dates are in "MM-DD" format in a non-leap year.
-
----
-
-## **2. Constraints & Edge Cases**
-
-- Each date is valid and within the same non-leap year.
-- Alice and Bob's own arrival date is *earlier than or equal to* the departure date.
-- The answer might be 0 if the intervals don't overlap at all.
-- Dates could be the same for both Alice and Bob.
-- Both intervals can be fully or partially overlapping.
-- Dates are *inclusive*.
+Given a 2D grid of 0s (land) and 1s (water), **count the number of *closed* islands**, where a closed island is a group of 0s surrounded in all 4 directions by 1s and located fully inside the grid (i.e., does not touch the boundary).
 
 ---
 
-## **3. Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-**Key Insight:**  
-For two date intervals `[a1, l1]` and `[a2, l2]`, their overlapping interval is  
-`[max(a1,a2), min(l1,l2)]`.  
-Days overlapped: `max(0, min(l1,l2) - max(a1,a2) + 1)`.
+**Constraints:**
+- `1 <= grid.length, grid[0].length <= 100` (so the grid can have up to 10,000 cells)
+- `0 <= grid[i][j] <= 1` (valid cells)
 
-We need to convert MM-DD to the "day-of-year" format for easy comparison.
-
-**Steps:**
-1. Convert each date ("MM-DD") to its day-of-year integer.
-2. Find the overlap as above.
-3. Return the length of overlap or 0 if non-overlapping.
+**Edge cases:**
+- An island touches the grid boundary ⇒ **not closed**.
+- Several small closed islands possible.
+- A grid with only 0s, or only 1s.
+- Thin grids (1 row or 1 column).
+- Multiple "open" islands that touch the edge.
 
 ---
 
-## **4. C++ Solution**
+### 3. **Optimal Algorithm (with explanation)**
+
+#### Core Idea
+An island is *not* closed if it is connected to the boundary.  
+**Approach:**
+- Ignore islands touching the borders.
+- For each 0-cell inside, run DFS/BFS.
+  - **If** that island touches the border, it's not closed.
+  - Otherwise, count it as a closed island.
+- To avoid re-visiting, we mark visited 0s as 1 (turn land to water).
+
+#### Steps:
+1. **First pass**: Flood-fill all 0s *connected to the edge* (using DFS/BFS from boundary zeros) and mark them visited (set to 1).
+2. **Second pass**: For each cell inside grid (excluding border), start DFS/BFS for each unvisited 0. Each such flood-fill is a closed island; increment count.
+
+#### Complexity:
+- O(R × C), visiting each cell at most twice.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
-#include <iostream>
 #include <vector>
-#include <string>
-#include <algorithm>
-
 using namespace std;
 
-// helper: MM-DD to day-of-year
-int toDayOfYear(const string& date) {
-    // months days, 0-indexed: Jan=0
-    static vector<int> daysInMonth = 
-        {31,28,31,30,31,30,31,31,30,31,30,31};
-    int month = stoi(date.substr(0, 2));
-    int day = stoi(date.substr(3, 2));
-    int doy = day;
-    for(int m = 0; m < month - 1; ++m)
-        doy += daysInMonth[m];
-    return doy;
-}
-
-int countDaysTogether(string arriveAlice, string leaveAlice, string arriveBob, string leaveBob) {
-    int a1 = toDayOfYear(arriveAlice);
-    int l1 = toDayOfYear(leaveAlice);
-    int a2 = toDayOfYear(arriveBob);
-    int l2 = toDayOfYear(leaveBob);
-
-    int start = max(a1, a2);
-    int end = min(l1, l2);
-    return max(0, end - start + 1);
-}
+class Solution {
+public:
+    void dfs(vector<vector<int>>& grid, int i, int j) {
+        int m = grid.size(), n = grid[0].size();
+        // Out of bounds or already visited
+        if (i < 0 || j < 0 || i >= m || j >= n || grid[i][j] == 1) return;
+        grid[i][j] = 1; // Mark as water (visited)
+        dfs(grid, i+1, j);
+        dfs(grid, i-1, j);
+        dfs(grid, i, j+1);
+        dfs(grid, i, j-1);
+    }
+    int closedIsland(vector<vector<int>>& grid) {
+        int m = grid.size(), n = grid[0].size();
+        // Step 1: Flood-fill all lands connected to the border
+        for (int i = 0; i < m; ++i) {
+            if (grid[i][0] == 0) dfs(grid, i, 0);
+            if (grid[i][n-1] == 0) dfs(grid, i, n-1);
+        }
+        for (int j = 0; j < n; ++j) {
+            if (grid[0][j] == 0) dfs(grid, 0, j);
+            if (grid[m-1][j] == 0) dfs(grid, m-1, j);
+        }
+        // Step 2: Flood-fill closed islands and count them
+        int closed = 0;
+        for (int i = 1; i < m-1; ++i) {
+            for (int j = 1; j < n-1; ++j) {
+                if (grid[i][j] == 0) {
+                    dfs(grid, i, j);
+                    ++closed;
+                }
+            }
+        }
+        return closed;
+    }
+};
 ```
 
 ---
 
-## **5. Example Explained**
+### 5. **Explanation with Example**
 
-**Example 1:**  
-`arriveAlice = "08-15", leaveAlice = "08-18"`  
-`arriveBob   = "08-16", leaveBob   = "08-19"`
+Let's use **Example 1**:
 
-- Alice:  **Aug 15** to **Aug 18** (inclusive)
-- Bob:    **Aug 16** to **Aug 19** (inclusive)
+```
+grid = [
+  [1,1,1,1,1,1,1,0],
+  [1,0,0,0,0,1,1,0],
+  [1,0,1,0,1,1,1,0],
+  [1,0,0,0,0,1,0,1],
+  [1,1,1,1,1,1,1,0]
+]
+```
 
-**Convert to day-of-year:**  
-- Aug: It's the 8th month. By July 31st: Jan(31) + Feb(28) + Mar(31) + Apr(30) + May(31) + Jun(30) + Jul(31) = 212
-- Aug 15: 212 + 15 = 227  
-- Aug 16: 212 + 16 = 228  
-- Aug 18: 212 + 18 = 230  
-- Aug 19: 212 + 19 = 231
-
-**Alice: 227 ~ 230**  
-**Bob:   228 ~ 231**
-
-Overlap = [max(227, 228), min(230, 231)] = [228, 230] = 3 days (**Aug 16, 17, 18**)
-
-**Output: 3**
+- **First pass**: 
+    - All zeros connected to borders (first/last row&col) are flooded and marked as water (1). All edge-connected "open" islands can't ever be closed.
+- **Second pass**: 
+    - We find the remaining islands of zeros not connected to the border and count them.
+    - In this example, we find **2 closed islands** in the middle.
 
 ---
 
-### **Summary**
-- Convert "MM-DD" to day-of-year.
-- Compute overlap as `[max(a1,a2), min(l1,l2)]`.
-- Return `max(0, end - start + 1)`.
+**Summary Table:**
+
+| Step        | Action                          |
+| ----------- | ------------------------------ |
+| 1           | Flood-fill edge-connected 0s    |
+| 2           | Count inner DFS components      |
+| Result      | Number of closed islands        |
+
+---
+
+If you need **step-by-step grid transformations with the example**, ask!
