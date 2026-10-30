@@ -1,197 +1,139 @@
-Let's tackle the problem step by step:
+Let's break down the solution step-by-step:
 
 ---
 
 ## 1. **Summary**
 
-You are given a tree with each node assigned a lowercase letter. You must efficiently process:
-- `"update u c"`: set the character at node `u` to `c`.
-- `"query u v"`: check if the string along the path from `u` to `v`, if rearranged, could form a palindrome.
-
-Return an array of booleans for each `"query"`.
+Find the shortest (minimum weight) path from node `0` to node `n-1` in a **directed, weighted graph** with labels on each node, such that **no path contains more than `k` consecutive identical characters** according to the concatenation of node labels along the path. If no such path exists, return `-1`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **n, queries up to 5e4** → Need `O(log n)` per query.
-- **Updates** can be interleaved with queries.
-- Input is a valid undirected tree.
-- Only 26 possible letters for node values.
-- For palindrome: string can be rearranged to palindrome iff **at most 1 letter occurs an odd number of times**.
+- `n` and `edges.length` can be up to **5e4 (50,000)** → Need an *efficient* solution (ideally O(M log N) or O(MK log N), where M is total edges).
+- Labels: Only lowercase English letters.
+- Each edge: positive weight, directed.
+- `k` up to 50 → Small enough to track as state info.
+  
+**Edge Cases:**
+- No path from 0 to n-1.
+- All nodes have same label, but `k` is too small for the path.
+- Shortcuts/longer paths may be optimal based on the label runs and weights.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Observations**
+**Dijkstra's Algorithm** with an *augmented state*:
+- Usual Dijkstra state: (total_weight, node)
+- **Augment the state** to track:
+    - Current consecutive identical label count (`cnt`)
+    - Current label (`ch` or just use labels[node])
+- **State**: (current_node, current_consecutive_count)
 
-- **Palindrome Rearrangement:** Path string is rearrangeable to a palindrome iff at most 1 letter occurs odd times.
-- If we can quickly count letter parities (odd/even counts) along any path, we can solve each query.
+**Why needed?**
+- Visiting a node with different consecutive run requirements may lead to different valid paths, so we need to track by (node, consecutive_run).
 
-### **Technical Path**
+**Implementation Steps:**
+1. **Represent the graph** as adjacency list (vector).
+2. **Use a min-heap (priority queue)** for Dijkstra:  
+   Each state is `(current_total_cost, curr_node, consecutive_length)`.
+3. For each transition:
+   - If the **next node's label == current node's label**:
+      - Increase the run-length by 1.
+      - If the run length exceeds `k`: **invalid, skip.**
+   - If **different**:
+      - Reset the run-length to 1.
+   - Only proceed to state `(next, run_length)` if it's not already been reached with lower or equal cost.
+4. At the end, the minimal cost to `(n-1, any valid run)` is the answer.
+5. If unreachable, return `-1`.
 
-#### **Heavy-Light Decomposition (HLD):**
-- Supports efficiently answering queries on paths, including dynamic updates.
-
-#### **Bitmask Parity Representation:**
-- For each letter, presence (odd count) is recorded as 1, absence (even) as 0 in a 26-bit integer mask.
-- The XOR of masks along a path gives the parity-occurrence mask for the string on that path.
-
-#### **Segment Tree on HLD order:**
-- Each node maps to a position in HLD array.
-- The segment tree maintains the letter mask for each node.
-
-#### **For queries:**
-- For a path from u to v, split into O(log n) segments by HLD, and XOR-combine the masks.
-
-#### **For updates:**
-- Update the segment tree at a single position.
-
-#### **Palindrome check:**
-- The mask must have **at most one bit set** (`mask & (mask-1) == 0`).
+**Space Complexity:** O(N*K) (since we keep a cost map or array for every (node, possible run length))
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <bits/stdc++.h>
+#include <vector>
+#include <queue>
+#include <string>
+#include <limits>
 using namespace std;
-
-struct SegmentTree {
-    int n;
-    vector<int> tree;
-    SegmentTree(int sz): n(sz), tree(2 * sz) {}
-
-    void build(const vector<int>& arr) {
-        for (int i = 0; i < n; ++i) tree[n + i] = arr[i];
-        for (int i = n - 1; i > 0; --i) tree[i] = tree[i << 1] ^ tree[i << 1 | 1];
-    }
-    void update(int idx, int value) {
-        for (tree[idx += n] = value; idx > 1; idx >>= 1)
-            tree[idx >> 1] = tree[idx] ^ tree[idx ^ 1];
-    }
-    int query(int l, int r) { // [l, r)
-        int res = 0;
-        for (l += n, r += n; l < r; l >>= 1, r >>= 1) {
-            if (l & 1) res ^= tree[l++];
-            if (r & 1) res ^= tree[--r];
-        }
-        return res;
-    }
-};
-
-// HLD
-struct HLD {
-    vector<vector<int>> adj;
-    vector<int> parent, depth, heavy, head, pos;
-    int cur_pos;
-    HLD(int n) : adj(n), parent(n), depth(n), heavy(n, -1),
-        head(n), pos(n), cur_pos(0) {}
-
-    void addEdge(int u, int v) {
-        adj[u].push_back(v); adj[v].push_back(u);
-    }
-    int dfs(int v, int p) {
-        int size = 1, max_sub = 0;
-        parent[v] = p;
-        for (int u : adj[v]) if (u != p) {
-            depth[u] = depth[v] + 1;
-            int sub_size = dfs(u, v);
-            size += sub_size;
-            if (sub_size > max_sub) { max_sub = sub_size; heavy[v] = u; }
-        }
-        return size;
-    }
-    void decompose(int v, int h) {
-        head[v] = h; pos[v] = cur_pos++;
-        if (heavy[v] != -1) decompose(heavy[v], h);
-        for (int u : adj[v])
-            if (u != parent[v] && u != heavy[v])
-                decompose(u, u);
-    }
-    void init(int root = 0) {
-        dfs(root, -1);
-        decompose(root, root);
-    }
-    // path u-v
-    int query(int u, int v, SegmentTree& st) {
-        int res = 0;
-        for (; head[u] != head[v]; v = parent[head[v]]) {
-            if (depth[head[u]] > depth[head[v]]) swap(u, v);
-            res ^= st.query(pos[head[v]], pos[v] + 1);
-        }
-        if (depth[u] > depth[v]) swap(u, v);
-        res ^= st.query(pos[u], pos[v] + 1);
-        return res;
-    }
-};
 
 class Solution {
 public:
-    vector<bool> treeQueries(int n, vector<vector<int>>& edges, string s, vector<string>& queries) {
-        HLD hld(n);
-        for (auto &e : edges) hld.addEdge(e[0], e[1]);
-        hld.init();
-        // Build initial mask array
-        vector<int> masks(n);
-        for (int i = 0; i < n; ++i)
-            masks[hld.pos[i]] = 1 << (s[i] - 'a');
-        SegmentTree st(n); st.build(masks);
-
-        vector<bool> res;
-        for (auto &q : queries) {
-            stringstream ss(q);
-            string cmd; ss >> cmd;
-            if (cmd == "update") {
-                int u; char c; ss >> u >> c;
-                st.update(hld.pos[u], 1 << (c - 'a'));
-            } else if (cmd == "query") {
-                int u, v; ss >> u >> v;
-                int mask = hld.query(u, v, st);
-                // is mask at most one bit set? (count of odd letters <= 1)
-                res.push_back((mask & (mask - 1)) == 0);
+    int shortestPath(vector<vector<int>>& edges, string labels, int k) {
+        int n = labels.size();
+        vector<vector<pair<int, int>>> graph(n);
+        for (auto& e : edges) {
+            graph[e[0]].emplace_back(e[1], e[2]);
+        }
+        
+        // cost[node][run_length == consecutive count of labels[node]]
+        vector<vector<int>> cost(n, vector<int>(k+2, numeric_limits<int>::max()));
+        using T = tuple<int, int, int>; // (total_weight, node, consecutive_count)
+        priority_queue<T, vector<T>, greater<T>> pq;
+        
+        cost[0][1] = 0;
+        pq.emplace(0, 0, 1);
+        
+        while (!pq.empty()) {
+            auto [curr_cost, u, cnt] = pq.top();
+            pq.pop();
+            if (u == n-1) return curr_cost;
+            if (cost[u][cnt] < curr_cost) continue; // Already found better
+            
+            char curr_label = labels[u];
+            for (auto& [v, w] : graph[u]) {
+                char next_label = labels[v];
+                int ncnt = (next_label == curr_label) ? (cnt + 1) : 1;
+                if (ncnt > k) continue;
+                if (cost[v][ncnt] > curr_cost + w) {
+                    cost[v][ncnt] = curr_cost + w;
+                    pq.emplace(curr_cost + w, v, ncnt);
+                }
             }
         }
-        return res;
+        return -1;
     }
 };
 ```
 
----
-
-## 5. **Example Explanation**
-
-**Input:**
-
-```
-n = 3, edges = [[0,1],[1,2]], s = "aac", queries = ["query 0 2","update 1 b","query 0 2"]
-```
-
-- Tree:   0 - 1 - 2
-- s:      a   a   c
-
-### 1st "query 0 2":
-- Path: [0,1,2] → "aac"
-- Frequencies: {'a':2, 'c':1} → Only 'c' occurs odd times (once), others even.
-- Can rearrange to palindrome ("aca"), so `true`.
-
-Update: `1` to 'b', so s = "abc"
-
-### 2nd "query 0 2":
-- Path: "abc"
-- Each letter occurs once (all odd counts): more than 1, so cannot become palindrome.
-- `false`.
-
-**Output: `[true, false]`**
+**Notes:**
+- `cost[node][run_length]` saves best cost for each state to avoid revisiting worse paths.
+- Dijkstra guarantees minimal path.
 
 ---
 
-### **Summary**
+## 5. **Example Walkthrough**
 
-- Used HLD + Segment Tree for efficient path query & update.
-- Used bitmask for fast odd/even letter occurrence check.
-- Each operation: **O(log n)**. Fast enough for constraints.
+**Example 1:**
+
+- `n = 3`  
+- `edges = [[0,1,1],[1,2,1],[0,2,3]]`
+- `labels = "aab"`
+- `k = 1`
+
+Graph:
+- 0 ("a") → 1 ("a"), cost 1
+- 1 ("a") → 2 ("b"), cost 1
+- 0 ("a") → 2 ("b"), cost 3
+
+Let’s evaluate paths:
+
+- **0 → 2**: label path = "ab" → no consecutive > 1, valid, cost = 3
+- **0 → 1 → 2**: label path = "aab" → "aa" is two 'a's, but `k=1` → This violates the constraint.
+
+So **only valid path** is 0→2 with cost = 3.
+
+**The code will explore:**
+- Queue starts with (0, node=0, run_length=1)
+- From 0: edge to 1, next label same, run=2 (violates k), **so not taken**
+- From 0: edge to 2, diff label, run=1, allowed, cost=3, and reaches target.
+
+Output: **3**
 
 ---
+
+Let me know if you need further explanation or more examples!
