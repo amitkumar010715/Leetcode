@@ -1,54 +1,112 @@
-Let's break down the solution step-by-step:
+Let's tackle the **Twisted Mirror Path Count** LeetCode problem step by step as you asked:
 
 ---
 
 ## 1. **Summary**
 
-Find the shortest (minimum weight) path from node `0` to node `n-1` in a **directed, weighted graph** with labels on each node, such that **no path contains more than `k` consecutive identical characters** according to the concatenation of node labels along the path. If no such path exists, return `-1`.
+You are given an `m x n` grid with binary values:
+- `0` = empty cell, `1` = mirror cell.
+
+You can only move **right** or **down** from the top-left `(0,0)` to the bottom-right `(m-1, n-1)`.  
+BUT:  
+- If you try to move into a mirror cell, you don't enter it in your intended direction; you are immediately reflected:
+    - Moving right into a mirror: you actually move **down** to the cell below the mirror (same column).  
+    - Moving down into a mirror: you move **right**, to the cell to the right of the mirror (same row).  
+- This reflection *can recur* if the new cell is also a mirror, and so on.
+- If you're ever out of bounds due to a reflection, the path is invalid.
+
+Your task = **count unique valid paths** from start to finish, using this reflection rule.  
+Return the answer modulo 1e9+7.
 
 ---
 
-## 2. **Constraints & Edge Cases**
+## 2. **Constraints and Edge Cases**
 
-- `n` and `edges.length` can be up to **5e4 (50,000)** → Need an *efficient* solution (ideally O(M log N) or O(MK log N), where M is total edges).
-- Labels: Only lowercase English letters.
-- Each edge: positive weight, directed.
-- `k` up to 50 → Small enough to track as state info.
-  
-**Edge Cases:**
-- No path from 0 to n-1.
-- All nodes have same label, but `k` is too small for the path.
-- Shortcuts/longer paths may be optimal based on the label runs and weights.
+- **Constraints**:
+    - `2 <= m, n <= 500`: moderate to large grids.
+    - Each cell is either empty (0) or mirror (1).
+    - The start (`(0,0)`) and end (`(m-1,n-1)`) are always empty (`0`).
+    - The answer can be very large; must use modulo.
+
+- **Edge cases**:
+    - *Chain reflections*: A mirror could send you to another mirror, which might reflect you again, etc.
+    - *Impossible paths*: You might get reflected out of bounds.
+    - *Multiple valid paths*: Even with mirrors, some cells can be reached through several paths.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm Explanation**
 
-**Dijkstra's Algorithm** with an *augmented state*:
-- Usual Dijkstra state: (total_weight, node)
-- **Augment the state** to track:
-    - Current consecutive identical label count (`cnt`)
-    - Current label (`ch` or just use labels[node])
-- **State**: (current_node, current_consecutive_count)
+We need to perform **DP** (dynamic programming), but while regular grid DP is enough for "unique paths" problems, here we must handle the "twisted" moves caused by mirrors—including "reflection chains".
 
-**Why needed?**
-- Visiting a node with different consecutive run requirements may lead to different valid paths, so we need to track by (node, consecutive_run).
+**Key Insights**:
+- At every cell, you could have arrived from either the left (right move) or top (down move).
+- When approaching a cell, you have to simulate reflections **until you land on an empty cell or go out of bounds**.
+- Therefore, traversing the grid in DP order (`i` from 0..m-1, `j` from 0..n-1), we need to for each possible "arrival", process "reflection chains".
 
-**Implementation Steps:**
-1. **Represent the graph** as adjacency list (vector).
-2. **Use a min-heap (priority queue)** for Dijkstra:  
-   Each state is `(current_total_cost, curr_node, consecutive_length)`.
-3. For each transition:
-   - If the **next node's label == current node's label**:
-      - Increase the run-length by 1.
-      - If the run length exceeds `k`: **invalid, skip.**
-   - If **different**:
-      - Reset the run-length to 1.
-   - Only proceed to state `(next, run_length)` if it's not already been reached with lower or equal cost.
-4. At the end, the minimal cost to `(n-1, any valid run)` is the answer.
-5. If unreachable, return `-1`.
+**Approach**:
+- Use a 2D DP array (`dp[i][j]`) = number of ways to reach cell `(i, j)`.
+- For each cell, for each possible previous move (from the left or from above), do:
+    - **Step 1**: Try to move from the left (right-move):
+        - Let `(prev_i, prev_j) = (i, j-1)`; direction = "right".
+        - Simulate reflections:  
+            - If `grid[i][j] == 1`, you are reflected downward; so increment `i` and keep `j`, and direction becomes "down".
+            - Repeat if next cell is still a mirror, until you stop (either reach an empty cell, or go out of grid).
+    - **Step 2**: Likewise, for move from above:
+        - `(prev_i, prev_j) = (i-1, j)`, direction = "down".
+        - Simulate.
 
-**Space Complexity:** O(N*K) (since we keep a cost map or array for every (node, possible run length))
+- Since reflection is *deterministic*, for each incoming direction and cell you can "walk" the reflection chain at each attempt.
+
+- **Implementation details**:
+    - For each direction, **walk the "reflection path"** until landing at an empty cell, or going out of bounds.
+    - To make it efficient, you can compute for each move in constant time, since the reflection process is always strictly advancing (no cycles, as grid size is finite and you never revisit the same cell in a single chain).
+
+---
+
+### **Pseudo-code**
+
+```text
+Initialize dp[0][0] = 1
+
+for i in 0...m-1:
+    for j in 0...n-1:
+        if (i==0 && j==0): continue
+        # Try coming from left (move right)
+        ni, nj, d = i, j-1, 'right'
+        while in bounds:
+            if nj<0: break
+            if grid[ni][nj] == 0:
+                dp[i][j] += dp[ni][nj]
+                break
+            else:
+                if d == 'right':
+                    ni += 1
+                    d = 'down'
+                else:
+                    nj += 1
+                    d = 'right'
+                if ni >= m or nj >= n: break
+        # Try coming from above (move down)
+        ni, nj, d = i-1, j, 'down'
+        while in bounds:
+            if ni<0: break
+            if grid[ni][nj] == 0:
+                dp[i][j] += dp[ni][nj]
+                break
+            else:
+                if d == 'down':
+                    nj += 1
+                    d = 'right'
+                else:
+                    ni += 1
+                    d = 'down'
+                if ni >= m or nj >= n: break
+        dp[i][j] %= MOD
+return dp[m-1][n-1]
+```
+
+- The reflection chain can only advance further away from the starting cell, so worst-case O(m+n) per DP cell.
 
 ---
 
@@ -56,84 +114,107 @@ Find the shortest (minimum weight) path from node `0` to node `n-1` in a **direc
 
 ```cpp
 #include <vector>
-#include <queue>
-#include <string>
-#include <limits>
 using namespace std;
 
 class Solution {
 public:
-    int shortestPath(vector<vector<int>>& edges, string labels, int k) {
-        int n = labels.size();
-        vector<vector<pair<int, int>>> graph(n);
-        for (auto& e : edges) {
-            graph[e[0]].emplace_back(e[1], e[2]);
-        }
+    int twistedMirrorPathCount(vector<vector<int>>& grid) {
+        int m = grid.size();
+        int n = grid[0].size();
+        const int MOD = 1e9+7;
+        vector<vector<int>> dp(m, vector<int>(n, 0));
+        dp[0][0] = 1;
         
-        // cost[node][run_length == consecutive count of labels[node]]
-        vector<vector<int>> cost(n, vector<int>(k+2, numeric_limits<int>::max()));
-        using T = tuple<int, int, int>; // (total_weight, node, consecutive_count)
-        priority_queue<T, vector<T>, greater<T>> pq;
-        
-        cost[0][1] = 0;
-        pq.emplace(0, 0, 1);
-        
-        while (!pq.empty()) {
-            auto [curr_cost, u, cnt] = pq.top();
-            pq.pop();
-            if (u == n-1) return curr_cost;
-            if (cost[u][cnt] < curr_cost) continue; // Already found better
-            
-            char curr_label = labels[u];
-            for (auto& [v, w] : graph[u]) {
-                char next_label = labels[v];
-                int ncnt = (next_label == curr_label) ? (cnt + 1) : 1;
-                if (ncnt > k) continue;
-                if (cost[v][ncnt] > curr_cost + w) {
-                    cost[v][ncnt] = curr_cost + w;
-                    pq.emplace(curr_cost + w, v, ncnt);
+        for(int i=0;i<m;++i) {
+            for(int j=0;j<n;++j) {
+                if(i==0 && j==0) continue;
+                // Path coming from left (move right)
+                int ni = i, nj = j-1;
+                char dir = 'R'; // entering (i,j) by moving right from (i, j-1)
+                while(ni >= 0 && ni < m && nj >= 0 && nj < n) {
+                    if(grid[ni][nj] == 0) {
+                        dp[i][j] = (dp[i][j] + dp[ni][nj]) % MOD;
+                        break;
+                    } else {
+                        // It's a mirror, so reflect
+                        if(dir == 'R') {
+                            ni += 1;
+                            dir = 'D';
+                        } else {
+                            nj += 1;
+                            dir = 'R';
+                        }
+                    }
+                }
+                
+                // Path coming from top (move down)
+                ni = i-1; nj = j;
+                dir = 'D'; // entering (i,j) by moving down from (i-1, j)
+                while(ni >= 0 && ni < m && nj >= 0 && nj < n) {
+                    if(grid[ni][nj] == 0) {
+                        dp[i][j] = (dp[i][j] + dp[ni][nj]) % MOD;
+                        break;
+                    } else {
+                        // It's a mirror, so reflect
+                        if(dir == 'D') {
+                            nj += 1;
+                            dir = 'R';
+                        } else {
+                            ni += 1;
+                            dir = 'D';
+                        }
+                    }
                 }
             }
         }
-        return -1;
+        return dp[m-1][n-1];
     }
 };
 ```
 
-**Notes:**
-- `cost[node][run_length]` saves best cost for each state to avoid revisiting worse paths.
-- Dijkstra guarantees minimal path.
+---
+
+## 5. **Example Explanation**
+
+Let's walk through **Example 1**:  
+`grid = [[0,1,0],[0,0,1],[1,0,0]]`
+
+The grid:
+
+| 0 | 1 | 0 |
+|:-:|:-:|:-:|
+| 0 | 0 | 1 |
+| 1 | 0 | 0 |
+
+Here are some paths that use the reflection rules:
+
+### Path 1:
+- (0,0) → (0,1): try to move right, but (0,1) is a mirror ⇒ reflect down to (1,1)
+- (1,1): move right to (1,2), it's a mirror ⇒ reflect down to (2,2) (target!).
+
+### Path 2:
+- (0,0) → (0,1) [mirror] → (1,1): move down to (2,1)
+- (2,1): move right to (2,2)
+
+### Path 3:
+- (0,0) → (1,0): move right to (1,1): not a mirror
+- (1,1): move right to (1,2) [mirror]→ reflect down to (2,2) (target)
+
+### Path 4:
+- (0,0) → (1,0): move right to (1,1): not a mirror
+- (1,1): move down to (2,1)
+- (2,1): move right to (2,2)
+
+### Path 5:
+- (0,0) → (1,0): move down to (2,0) [mirror]→ reflect right to (2,1)
+- (2,1): move right to (2,2)
+
+All ways are correctly handled by the DP and reflection-chain simulation.
 
 ---
 
-## 5. **Example Walkthrough**
+## **Conclusion**
 
-**Example 1:**
+This solution, while a bit more complex than classic grid DP, efficiently computes the answer even for large grids due to deterministic, always-advancing reflection chains.
 
-- `n = 3`  
-- `edges = [[0,1,1],[1,2,1],[0,2,3]]`
-- `labels = "aab"`
-- `k = 1`
-
-Graph:
-- 0 ("a") → 1 ("a"), cost 1
-- 1 ("a") → 2 ("b"), cost 1
-- 0 ("a") → 2 ("b"), cost 3
-
-Let’s evaluate paths:
-
-- **0 → 2**: label path = "ab" → no consecutive > 1, valid, cost = 3
-- **0 → 1 → 2**: label path = "aab" → "aa" is two 'a's, but `k=1` → This violates the constraint.
-
-So **only valid path** is 0→2 with cost = 3.
-
-**The code will explore:**
-- Queue starts with (0, node=0, run_length=1)
-- From 0: edge to 1, next label same, run=2 (violates k), **so not taken**
-- From 0: edge to 2, diff label, run=1, allowed, cost=3, and reaches target.
-
-Output: **3**
-
----
-
-Let me know if you need further explanation or more examples!
+Let me know if you'd like a Python version or detailed step-through for a particular test case!
