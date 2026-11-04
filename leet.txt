@@ -1,87 +1,184 @@
-Let's address your requirements step-by-step:
+## 1. Short Summary
+
+Given an array `nums`, and integers `x` and `k`, we can increment or decrement any element by 1 as many times as we like. We need to **minimize** the total number of operations so that **at least `k` non-overlapping subarrays of length `x`** have all elements equal.
 
 ---
 
-## 1. **Short Summary**
+## 2. Constraints & Edge Cases
 
-Given an array of integers, you can **increase any element by 1 in a move**.  
-Find the **minimum number of moves** needed to make **all elements equal**.
+- `2 <= nums.length <= 1e5`
+- `-1e6 <= nums[i] <= 1e6`
+- `2 <= x <= nums.length`
+- `1 <= k <= 15`
+- `2 <= k * x <= nums.length`
 
----
+**Edge Cases:**
+- Smallest arrays (length = k * x)
+- Nearly equal elements or all elements already equal
+- Elements far apart in value (large cost to match)
+- Multiple distinct regions that can be independently chosen
 
-## 2. **Constraints & Edge Cases**
-
-- **Constraints**:
-  - `1 <= nums.length <= 100`
-  - `1 <= nums[i] <= 100`
-
-- **Edge Cases**:
-  - All elements are already the same: No moves needed (`0`).
-  - Only one element in the array: No moves needed (`0`).
-  - Array is sorted or unsorted: Order doesn't affect the solution.
-
----
-
-## 3. **Optimal Algorithm (Explanation)**
-
-### **Observation**
-- Since you can only **increase** elements, the only way to make all equal is to turn every value into the **maximum value** in the array.
-- For each `nums[i]`, number of moves needed: `max_element - nums[i]`.
-- The total minimum moves is the sum of those differences.
-
-### **Steps**
-1. Find the **maximum** number in the array `nums`.
-2. For each number, compute `max_element - nums[i]` and add to total.
-3. Return the total sum.
-
-- **Time Complexity:** O(N)  
-- **Space Complexity:** O(1) (excluding the input)
+Important observations:
+- x can be up to 1e5, but k is very small (up to 15).
+- k * x can be up to nums.length, so there are always enough places for k subarrays.
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+**Key Observations:**
+- For subarray of size x, the minimum number of operations to make all values equal is to pick a "target" value, and sum up |nums[i] - target| for all i. The optimal target (to minimize sum of absolute differences) is the **median** of the subarray.
+- We must select k non-overlapping x-length subarrays with **the minimum total cost** over all possible such configurations.
+
+### DP Approach
+
+Let dp[i][j] = minimal cost to select j subarrays among the prefix [0 ... i).
+
+- dp[0][0] = 0
+- dp[i][j] = min over t (dp[t][j-1] + cost to make subarray nums[t..i-1] equal), for all t <= i - x
+- Only transitions that pick the next subarray starting at t, so choices are t in [0, i-x].
+
+Since k is small, we can optimize using O(n * k) DP.
+
+#### Steps:
+1. **Precompute costs**:
+   - For all substrings nums[i..i+x-1], compute `cost[i]`: the cost to set nums[i..i+x-1] to the same value.
+   - We only need to know minimal cost for all possible starting positions.
+
+   Use a sliding window and maintain a multiset to compute the cost in O(1) per move, as median move cost is updatable by keeping prefix sums and multisets.
+
+2. **DP**
+   - Initialize dp[0][0] = 0, rest as INF.
+   - For each i in [0, n]:
+       - For each j in [0, k]:
+         - Option 1: do not select subarray at i: dp[i+1][j] = min(dp[i+1][j], dp[i][j])
+         - Option 2: if i + x <= n and j < k: select subarray starting at i (cost[i]):
+             - dp[i+x][j+1] = min(dp[i+x][j+1], dp[i][j] + cost[i])
+   - The minimal answer is min(dp[n][k]), i.e. having selected k subarrays.
+
+#### Time Complexity
+
+- Precomputing cost for all subarrays: O(n log x) (with multiset median)
+- DP: O(n * k)
+- Overall: O(n*k + n log x) = efficient for constraints.
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 #include <vector>
+#include <set>
 #include <algorithm>
+#include <numeric>
+#include <climits>
+using namespace std;
 
 class Solution {
 public:
-    int minMoves(std::vector<int>& nums) {
-        int max_val = *std::max_element(nums.begin(), nums.end());
-        int moves = 0;
-        for (int x : nums) {
-            moves += (max_val - x);
+    int minOperationsToMakeKSubarraysEqual(vector<int>& nums, int x, int k) {
+        int n = nums.size();
+        vector<long long> cost(n - x + 1);
+        
+        // Precompute cost for each x-length window
+        // Use two multisets to maintain two halves (left: small, right: large)
+        // To find/walk median efficiently
+        multiset<int> left, right;
+        long long lsum = 0, rsum = 0;
+        vector<int> window;
+
+        for (int i = 0; i < x; ++i) {
+            window.push_back(nums[i]);
         }
-        return moves;
+        sort(window.begin(), window.end());
+        for (int i = 0; i < x; ++i) {
+            if (i < (x+1)/2) {
+                left.insert(window[i]);
+                lsum += window[i];
+            } else {
+                right.insert(window[i]);
+                rsum += window[i];
+            }
+        }
+        for (int i = 0; i <= n - x; ++i) {
+            // Median is *prev(left.end())
+            int med = *prev(left.end());
+            long long now = 1LL * med * (int)left.size() - lsum
+                          + rsum - 1LL * med * (int)right.size();
+            cost[i] = now;
+            if (i + x >= n) break;
+            // Slide window: remove nums[i], add nums[i+x]
+            int out = nums[i];
+            int in = nums[i+x];
+            // Remove out
+            if (left.count(out)) {
+                left.erase(left.find(out));
+                lsum -= out;
+            } else {
+                right.erase(right.find(out));
+                rsum -= out;
+            }
+            // Insert in
+            if (!left.empty() && in <= *prev(left.end())) {
+                left.insert(in);
+                lsum += in;
+            } else {
+                right.insert(in);
+                rsum += in;
+            }
+            // Rebalance
+            while (left.size() > (x + 1) / 2) {
+                int mv = *prev(left.end());
+                left.erase(prev(left.end()));
+                lsum -= mv;
+                right.insert(mv);
+                rsum += mv;
+            }
+            while (left.size() < (x + 1) / 2) {
+                int mv = *right.begin();
+                right.erase(right.begin());
+                rsum -= mv;
+                left.insert(mv);
+                lsum += mv;
+            }
+        }
+
+        // DP: dp[pos][taken]
+        vector<vector<long long>> dp(n+1, vector<long long>(k+1, LLONG_MAX/2));
+        dp[0][0] = 0;
+        for (int i = 0; i <= n; ++i) {
+            for (int j = 0; j <= k; ++j) {
+                // Not take new segment at i
+                if (i+1 <= n)
+                    dp[i+1][j] = min(dp[i+1][j], dp[i][j]);
+                // Take a segment if possible
+                if (j < k && i + x <= n) {
+                    dp[i+x][j+1] = min(dp[i+x][j+1], dp[i][j] + cost[i]);
+                }
+            }
+        }
+        return (int)dp[n][k];
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. Example Explanation
 
-**Example:**  
-`nums = [2, 1, 3]`
+**Example 1:**
+- `nums = [5, -2, 1, 3, 7, 3, 6, 4, -1], x = 3, k = 2`
+- Goal: Pick 2 non-overlapping subarrays of size 3. Minimize total operations so elements in each subarray are equal.
+- Possible choices:
+  - Subarray [1,3]: `[-2,1,3]` ⇒ cost to make equal (median is 1): |(-2)-1|+|1-1|+|3-1| = 3+0+2=5
+  - Subarray [5,6,7]: `[3,6,4]` ⇒ median is 4: |3-4|+|6-4|+|4-4| = 1+2+0=3
+- Total: 5+3=8 (optimal among all possible combinations).
 
-- Maximum value: **3**
-- Required moves for each element:
-  - For `2`: `3 - 2 = 1`
-  - For `1`: `3 - 1 = 2`
-  - For `3`: `3 - 3 = 0`
-- **Total moves:** `1 + 2 + 0 = 3`
-
-**So, output is `3`.**
+You may pick other subarrays and verify their cost is not lower.
 
 ---
 
-### **Summary Table**
-
-| Array     | Moves needed           | Total moves |
-|-----------|-----------------------|-------------|
-| [2, 1, 3] | (3-2) + (3-1) + (3-3) | 3           |
-
----
-
-If you need an even more detailed step-by-step or a follow-up, let me know!
+**In summary:**
+- Precompute the cost for every possible subarray of length x to make it all equal (with median).
+- Use DP to collect the minimum total cost for picking k non-overlapping subarrays.
+- The provided C++ code is both optimal and efficient for the given constraints.
