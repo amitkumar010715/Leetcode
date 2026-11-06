@@ -1,43 +1,68 @@
-Let's address your requirements step by step.
+Let's solve the **"Count Zero Request Servers"** LeetCode problem.
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-Given two integer arrays `arr1` and `arr2`, and an integer `d`, **return the count of elements in `arr1` for which every element in `arr2` is at distance greater than `d`**. In other words, count the elements in `arr1` that have no element in `arr2` within `d` distance.
+Given logs of requests to `n` servers, for each query time `q`, count the number of servers that did **not** receive any request in the interval `[q - x, q]` (inclusive). Each log is `[server_id, time]`. Efficiently answer for many queries.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- `1 <= arr1.length, arr2.length <= 500`
-- `-1000 <= arr1[i], arr2[j] <= 1000`
-- `0 <= d <= 100`
+### Constraints
 
-**Edge Cases:**
-- `d` can be zero; thus, must ensure elements aren't exactly matching.
-- Arrays may have negative, zero, or positive values.
-- All or none in arr1 may satisfy the distance constraint.
-- Duplicates may be present; each value in `arr1` is considered independently.
+- `n, logs.size(), queries.size() <= 1e5`
+- All times are up to `1e6`
+- `1 <= server_id <= n`, but note server IDs are 1-based.
+- Query times: `x < queries[i] <= 1e6`
+- Need to answer up to 1e5 queries efficiently.
+
+### Edge Cases
+
+- Some servers may never have any requests.
+- There can be duplicate logs for same server at different times.
+- There may be queries with no logs in their interval.
+- Queries can be out of order.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### Brute-force (Nested Loops)
-For each `a` in `arr1`, check all `b` in `arr2`. If for *all* `b`, `|a-b| > d`, count this `a`.  
-Time: O(N*M), where N=len(arr1), M=len(arr2). **(Worst O(250,000) - acceptable, but we can do better)**
+### **High Level**
 
-### Optimized Algorithm (Binary Search)
-1. **Sort arr2.**
-2. For each value in arr1:
-    - Use binary search on arr2 to check if there is *any* value within `[a-d, a+d]`.
-    - If **none** found in this window, count it.
-- Sorting is O(M\*logM); each search O(logM); total O(M\*logM + N\*logM).
+We want to answer, for each query, in the time interval `[q - x, q]`, how many servers have `0` logs (i.e., didn't receive any request) in that interval.
 
-**Why binary search works:**  
-For a value `x`, if there's any value in arr2 within `[x-d, x+d]`, then it will appear as an element in this range in sorted arr2. We can use `lower_bound` to check if an element in this range exists.
+**Key Insight:**  
+We need to efficiently, for each query, know which servers had *at least one* log in `[q - x, q]`. Complement to `n` gives answer.
+
+### **Efficient Processing - Sliding Window Over Logs**
+
+- **Sort both logs and queries by time.**
+- As we scan queries in order (by time), we "slide" a window of logs that are in the current query interval:
+  - Maintain a ***window*** of logs with `time in [query - x, query]`.
+  - Use a frequency map (array) to track, for each `server`, how many logs are in the window.
+- For every query, the number of servers with `freq[server_id] == 0` is the answer.
+
+This is a classic ***two pointers/sliding window*** problem.
+
+#### **STEP BY STEP ALGORITHM**
+
+1. **Sort logs by time.**
+2. **Sort queries with their original indices, by query time.**
+3. For the current query at `t = q` (iterating in increasing time), maintain two pointers:
+    - `winStart`: index in logs for the first log `>= q-x`
+    - `winEnd`: index for last log `<= q`
+    - Incrementally move window as queries advance.
+4. As window slides:
+    - When a log enters the window, if server was previously at `0`, decrement the count of servers with zero logs.
+    - When a log leaves the window, if server's count goes from `1->0`, increment zero server count.
+5. Store results for each original query index.
+
+#### **Complexity**
+- Preprocessing: sort logs and queries: `O(L log L + Q log Q)`
+- Processing logs and queries in total linear: `O(L + Q)`
+- Perfect for input limits.
 
 ---
 
@@ -50,54 +75,75 @@ using namespace std;
 
 class Solution {
 public:
-    int findTheDistanceValue(vector<int>& arr1, vector<int>& arr2, int d) {
-        sort(arr2.begin(), arr2.end());
-        int count = 0;
-        for (int x : arr1) {
-            // Find the first element >= x-d
-            auto it = lower_bound(arr2.begin(), arr2.end(), x - d);
-            bool ok = true;
-            // Check the element at it (if exists)
-            if (it != arr2.end() && abs(*it - x) <= d) ok = false;
-            // Could also check the element before it
-            if (it != arr2.begin() && abs(*(it - 1) - x) <= d) ok = false;
-            if (ok) ++count;
+    vector<int> countServers(int n, vector<vector<int>>& logs, int x, vector<int>& queries) {
+        int L = logs.size(), Q = queries.size();
+        // Pair each query with its original index
+        vector<pair<int,int>> query_with_index;
+        for (int i=0; i<Q; ++i)
+            query_with_index.push_back({queries[i], i});
+        sort(query_with_index.begin(), query_with_index.end());
+
+        // Sort logs by their time
+        sort(logs.begin(), logs.end(), [](const vector<int>& a, const vector<int>& b){
+            return a[1] < b[1];
+        });
+
+        vector<int> freq(n+2, 0);  // Server ids start from 1
+        int zeroCount = n;         // Initially, all servers have 0 logs in window
+
+        int l = 0, r = 0;
+        vector<int> res(Q);
+        for (auto& [q_time, idx] : query_with_index) {
+            // Extend window right to include logs with time <= q_time
+            while (r < L && logs[r][1] <= q_time) {
+                int sid = logs[r][0];
+                if (freq[sid] == 0)
+                    zeroCount--;
+                freq[sid]++;
+                r++;
+            }
+            // Shrink window left to logs with time >= q_time - x
+            while (l < L && logs[l][1] < q_time - x) {
+                int sid = logs[l][0];
+                freq[sid]--;
+                if (freq[sid] == 0)
+                    zeroCount++;
+                l++;
+            }
+            // Record result
+            res[idx] = zeroCount;
         }
-        return count;
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Walkthrough**
 
-Consider:
+### **Example 1**
+
 ```
-arr1 = [4,5,8], arr2 = [10,9,1,8], d = 2
+n = 3, logs = [[1,3],[2,6],[1,5]], x = 5, queries = [10, 11]
 ```
 
-- **Sort arr2:** `[1,8,9,10]`
-- For `4`:
-  - Want no values in `[4-2, 4+2] = [2,6]`
-  - Use `lower_bound`, first value >= 2 is `8` (`it = 1`)
-  - Previous value is `1`, `abs(1-4) = 3 > 2`; `abs(8-4) = 4 > 2`, so `4` counts.
+Sort logs: `[[1,3], [1,5], [2,6]]`
+Queries (with indices): `[(10,0), (11,1)]`
 
-- For `5`:
-  - Range: `[3,7]`
-  - lower_bound is `8`, previous is `1`
-  - Both abs diffs: `abs(1-5)=4>2`, `abs(8-5)=3>2` => `5` **counts**.
+#### Query 0: q=10, interval [5,10]
+- Slide window: logs with time 3 < 5 (removed), now window is `[1,5],[2,6]`
+- Server 1 (log at 5)
+- Server 2 (log at 6)
+- Server 3: No logs => 1 server with zero requests
 
-- For `8`:
-  - Range: `[6,10]`
-  - lower_bound is `8`
-  - abs(8-8)=0 <= 2 (found), so **does not count**.
+#### Query 1: q=11, interval [6,11]
+- [1,5] is before 6, so remove, freq[1] -> 0, zeroCount++
+- Window now only [2,6]; freq[2]=1
+- Only server 2 has log; servers 1 and 3 have zero logs => 2 servers with zero requests
 
-**Total = 2**
+**Output: [1,2]**
 
 ---
 
-**In summary:**  
-- Sort arr2, use lower_bound for each arr1 value, consider direct and previous position.
-- Count values in arr1 with no matching arr2 value within distance `d`.
-- Solution is efficient (O(N log M)) and clean.
+**This algorithm works efficiently for large constraints by leveraging the windowed sliding mechanism. Let me know if you need more clarifications or a Python version!**
