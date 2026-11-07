@@ -1,149 +1,135 @@
-Let's solve the **"Count Zero Request Servers"** LeetCode problem.
+Let's address your requests step by step.
 
 ---
 
-## 1. **Short Summary**
+### 1. **Short Summary**
 
-Given logs of requests to `n` servers, for each query time `q`, count the number of servers that did **not** receive any request in the interval `[q - x, q]` (inclusive). Each log is `[server_id, time]`. Efficiently answer for many queries.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-### Constraints
-
-- `n, logs.size(), queries.size() <= 1e5`
-- All times are up to `1e6`
-- `1 <= server_id <= n`, but note server IDs are 1-based.
-- Query times: `x < queries[i] <= 1e6`
-- Need to answer up to 1e5 queries efficiently.
-
-### Edge Cases
-
-- Some servers may never have any requests.
-- There can be duplicate logs for same server at different times.
-- There may be queries with no logs in their interval.
-- Queries can be out of order.
+This problem requires simulating a task processing system using a set of servers, where each task is assigned to the earliest-available server with the smallest weight (and smallest index if tied). We must return which server handled each task.
 
 ---
 
-## 3. **Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-### **High Level**
-
-We want to answer, for each query, in the time interval `[q - x, q]`, how many servers have `0` logs (i.e., didn't receive any request) in that interval.
-
-**Key Insight:**  
-We need to efficiently, for each query, know which servers had *at least one* log in `[q - x, q]`. Complement to `n` gives answer.
-
-### **Efficient Processing - Sliding Window Over Logs**
-
-- **Sort both logs and queries by time.**
-- As we scan queries in order (by time), we "slide" a window of logs that are in the current query interval:
-  - Maintain a ***window*** of logs with `time in [query - x, query]`.
-  - Use a frequency map (array) to track, for each `server`, how many logs are in the window.
-- For every query, the number of servers with `freq[server_id] == 0` is the answer.
-
-This is a classic ***two pointers/sliding window*** problem.
-
-#### **STEP BY STEP ALGORITHM**
-
-1. **Sort logs by time.**
-2. **Sort queries with their original indices, by query time.**
-3. For the current query at `t = q` (iterating in increasing time), maintain two pointers:
-    - `winStart`: index in logs for the first log `>= q-x`
-    - `winEnd`: index for last log `<= q`
-    - Incrementally move window as queries advance.
-4. As window slides:
-    - When a log enters the window, if server was previously at `0`, decrement the count of servers with zero logs.
-    - When a log leaves the window, if server's count goes from `1->0`, increment zero server count.
-5. Store results for each original query index.
-
-#### **Complexity**
-- Preprocessing: sort logs and queries: `O(L log L + Q log Q)`
-- Processing logs and queries in total linear: `O(L + Q)`
-- Perfect for input limits.
+- **Constraints:**
+  - Up to 200,000 servers and 200,000 tasks: O(N log N) solutions are necessary.
+  - Server weights and task processing times can be up to 200,000.
+- **Edge Cases:**
+  - All servers the same weight.
+  - Tasks that take 1 second and/or max time.
+  - All servers busy at task arrivals → need to queue tasks and possibly fast-forward time.
+  - Tasks entering faster/slower than servers can complete tasks.
 
 ---
 
-## 4. **C++ Solution**
+### 3. **Optimal Algorithm**
+
+#### **Key Ideas**
+- Use two priority queues (heaps):
+  - One min-heap for **available servers**: by `(weight, index)`.
+  - Another min-heap for **busy servers**: by `(available_time, weight, index)`.
+- At every second (task arrival), do the following:
+  1. **Free-up servers**: Move busy servers whose finish time ≤ current time to the free-servers heap.
+  2. **Assign task**:
+     - If free servers exist, assign current task to the top one (min weight/index).
+     - If not, fast-forward time to next server's available_time, process all servers that become free, then assign.
+- Each task is assigned one at a time; always try to assign ASAP, in input order.
+
+#### **Time Complexity**
+- Each task is pushed/popped once from both heaps → O(M log N), where M is number of tasks and N is number of servers.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
+#include <queue>
 using namespace std;
 
-class Solution {
-public:
-    vector<int> countServers(int n, vector<vector<int>>& logs, int x, vector<int>& queries) {
-        int L = logs.size(), Q = queries.size();
-        // Pair each query with its original index
-        vector<pair<int,int>> query_with_index;
-        for (int i=0; i<Q; ++i)
-            query_with_index.push_back({queries[i], i});
-        sort(query_with_index.begin(), query_with_index.end());
+vector<int> assignTasks(vector<int>& servers, vector<int>& tasks) {
+    using pii = pair<int, int>; // (weight, index)
+    using busy_t = tuple<long long, int, int>; // (free_time, weight, index)
+    int n = servers.size(), m = tasks.size();
 
-        // Sort logs by their time
-        sort(logs.begin(), logs.end(), [](const vector<int>& a, const vector<int>& b){
-            return a[1] < b[1];
-        });
+    // Min-heap by (weight, index)
+    priority_queue<pii, vector<pii>, greater<pii>> free;
+    // Min-heap by (free_time, weight, index)
+    priority_queue<busy_t, vector<busy_t>, greater<busy_t>> busy;
 
-        vector<int> freq(n+2, 0);  // Server ids start from 1
-        int zeroCount = n;         // Initially, all servers have 0 logs in window
+    for (int i = 0; i < n; ++i)
+        free.emplace(servers[i], i);
 
-        int l = 0, r = 0;
-        vector<int> res(Q);
-        for (auto& [q_time, idx] : query_with_index) {
-            // Extend window right to include logs with time <= q_time
-            while (r < L && logs[r][1] <= q_time) {
-                int sid = logs[r][0];
-                if (freq[sid] == 0)
-                    zeroCount--;
-                freq[sid]++;
-                r++;
-            }
-            // Shrink window left to logs with time >= q_time - x
-            while (l < L && logs[l][1] < q_time - x) {
-                int sid = logs[l][0];
-                freq[sid]--;
-                if (freq[sid] == 0)
-                    zeroCount++;
-                l++;
-            }
-            // Record result
-            res[idx] = zeroCount;
+    vector<int> ans(m);
+    long long curr_time = 0;
+
+    for (int i = 0; i < m; ++i) {
+        curr_time = max<(long long)>(curr_time, i);
+        // Free servers whose task completed by curr_time
+        while (!busy.empty() && get<0>(busy.top()) <= curr_time) {
+            auto [t, w, idx] = busy.top(); busy.pop();
+            free.emplace(w, idx);
         }
-        return res;
+        // If none free, fast forward to the earliest finish time
+        if (free.empty()) {
+            curr_time = get<0>(busy.top());
+            while (!busy.empty() && get<0>(busy.top()) <= curr_time) {
+                auto [t, w, idx] = busy.top(); busy.pop();
+                free.emplace(w, idx);
+            }
+        }
+        auto [w, idx] = free.top(); free.pop();
+        ans[i] = idx;
+        busy.emplace(curr_time + tasks[i], w, idx);
     }
-};
+    return ans;
+}
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+### 5. **Example Explained ([3, 3, 2], tasks = [1, 2, 3, 2, 1, 2])**
 
-### **Example 1**
+Let's step through the first few tasks:
 
-```
-n = 3, logs = [[1,3],[2,6],[1,5]], x = 5, queries = [10, 11]
-```
+- **Second 0:** Task 0 arrives (time needed: 1).
+  - Servers: [(2,2), (3,0), (3,1)] → pick 2 (index 2).
+  - Server 2 will be free at 1.
 
-Sort logs: `[[1,3], [1,5], [2,6]]`
-Queries (with indices): `[(10,0), (11,1)]`
+- **Second 1:** Task 1 arrives (2s).
+  - Server 2 is now free.
+  - Pick server 2 (index 2).
+  - Will be free at 3.
 
-#### Query 0: q=10, interval [5,10]
-- Slide window: logs with time 3 < 5 (removed), now window is `[1,5],[2,6]`
-- Server 1 (log at 5)
-- Server 2 (log at 6)
-- Server 3: No logs => 1 server with zero requests
+- **Second 2:** Task 2 arrives (3s).
+  - All servers busy except (3,0), (3,1) (from initial). Server 2 is busy until 3.
+  - Pick server 0 (weight 3, idx 0). Free at 5.
 
-#### Query 1: q=11, interval [6,11]
-- [1,5] is before 6, so remove, freq[1] -> 0, zeroCount++
-- Window now only [2,6]; freq[2]=1
-- Only server 2 has log; servers 1 and 3 have zero logs => 2 servers with zero requests
+- **Second 3:** Task 3 arrives (2s).
+  - Server 2 is now free again.
+  - Pick server 2 (index 2), will be free at 5.
 
-**Output: [1,2]**
+- **Second 4:** Task 4 arrives (1s).
+  - No server free till 5, fast forward.
+  - At 5: All servers become free. Among [(3,0), (3,1), (2,2)], pick 1st available: 1 (index 1, weight 3).
+  - Will be free at 5.
+
+- **Continue similarly for remaining tasks.**
+
+**Output:** `[2,2,0,2,1,2]` matches each assignment.
 
 ---
 
-**This algorithm works efficiently for large constraints by leveraging the windowed sliding mechanism. Let me know if you need more clarifications or a Python version!**
+## **Summary Table for the Example**
+
+| Task | Arrive at | Needed | Free Servers        | Assigned | Busy Until |
+|------|-----------|--------|--------------------|----------|------------|
+| 0    | 0         | 1      | 2, 0, 1            | 2        | 1          |
+| 1    | 1         | 2      | 2, 0, 1            | 2        | 3          |
+| 2    | 2         | 3      | 0, 1               | 0        | 5          |
+| 3    | 3         | 2      | 2, 1               | 2        | 5          |
+| 4    | 4         | 1      | 1                  | 1        | 5          |
+| 5    | 5         | 2      | 2, 0, 1            | 2        | 7          |
+
+---
+
+**This algorithm handles task/worker availability efficiently and meets all constraints.**
