@@ -1,135 +1,98 @@
-Let's address your requests step by step.
+Let's approach this problem step by step:
 
 ---
 
-### 1. **Short Summary**
+## 1. Short Summary
 
-This problem requires simulating a task processing system using a set of servers, where each task is assigned to the earliest-available server with the smallest weight (and smallest index if tied). We must return which server handled each task.
-
----
-
-### 2. **Constraints & Edge Cases**
-
-- **Constraints:**
-  - Up to 200,000 servers and 200,000 tasks: O(N log N) solutions are necessary.
-  - Server weights and task processing times can be up to 200,000.
-- **Edge Cases:**
-  - All servers the same weight.
-  - Tasks that take 1 second and/or max time.
-  - All servers busy at task arrivals → need to queue tasks and possibly fast-forward time.
-  - Tasks entering faster/slower than servers can complete tasks.
+Given a grid representing servers (with `1`s for servers, `0`s for empty), **count the servers that can communicate with at least one other server**. Two servers can communicate if they share a row or a column.
 
 ---
 
-### 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-#### **Key Ideas**
-- Use two priority queues (heaps):
-  - One min-heap for **available servers**: by `(weight, index)`.
-  - Another min-heap for **busy servers**: by `(available_time, weight, index)`.
-- At every second (task arrival), do the following:
-  1. **Free-up servers**: Move busy servers whose finish time ≤ current time to the free-servers heap.
-  2. **Assign task**:
-     - If free servers exist, assign current task to the top one (min weight/index).
-     - If not, fast-forward time to next server's available_time, process all servers that become free, then assign.
-- Each task is assigned one at a time; always try to assign ASAP, in input order.
+**Constraints:**
+- `1 <= m, n <= 250`
+- The grid contains only 0 or 1.
+- Up to 62,500 total cells (so O(m*n) solutions are feasible).
 
-#### **Time Complexity**
-- Each task is pushed/popped once from both heaps → O(M log N), where M is number of tasks and N is number of servers.
+**Edge Cases:**
+- All values are `0` (no servers): output should be 0.
+- Every cell is a server (all `1`): all can communicate.
+- Only one server: cannot communicate, so output is 0.
+- All servers isolated (each in unique row and column): output is 0.
 
 ---
 
-### 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+**Approach:**
+- For a server to communicate, there must be **at least two servers in its row or column**.
+- Count the number of servers in each row and each column.
+- Then, for each cell containing a server, if its row or column count is greater than 1, it can communicate.
+
+**Complexity:**  
+- First pass: count servers in each row (O(m*n))
+- Second pass: for each server, check row/col counts (O(m*n))
+- So, total O(m*n), which works for given constraints.
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 #include <vector>
-#include <queue>
 using namespace std;
 
-vector<int> assignTasks(vector<int>& servers, vector<int>& tasks) {
-    using pii = pair<int, int>; // (weight, index)
-    using busy_t = tuple<long long, int, int>; // (free_time, weight, index)
-    int n = servers.size(), m = tasks.size();
+class Solution {
+public:
+    int countServers(vector<vector<int>>& grid) {
+        int m = grid.size(), n = grid[0].size();
 
-    // Min-heap by (weight, index)
-    priority_queue<pii, vector<pii>, greater<pii>> free;
-    // Min-heap by (free_time, weight, index)
-    priority_queue<busy_t, vector<busy_t>, greater<busy_t>> busy;
+        vector<int> rowCount(m, 0);
+        vector<int> colCount(n, 0);
 
-    for (int i = 0; i < n; ++i)
-        free.emplace(servers[i], i);
+        // Count servers in each row and column
+        for(int i = 0; i < m; ++i)
+            for(int j = 0; j < n; ++j)
+                if(grid[i][j]) {
+                    rowCount[i]++;
+                    colCount[j]++;
+                }
+        
+        int result = 0;
+        // If server row or col has more than one server, this one can communicate
+        for(int i = 0; i < m; ++i)
+            for(int j = 0; j < n; ++j)
+                if(grid[i][j] && (rowCount[i] > 1 || colCount[j] > 1))
+                    result++;
 
-    vector<int> ans(m);
-    long long curr_time = 0;
-
-    for (int i = 0; i < m; ++i) {
-        curr_time = max<(long long)>(curr_time, i);
-        // Free servers whose task completed by curr_time
-        while (!busy.empty() && get<0>(busy.top()) <= curr_time) {
-            auto [t, w, idx] = busy.top(); busy.pop();
-            free.emplace(w, idx);
-        }
-        // If none free, fast forward to the earliest finish time
-        if (free.empty()) {
-            curr_time = get<0>(busy.top());
-            while (!busy.empty() && get<0>(busy.top()) <= curr_time) {
-                auto [t, w, idx] = busy.top(); busy.pop();
-                free.emplace(w, idx);
-            }
-        }
-        auto [w, idx] = free.top(); free.pop();
-        ans[i] = idx;
-        busy.emplace(curr_time + tasks[i], w, idx);
+        return result;
     }
-    return ans;
-}
+};
 ```
 
 ---
 
-### 5. **Example Explained ([3, 3, 2], tasks = [1, 2, 3, 2, 1, 2])**
+## 5. Example Explained
 
-Let's step through the first few tasks:
+**Example 2:**
 
-- **Second 0:** Task 0 arrives (time needed: 1).
-  - Servers: [(2,2), (3,0), (3,1)] → pick 2 (index 2).
-  - Server 2 will be free at 1.
+```
+Input: grid = [[1,0],
+               [1,1]]
+Row counts: [1, 2]
+Col counts: [2, 1]
+```
+Let's see which servers can communicate:
+- (0,0): rowCount=1, colCount=2, so communicates (since col has 2 servers)
+- (1,0): rowCount=2, colCount=2, communicates
+- (1,1): rowCount=2, colCount=1, communicates
 
-- **Second 1:** Task 1 arrives (2s).
-  - Server 2 is now free.
-  - Pick server 2 (index 2).
-  - Will be free at 3.
-
-- **Second 2:** Task 2 arrives (3s).
-  - All servers busy except (3,0), (3,1) (from initial). Server 2 is busy until 3.
-  - Pick server 0 (weight 3, idx 0). Free at 5.
-
-- **Second 3:** Task 3 arrives (2s).
-  - Server 2 is now free again.
-  - Pick server 2 (index 2), will be free at 5.
-
-- **Second 4:** Task 4 arrives (1s).
-  - No server free till 5, fast forward.
-  - At 5: All servers become free. Among [(3,0), (3,1), (2,2)], pick 1st available: 1 (index 1, weight 3).
-  - Will be free at 5.
-
-- **Continue similarly for remaining tasks.**
-
-**Output:** `[2,2,0,2,1,2]` matches each assignment.
+Result: 3 servers can communicate.
 
 ---
 
-## **Summary Table for the Example**
-
-| Task | Arrive at | Needed | Free Servers        | Assigned | Busy Until |
-|------|-----------|--------|--------------------|----------|------------|
-| 0    | 0         | 1      | 2, 0, 1            | 2        | 1          |
-| 1    | 1         | 2      | 2, 0, 1            | 2        | 3          |
-| 2    | 2         | 3      | 0, 1               | 0        | 5          |
-| 3    | 3         | 2      | 2, 1               | 2        | 5          |
-| 4    | 4         | 1      | 1                  | 1        | 5          |
-| 5    | 5         | 2      | 2, 0, 1            | 2        | 7          |
-
----
-
-**This algorithm handles task/worker availability efficiently and meets all constraints.**
+**Summary:**
+- Count servers in each row and column.
+- For each server, if row or column has more than 1 server, count it.
+- This gives an efficient and clean solution.
