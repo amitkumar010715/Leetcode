@@ -1,98 +1,149 @@
-Let's approach this problem step by step:
+Sure! Let's address your requirements for the LeetCode problem **"Find Servers That Handled Most Number of Requests"**.
 
 ---
 
-## 1. Short Summary
+## 1. **Problem Summary**
 
-Given a grid representing servers (with `1`s for servers, `0`s for empty), **count the servers that can communicate with at least one other server**. Two servers can communicate if they share a row or a column.
-
----
-
-## 2. Constraints & Edge Cases
-
-**Constraints:**
-- `1 <= m, n <= 250`
-- The grid contains only 0 or 1.
-- Up to 62,500 total cells (so O(m*n) solutions are feasible).
-
-**Edge Cases:**
-- All values are `0` (no servers): output should be 0.
-- Every cell is a server (all `1`): all can communicate.
-- Only one server: cannot communicate, so output is 0.
-- All servers isolated (each in unique row and column): output is 0.
+You have `k` servers, each can process at most **one** request at a time. For each request (arriving at strictly increasing times and taking some time to process), you try to assign it to server `(i % k)` (where `i` is the request index), or the next available one (circularly), or drop the request if all are busy. At the end, return the IDs of the server(s) that handled the most requests.
 
 ---
 
-## 3. Optimal Algorithm
+## 2. **Constraints & Edge Cases**
 
-**Approach:**
-- For a server to communicate, there must be **at least two servers in its row or column**.
-- Count the number of servers in each row and each column.
-- Then, for each cell containing a server, if its row or column count is greater than 1, it can communicate.
-
-**Complexity:**  
-- First pass: count servers in each row (O(m*n))
-- Second pass: for each server, check row/col counts (O(m*n))
-- So, total O(m*n), which works for given constraints.
+- `1 <= k, n <= 1e5` (`n` = number of requests).
+- `arrival` array is strictly increasing.
+- Each request may need to scan up to all `k` servers, but that's too slow for large `k`.
+- Need to process requests and updates efficiently.
+- Requests may arrive in quick succession, servers may become free at various times.
+- Edge cases:
+  - All requests need to be dropped (all servers busy).
+  - All servers get equal number of requests.
+  - Only one server, or only one request.
 
 ---
 
-## 4. Clean C++ Solution
+## 3. **Optimal Algorithm**
+
+**Key idea**: Use data structures to efficiently find the smallest available server >= target, or wrap to the smallest overall available.
+
+### Main steps:
+1. **Track busy servers** with a min-heap:  
+   Store `(free_time, server_id)` pairs. At each request, before handling, pop all servers that are now free and put them back to the available pool.
+2. **Track available servers** with an *ordered set*:  
+   To support wrap-around, keep the available servers in a data structure that efficiently finds lower_bound (the smallest server id `>=` target), or wraps to the smallest id (`0`).
+   - In C++, `std::set<int>` supports `lower_bound`.
+3. **Simulation**:
+   - For each request:
+     - Release (from busy heap) any servers that have become free.
+     - Try to assign to the `i % k`-th server or next available (`>=`) in available set; wraparound if needed.
+     - If no server is available, drop the request.
+     - Else, assign the request: remove from available, add to busy with new free time, increment its count.
+
+### Why is this efficient?
+- Each request's per-op cost is O(log k): set and heap operations.
+- Each server is only put back into available set once per request (when it finishes).
+- Total cost: O(n log k) (acceptable for large constraints).
+
+---
+
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
+#include <set>
+#include <queue>
 using namespace std;
 
 class Solution {
 public:
-    int countServers(vector<vector<int>>& grid) {
-        int m = grid.size(), n = grid[0].size();
+    vector<int> busiestServers(int k, vector<int>& arrival, vector<int>& load) {
+        vector<int> counts(k, 0); // Requests handled per server
 
-        vector<int> rowCount(m, 0);
-        vector<int> colCount(n, 0);
+        set<int> available; // IDs of servers currently available
+        for (int i = 0; i < k; ++i) available.insert(i);
 
-        // Count servers in each row and column
-        for(int i = 0; i < m; ++i)
-            for(int j = 0; j < n; ++j)
-                if(grid[i][j]) {
-                    rowCount[i]++;
-                    colCount[j]++;
-                }
-        
-        int result = 0;
-        // If server row or col has more than one server, this one can communicate
-        for(int i = 0; i < m; ++i)
-            for(int j = 0; j < n; ++j)
-                if(grid[i][j] && (rowCount[i] > 1 || colCount[j] > 1))
-                    result++;
+        // Min-heap of {end_time, server_id} for busy servers
+        using pii = pair<long long, int>;
+        priority_queue<pii, vector<pii>, greater<pii>> busy;
 
-        return result;
+        int n = arrival.size();
+
+        for (int i = 0; i < n; ++i) {
+            int time = arrival[i];
+            // Release all servers that are now available
+            while (!busy.empty() && busy.top().first <= time) {
+                available.insert(busy.top().second);
+                busy.pop();
+            }
+
+            // Find next available server (>= i % k), wrap if at end
+            if (available.empty()) continue; // drop request
+
+            int start = i % k;
+            auto it = available.lower_bound(start);
+            if (it == available.end()) it = available.begin();
+            int server = *it;
+
+            available.erase(it);
+            counts[server]++;
+            busy.emplace((long long)time + load[i], server);
+        }
+
+        // Find max count and servers with that count
+        int maxCount = *max_element(counts.begin(), counts.end());
+        vector<int> res;
+        for (int i = 0; i < k; ++i)
+            if (counts[i] == maxCount)
+                res.push_back(i);
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. Example Explained
+## 5. **Example Explanation**
 
-**Example 2:**
-
+Let's go through **Example 1**:
 ```
-Input: grid = [[1,0],
-               [1,1]]
-Row counts: [1, 2]
-Col counts: [2, 1]
+k = 3
+arrival = [1,2,3,4,5]
+load =    [5,2,3,3,3]
 ```
-Let's see which servers can communicate:
-- (0,0): rowCount=1, colCount=2, so communicates (since col has 2 servers)
-- (1,0): rowCount=2, colCount=2, communicates
-- (1,1): rowCount=2, colCount=1, communicates
+Servers: 0, 1, 2
 
-Result: 3 servers can communicate.
+1. At time 1 (req 0): server 0 is available (0 % 3 = 0). Assigned. Becomes busy until 6.
+2. At time 2 (req 1): server 1 is available (1 % 3 = 1). Assigned. Busy until 4.
+3. At time 3 (req 2): server 2 is available (2 % 3 = 2). Assigned. Busy until 6.
+4. At time 4 (req 3): server 0 is busy, try 1 (wrapping)... server 1 is now free (her earlier request ended at 4)—so assign to server 1. Server 1 now busy until 7.
+5. At time 5 (req 4): all servers busy (0 & 2 free at 6, 1 free at 7), request dropped.
+
+**Requests handled:**
+- Server 0: 1
+- Server 1: 2
+- Server 2: 1
+
+**Output:** `[1]`
 
 ---
 
-**Summary:**
-- Count servers in each row and column.
-- For each server, if row or column has more than 1 server, count it.
-- This gives an efficient and clean solution.
+### **Summary Table for Step-by-Step**
+
+| Request | Arrival | Load | Try Server | Assigned Server | Server Busy Till |
+|---------|---------|------|------------|----------------|-----------------|
+|   0     |   1     |   5  |    0       |       0        |       6         |
+|   1     |   2     |   2  |    1       |       1        |       4         |
+|   2     |   3     |   3  |    2       |       2        |       6         |
+|   3     |   4     |   0  |    0 (busy), try 1 (now free) | 1 |      7      |
+|   4     |   5     |   3  |   2 (busy), 0 (busy), 1 (busy): Drop |   - |   - |
+
+---
+
+## **Summary**
+
+- Use a set for available servers and a min-heap for busy tracking.
+- Release servers as their requests finish.
+- For each request, assign to `(i % k)` or next available (circularly).
+- Count handled requests, return those with max count.
+
+**If you need a Python version or have further questions, let me know!**
