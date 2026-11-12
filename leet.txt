@@ -1,88 +1,64 @@
-Let's solve the problem step-by-step:
+Let's break it down per your requirements:
 
 ---
 
-## 1. **Summary**
+## 1. Short Summary
 
-Given the cost of three types of items (`cost1`, `cost2`, `costBoth`) and the amounts needed (`need1`, `need2`), determine the minimal total cost to meet the required amounts, where type 3 (both) contributes to both needs.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **Constraints:**
-  - Costs up to 10⁶, needs up to 10⁹.
-  - Can't use brute force (`n^2`) due to large needs.
-- **Edge Cases:**
-  - `need1 = 0` or `need2 = 0`: Don't need to buy for that type.
-  - `costBoth` is much less than `cost1 + cost2`: Use more type 3 items.
-  - `costBoth` is higher than `cost1 + cost2`: Don't use type 3 at all.
+Given an array, **find the length of the longest contiguous subarray** that is either **strictly increasing** or **strictly decreasing**. The subarray must use consecutive elements, and the sequence must be *strict*, i.e., all elements **must be** `>` or `<` than their previous element respectively.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 2. Constraints & Edge Cases
 
-Let `x` be the amount of type 3 ("both") items we buy (`0 <= x <= min(need1, need2)`).  
-For each possible `x`, the costs:
-- Remaining for type 1: `need1 - x`
-- Remaining for type 2: `need2 - x`
-- Total cost: `x * costBoth + (need1 - x) * cost1 + (need2 - x) * cost2`
-
-But with huge needs, we can't check all possible `x`. Let's observe:
-- The total cost is a linear function in `x`:
-    ```
-    total = x * costBoth + (need1 - x) * cost1 + (need2 - x) * cost2
-          = need1 * cost1 + need2 * cost2 + x * (costBoth - cost1 - cost2)
-    ```
-
-- The direction in which we move (increase or decrease `x`) depends on whether `costBoth < cost1 + cost2`:
-  - If `costBoth < cost1 + cost2`: More type 3 is better – set `x = min(need1, need2)`.
-  - If `costBoth > cost1 + cost2`: Less type 3 is better – set `x = 0`.
-
-**But** using type 3 for needs beyond the smaller of `need1` and `need2` is possible—e.g., if you buy extra type 3 so you finish, say, `need2`, but overfills `need1`, is that advantageous?
-
-Let's generalize:
-- Try all possible `x` in [0, max(need1, need2)]:
-    - For each `x` in [0, max(need1, need2)]:
-        - Actual needs after buying `x` type 3 items:
-            - type 1: `max(0, need1 - x)`
-            - type 2: `max(0, need2 - x)`
-        - Total cost: `x * costBoth + max(0, need1 - x) * cost1 + max(0, need2 - x) * cost2`
-- The minimal point will be at or near:
-    - 0 (`x = 0`)
-    - `min(need1, need2)` (`x = min(need1, need2)`)
-    - at `need1` or `need2` (`x = need1` or `need2`)
-    - So try all these, and since cost is linear, only these cases needed.
-
-**Thus, we check for `x` = 0, `min(need1, need2)`, `need1`, `need2`, and possibly `max(need1, need2)`**
+- **Constraints**:  
+  - Array length: `1 ≤ nums.length ≤ 50`
+  - Element value: `1 ≤ nums[i] ≤ 50`
+- **Edge Cases**:
+  - Single-element arrays (answer is 1).
+  - All elements are the same (answer is 1).
+  - All elements strictly increasing/decreasing (answer is nums.length).
+  - Plateaus (equal consecutive elements): break both increasing/decreasing sequences.
+  - Mixed: sequences of length 2 (e.g., `[a, b]` where `a ≠ b`) count as strictly increasing/decreasing.
 
 ---
 
-## 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+Since N is small (≤ 50), a **linear scan** is optimal:
+
+- **Track two values as you scan**:
+  - `inc_len`: current length of strictly increasing ending at `i`
+  - `dec_len`: current length of strictly decreasing ending at `i`
+  - `ans`: max found so far
+- For every index from `1` to `n-1`:
+  - If `nums[i] > nums[i-1]`: `inc_len += 1`, reset `dec_len` to 1
+  - If `nums[i] < nums[i-1]`: `dec_len += 1`, reset `inc_len` to 1
+  - If `nums[i] == nums[i-1]`: both reset to 1
+  - Update `ans` after each step
+
+This is O(N) time and O(1) extra space.
+
+---
+
+## 4. Clean C++ Solution
 
 ```cpp
 class Solution {
 public:
-    long long minimumCost(int cost1, int cost2, int costBoth, int need1, int need2) {
-        // Edge: nothing needed
-        if (need1 == 0 && need2 == 0) return 0;
-        
-        long long ans = LLONG_MAX;
-        auto calc = [&](long long x) -> long long {
-            long long n1 = max(0LL, (long long)need1 - x);
-            long long n2 = max(0LL, (long long)need2 - x);
-            if (x < 0) return LLONG_MAX; // not possible
-            return x * costBoth + n1 * cost1 + n2 * cost2;
-        };
-        vector<long long> candidates = {
-            0LL,
-            (long long)min(need1, need2),
-            (long long)need1,
-            (long long)need2,
-            (long long)max(need1, need2),
-        };
-        for (long long x : candidates) {
-            ans = min(ans, calc(x));
+    int longestMonotonicSubarray(vector<int>& nums) {
+        int n = nums.size();
+        int inc_len = 1, dec_len = 1, ans = 1;
+        for (int i = 1; i < n; ++i) {
+            if (nums[i] > nums[i-1]) {
+                inc_len += 1;
+                dec_len = 1;
+            } else if (nums[i] < nums[i-1]) {
+                dec_len += 1;
+                inc_len = 1;
+            } else {
+                inc_len = dec_len = 1;
+            }
+            ans = max(ans, max(inc_len, dec_len));
         }
         return ans;
     }
@@ -91,38 +67,36 @@ public:
 
 ---
 
-## 5. **Example Explanation**
+## 5. Explanation with Example
 
-**Example 1:**  
-`cost1 = 3, cost2 = 2, costBoth = 1, need1 = 3, need2 = 2`
+Take `nums = [1, 4, 3, 3, 2]`.
+- Start: inc_len = dec_len = ans = 1
+- i=1: 4 > 1 ⇒ inc_len=2, dec_len=1, ans=2
+- i=2: 3 < 4 ⇒ dec_len=2, inc_len=1, ans=2
+- i=3: 3 == 3 ⇒ reset both to 1, ans=2
+- i=4: 2 < 3 ⇒ dec_len=2, inc_len=1, ans=2
 
-Try only type 3:
-- `x = 3` (buy 3 type 3):
-    - Type1: need = 3 - 3 = 0
-    - Type2: need = 2 - 3 = -1 (OK)
-    - Cost = 3 * 1 = 3
-- Try x=2:
-    - Type1: 3-2=1 (need 1 more type 1 at cost 3: cost = 2*1 + 1*3 = 5)
-    - Type2: enough
-- Try x=0:
-    - Type1: 3*3=9
-    - Type2: 2*2=4
-    - Cost=13
-
-Minimum is 3.
+**Final answer:** `2`
 
 ---
 
-# **Summary Table**
+### **Summary Table of Step-by-step:**
 
-| x (type 3 used) | Cost Calculation                    | Total Cost |
-|-----------------|-------------------------------------|------------|
-| 0 (no type 3)   | 3\*3 + 2\*2 = 9 + 4                | 13         |
-| min(3,2)=2      | 2\*1 + 1\*3 + 0\*2 = 2 + 3         | 5          |
-| 3               | 3\*1 + 0\*3 + 0\*2 = 3             | 3          |
-
-**Minimum is 3 (buy 3 type 3 items).**
+| i | nums[i] | inc_len | dec_len | ans |
+|---|---------|---------|---------|-----|
+| 0 |   1     |   1     |   1     |  1  |
+| 1 |   4     |   2     |   1     |  2  |
+| 2 |   3     |   1     |   2     |  2  |
+| 3 |   3     |   1     |   1     |  2  |
+| 4 |   2     |   1     |   2     |  2  |
 
 ---
 
-This approach is **O(1)**, robust, and optimal!
+## **Summary**
+
+- Linear scan: O(N)
+- Track strictly increasing & decreasing runs
+- Reset on equal nums
+- Update max each time.
+
+**This is both fast and clear!**
