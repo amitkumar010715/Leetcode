@@ -1,96 +1,98 @@
-Let's break down the solution according to your requirements:
+Let's break down the solution step by step:
 
 ---
 
 ## 1. **Short Summary**
 
-Given an array `nums` and integers `l` and `r`, **find the minimum positive sum of any contiguous subarray whose length is in the range `[l, r]`**. If no such subarray exists, return `-1`.
+You are given an array of integers. The task is to count the number of subarrays whose sum is **odd**. Return the answer modulo \( 10^9 + 7 \).  
+The brute-force way is too slow; we'll use prefixes and clever counting to achieve a linear solution.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
 **Constraints:**
-- `1 <= nums.length <= 100` (small, so O(n^2) is acceptable)
-- `1 <= l <= r <= nums.length`
-- `-1000 <= nums[i] <= 1000`
+- \( 1 \leq \text{arr.length} \leq 10^5 \)
+- \( 1 \leq \text{arr}[i] \leq 100 \)
 
 **Edge Cases:**
-- All sums ≤ 0: return `-1`.
-- `l = r = nums.length`, so only the whole array is considered.
-- `nums` with all negative/zero entries.
-- Subarray length at bounds (`l`, `r`, or anything in between).
+- All elements are even → answer is always 0 (since sums stay even).
+- All elements are odd → answer increases but needs careful calculation.
+- Single element → result is 1 if that element is odd, otherwise 0.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Given the small size of `nums`, a **brute-force using prefix sums** is efficient:
+### **Key Idea:**
+- We use prefix sums and count modulo 2 (parity) to track "how many prefix sums so far are even" and "how many are odd."
+- The sum of any subarray \([i..j]\) is `prefix[j+1] - prefix[i]`.
+    - For this sum to be **odd**, the parities of `prefix[j+1]` and `prefix[i]` must be **different**.
+- So, we keep a running count:
+    - For each position, we count how many prefixes with opposite parity exist up to that point.
 
-1. Compute prefix sums: `prefix[i] = nums[0] + ... + nums[i-1]`
-2. For every possible start index `i`, and for each subarray length between `l` and `r`, calculate the sum using the prefix array in O(1).
-3. If the sum is > 0, keep track of the minimum.
-4. Return the minimum found, or `-1` if none.
+### **Algorithm Steps:**
+1. Initialize `countEven = 1` (the empty prefix, sum=0 is even), `countOdd = 0`, and `curr = 0` (current prefix sum parity).
+2. For each number in the array:
+    - Add the number to the prefix sum and take parity: `curr = (curr + x) % 2`
+    - If `curr` is odd, it can be paired with an **even** prefix (so add `countEven` to the answer).
+    - If `curr` is even, it can be paired with an **odd** prefix (so add `countOdd` to the answer).
+    - Increment either `countEven` or `countOdd` accordingly.
+3. Return answer modulo \( 10^9 + 7 \).
 
-**Time Complexity: O(n^2)**
+**Time Complexity:** O(N)
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <climits>
-using namespace std;
-
 class Solution {
 public:
-    int minimumPositiveSum(vector<int>& nums, int l, int r) {
-        int n = nums.size();
-        vector<int> prefix(n + 1, 0);
-
-        // Compute prefix sum
-        for(int i = 0; i < n; ++i)
-            prefix[i + 1] = prefix[i] + nums[i];
-
-        int res = INT_MAX;
-
-        // Enumerate all possible subarrays
-        for(int start = 0; start < n; ++start) {
-            for(int len = l; len <= r; ++len) {
-                int end = start + len - 1;
-                if(end >= n) break;
-                int sum = prefix[end + 1] - prefix[start];
-                if(sum > 0 && sum < res) res = sum;
+    int numOfSubarrays(vector<int>& arr) {
+        const int MOD = 1e9 + 7;
+        long long ans = 0;
+        int countEven = 1, countOdd = 0;
+        int curr = 0;
+        for (int x : arr) {
+            curr = (curr + x) % 2;
+            if (curr == 1) {
+                ans = (ans + countEven) % MOD;
+                countOdd++;
+            } else {
+                ans = (ans + countOdd) % MOD;
+                countEven++;
             }
         }
-        return res == INT_MAX ? -1 : res;
+        return (int)ans;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+## 5. **Example Explained**
 
-Let's use **Example 1**:
+Let's use the **first example:** `arr = [1, 3, 5]`
 
-```
-nums = [3, -2, 1, 4], l = 2, r = 3
-```
-All possible subarrays of length 2 or 3:
+### Prefix parity progression:
 
-- [3, -2] (sum = 1)
-- [-2, 1] (sum = -1)
-- [1, 4] (sum = 5)
-- [3, -2, 1] (sum = 2)
-- [-2, 1, 4] (sum = 3)
+| Index | x | prefix sum | parity (curr) | countEven | countOdd | ans  | What happened?         |
+|-------|---|------------|---------------|-----------|----------|------|-----------------------|
+|   -   |   |     0      |      0        |     1     |     0    |   0  | Start                 |
+|  0    | 1 |     1      |      1        |     1     |     0    |   1  | curr=1, ans += 1 (even)     |
+|  1    | 3 |     4      |      0        |     1     |     1    |   1  | curr=0, ans += 1 (odd)      |
+|  2    | 5 |     9      |      1        |     2     |     1    |   4  | curr=1, ans += 2 (even)     |
 
-The **minimum positive sum** among these is **1** (from [3, -2]); so return `1`.
+**Final answer: 4 -- as expected.**
 
 ---
 
-**Summary:**
-- Use prefix sums for efficient sum calculation.
-- Double loop: start index and length.
-- Track the minimum positive sum; return -1 if not found.
+## **Summary Table of Subarrays with Odd Sums**
+
+Subarrays: `[1]`, `[1,3,5]`, `[3]`, `[5]`  
+All have odd sums; answer is 4.
+
+---
+
+**This approach guarantees fast computation even for large arrays (up to 100,000 elements).**
