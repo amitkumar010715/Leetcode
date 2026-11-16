@@ -4,95 +4,95 @@ Let's break down the solution step by step:
 
 ## 1. **Short Summary**
 
-You are given an array of integers. The task is to count the number of subarrays whose sum is **odd**. Return the answer modulo \( 10^9 + 7 \).  
-The brute-force way is too slow; we'll use prefixes and clever counting to achieve a linear solution.
+Given a string `s` of digits and an integer `k`, repeatedly split `s` into groups of size `k`, replace each group by the sum of its digits (as a string), then concatenate the results. Repeat while the length of `s` is greater than `k`. Return the final string.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-**Constraints:**
-- \( 1 \leq \text{arr.length} \leq 10^5 \)
-- \( 1 \leq \text{arr}[i] \leq 100 \)
+- **Constraints:**
+  - `1 <= s.length <= 100`
+  - `2 <= k <= 100`
+  - `s` only contains digits (`'0'` to `'9'`)
 
-**Edge Cases:**
-- All elements are even → answer is always 0 (since sums stay even).
-- All elements are odd → answer increases but needs careful calculation.
-- Single element → result is 1 if that element is odd, otherwise 0.
+- **Edge Cases:**
+  - All digits are `0` (e.g., `"0000"`)
+  - When `s.length == k` (no operations performed, just return `s`)
+  - When the last group's size is `< k`
+  - The sum of a group can be more than one digit (e.g., sum is 13)
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Idea:**
-- We use prefix sums and count modulo 2 (parity) to track "how many prefix sums so far are even" and "how many are odd."
-- The sum of any subarray \([i..j]\) is `prefix[j+1] - prefix[i]`.
-    - For this sum to be **odd**, the parities of `prefix[j+1]` and `prefix[i]` must be **different**.
-- So, we keep a running count:
-    - For each position, we count how many prefixes with opposite parity exist up to that point.
+- **While** the length of `s` is greater than `k`:
+  - Initialize an empty string for the next result.
+  - For each group of size up to `k` (could be smaller at the end):
+    - Sum all digits in the group (convert each char to int).
+    - Convert the sum to a string and append to the result string.
+  - Set `s` to the new string.
+- Return `s`.
 
-### **Algorithm Steps:**
-1. Initialize `countEven = 1` (the empty prefix, sum=0 is even), `countOdd = 0`, and `curr = 0` (current prefix sum parity).
-2. For each number in the array:
-    - Add the number to the prefix sum and take parity: `curr = (curr + x) % 2`
-    - If `curr` is odd, it can be paired with an **even** prefix (so add `countEven` to the answer).
-    - If `curr` is even, it can be paired with an **odd** prefix (so add `countOdd` to the answer).
-    - Increment either `countEven` or `countOdd` accordingly.
-3. Return answer modulo \( 10^9 + 7 \).
-
-**Time Complexity:** O(N)
+**Complexity:**  
+- Each round reduces the string size, and since the initial length is at most 100, max O(100*100) operations, so it's efficient.
 
 ---
 
-## 4. **C++ Solution**
+## 4. **Clean C++ Solution**
 
 ```cpp
 class Solution {
 public:
-    int numOfSubarrays(vector<int>& arr) {
-        const int MOD = 1e9 + 7;
-        long long ans = 0;
-        int countEven = 1, countOdd = 0;
-        int curr = 0;
-        for (int x : arr) {
-            curr = (curr + x) % 2;
-            if (curr == 1) {
-                ans = (ans + countEven) % MOD;
-                countOdd++;
-            } else {
-                ans = (ans + countOdd) % MOD;
-                countEven++;
+    string digitSum(string s, int k) {
+        while (s.size() > k) {
+            string next;
+            for (size_t i = 0; i < s.size(); i += k) {
+                int sum = 0;
+                for (size_t j = i; j < min(i + k, s.size()); ++j)
+                    sum += s[j] - '0';
+                next += to_string(sum);
             }
+            s = next;
         }
-        return (int)ans;
+        return s;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Walkthrough**
 
-Let's use the **first example:** `arr = [1, 3, 5]`
+**Input:**  
+`s = "11111222223", k = 3`
 
-### Prefix parity progression:
+**Process:**  
+- **First round** (groups: `"111"`, `"112"`, `"222"`, `"23"`):
+    - `"111"`: 1+1+1 = 3 → `"3"`
+    - `"112"`: 1+1+2 = 4 → `"4"`
+    - `"222"`: 2+2+2 = 6 → `"6"`
+    - `"23"`: 2+3 = 5 → `"5"`
+- Concatenate: `"3465"`
 
-| Index | x | prefix sum | parity (curr) | countEven | countOdd | ans  | What happened?         |
-|-------|---|------------|---------------|-----------|----------|------|-----------------------|
-|   -   |   |     0      |      0        |     1     |     0    |   0  | Start                 |
-|  0    | 1 |     1      |      1        |     1     |     0    |   1  | curr=1, ans += 1 (even)     |
-|  1    | 3 |     4      |      0        |     1     |     1    |   1  | curr=0, ans += 1 (odd)      |
-|  2    | 5 |     9      |      1        |     2     |     1    |   4  | curr=1, ans += 2 (even)     |
+- Since length > k, next round:
+  - **Second round** (`"346"`, `"5"`):
+    - `"346"`: 3+4+6 = 13 → `"13"`
+    - `"5"`: 5 → `"5"`
+- Concatenate: `"135"`
 
-**Final answer: 4 -- as expected.**
+- Length equals `k`, so return `"135"`.
 
 ---
 
-## **Summary Table of Subarrays with Odd Sums**
+**Summary Table:**
 
-Subarrays: `[1]`, `[1,3,5]`, `[3]`, `[5]`  
-All have odd sums; answer is 4.
+| Round | Groups              | Sum of Each Group | New string |
+|-------|---------------------|------------------|------------|
+| 1     | "111","112","222","23" | 3, 4, 6, 5       | "3465"     |
+| 2     | "346","5"           | 13, 5            | "135"      |
+
+Return: `"135"`
 
 ---
 
-**This approach guarantees fast computation even for large arrays (up to 100,000 elements).**
+**Hope this helps you understand and implement the solution!**
