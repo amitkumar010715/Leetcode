@@ -1,98 +1,149 @@
-Let's break down the solution step by step:
+Let's break this down step by step:
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given a string `s` of digits and an integer `k`, repeatedly split `s` into groups of size `k`, replace each group by the sum of its digits (as a string), then concatenate the results. Repeat while the length of `s` is greater than `k`. Return the final string.
+Given a string `s` and integer `k`, partition `s` into exactly `k` non-empty substrings. For each substring, compute the minimum number of letter changes needed to make it a **semi-palindrome** (by the divisor-group-palindrome property defined above). You must minimize the total number of changes across all `k` substrings. Return this minimum total.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - `1 <= s.length <= 100`
-  - `2 <= k <= 100`
-  - `s` only contains digits (`'0'` to `'9'`)
-
-- **Edge Cases:**
-  - All digits are `0` (e.g., `"0000"`)
-  - When `s.length == k` (no operations performed, just return `s`)
-  - When the last group's size is `< k`
-  - The sum of a group can be more than one digit (e.g., sum is 13)
+- **s.length**: [2, 200]   → Small enough for O(N³) DP.
+- **k**: in [1, s.length/2]
+- Each substring must be non-empty.
+- All lowercase English letters.
+- **Edge cases**:
+  - Substring of length 1: No valid 'd' divisor (since we require 1 ≤ d < len(s)), so it must stay as is (cost = 0).
+  - For substrings where multiple divisors allow semi-palindrome structure, choose the divisor that needs the fewest changes.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-- **While** the length of `s` is greater than `k`:
-  - Initialize an empty string for the next result.
-  - For each group of size up to `k` (could be smaller at the end):
-    - Sum all digits in the group (convert each char to int).
-    - Convert the sum to a string and append to the result string.
-  - Set `s` to the new string.
-- Return `s`.
+### **Step 1: Precompute minimum semi-palindrome cost for all substrings**
 
-**Complexity:**  
-- Each round reduces the string size, and since the initial length is at most 100, max O(100*100) operations, so it's efficient.
+- For every substring `s[i...j]`, compute minimum number of changes to make it a semi-palindrome.
+  - Try all divisors `d` of `len = j-i+1` (where `1 ≤ d < len`) and, for each, group indices by modulo `d`.
+  - For each group, for positions `[g, g+d, g+2d, ...]`, make it a palindrome: cost is sum over (halfway pairs) of how many characters must be changed to match. Do this for every group.
+  - Take the minimum over all possible `d`.
+
+- Save these in a `cost[i][j]` table.
+
+### **Step 2: DP for optimal k-partition**
+
+Let `dp[i][kk]` be the minimum total cost to break off the prefix `s[0..i]` into `kk` (non-empty) semi-palindromic partitions.
+
+- **Base case**:  
+  - `dp[-1][0] = 0` (empty string, zero parts, zero cost).
+- **DP step**:
+  - For each possible last segment length (ending at `i`, starting from `p`),  
+    `dp[i][kk] = min(dp[p-1][kk-1] + cost[p][i])`  for all `kk > 0` and `0 ≤ p ≤ i`.
+
+- **Result**: `dp[n-1][k]`
+
+### **Complexity**
+
+- **Cost table**: O(N³/2)  (since up to N² substrings, and O(N) per semi-palindrome check since for divisor d you go through at most N/d ≤ N).
+- **DP**: O(k*N²) (since each dp[i][kk] looks back up to N places).
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
+#include <vector>
+#include <string>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    string digitSum(string s, int k) {
-        while (s.size() > k) {
-            string next;
-            for (size_t i = 0; i < s.size(); i += k) {
-                int sum = 0;
-                for (size_t j = i; j < min(i + k, s.size()); ++j)
-                    sum += s[j] - '0';
-                next += to_string(sum);
+    int minChanges(string s, int k) {
+        int n = s.size();
+        // Precompute minimum cost for all substrings [l, r] to become semi-palindrome
+        vector<vector<int>> cost(n, vector<int>(n, INT_MAX));
+
+        for (int l = 0; l < n; ++l) {
+            for (int r = l; r < n; ++r) {
+                int len = r - l + 1;
+                int minCost = INT_MAX;
+                // Divisors d (1 ≤ d < len)
+                for (int d = 1; d < len; ++d) {
+                    if (len % d != 0) continue;
+                    int currCost = 0;
+                    // For each group, attempt to make it palindrome
+                    for (int g = 0; g < d; ++g) {
+                        int left = 0;
+                        int right = (len - g - 1) / d;
+                        // Collect group letters
+                        vector<char> group;
+                        for (int t = g; t < len; t += d) {
+                            group.push_back(s[l + t]);
+                        }
+                        int m = group.size();
+                        int changes = 0;
+                        for (int i = 0, j = m-1; i < j; ++i, --j) {
+                            if (group[i] != group[j]) ++changes;
+                        }
+                        currCost += changes;
+                    }
+                    minCost = min(minCost, currCost);
+                }
+                // Edge: If len == 1, no valid divisor
+                if (minCost == INT_MAX) minCost = 0;
+                cost[l][r] = minCost;
             }
-            s = next;
         }
-        return s;
+        // DP: dp[i][kk] = min cost for prefix [0...i], partitioned into kk substrings
+        vector<vector<int>> dp(n, vector<int>(k+1, INT_MAX));
+        // Base cases: 1 cut (all as one piece)
+        for (int i = 0; i < n; ++i) dp[i][1] = cost[0][i];
+
+        for (int i = 0; i < n; ++i) {
+            for (int kk = 2; kk <= k; ++kk) {
+                // Try splitting between p-1 | p...i
+                for (int p = kk-1; p <= i; ++p) {
+                    if (dp[p-1][kk-1] != INT_MAX) {
+                        dp[i][kk] = min(dp[i][kk], dp[p-1][kk-1] + cost[p][i]);
+                    }
+                }
+            }
+        }
+        return dp[n-1][k];
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explained** (`s = "abcdef", k = 2`)
 
-**Input:**  
-`s = "11111222223", k = 3`
+- Possible partitions:  
+  - `"a" + "bcdef"`  
+  - `"ab" + "cdef"`  
+  - `"abc" + "def"`  
+  - ...
 
-**Process:**  
-- **First round** (groups: `"111"`, `"112"`, `"222"`, `"23"`):
-    - `"111"`: 1+1+1 = 3 → `"3"`
-    - `"112"`: 1+1+2 = 4 → `"4"`
-    - `"222"`: 2+2+2 = 6 → `"6"`
-    - `"23"`: 2+3 = 5 → `"5"`
-- Concatenate: `"3465"`
+The optimal: `"abc" + "def"`
 
-- Since length > k, next round:
-  - **Second round** (`"346"`, `"5"`):
-    - `"346"`: 3+4+6 = 13 → `"13"`
-    - `"5"`: 5 → `"5"`
-- Concatenate: `"135"`
+For both `"abc"` and `"def"`:
+- Substring length = 3, possible divisors: `1`
+- For d=1 : Whole string, must become palindrome: need to change `b` in `"abc"` to `a` or `c`, so min 1 change.
+- So, total = 1 (for "abc") + 1 (for "def") = 2.
 
-- Length equals `k`, so return `"135"`.
+**Output: 2**
 
 ---
 
-**Summary Table:**
+## **Summary Table**
 
-| Round | Groups              | Sum of Each Group | New string |
-|-------|---------------------|------------------|------------|
-| 1     | "111","112","222","23" | 3, 4, 6, 5       | "3465"     |
-| 2     | "346","5"           | 13, 5            | "135"      |
-
-Return: `"135"`
+| Substring   | Min semi-palindrome cost |
+|-------------|-------------------------|
+| "abc"       | 1                       |
+| "def"       | 1                       |
 
 ---
 
-**Hope this helps you understand and implement the solution!**
+**If you want even faster code, you can further optimize, but above handles all constraints robustly and clearly.**
