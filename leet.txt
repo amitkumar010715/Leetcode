@@ -1,149 +1,89 @@
-Let's break this down step by step:
+Let's break down the solution as requested:
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-Given a string `s` and integer `k`, partition `s` into exactly `k` non-empty substrings. For each substring, compute the minimum number of letter changes needed to make it a **semi-palindrome** (by the divisor-group-palindrome property defined above). You must minimize the total number of changes across all `k` substrings. Return this minimum total.
+Given a binary string of even length, compute the **minimum changes required** to make it **"beautiful"**—i.e., partitionable into substrings each of **even length** and consisting of only `'0'`s or only `'1'`s. You may change any character.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **s.length**: [2, 200]   → Small enough for O(N³) DP.
-- **k**: in [1, s.length/2]
-- Each substring must be non-empty.
-- All lowercase English letters.
-- **Edge cases**:
-  - Substring of length 1: No valid 'd' divisor (since we require 1 ≤ d < len(s)), so it must stay as is (cost = 0).
-  - For substrings where multiple divisors allow semi-palindrome structure, choose the divisor that needs the fewest changes.
+**Constraints:**
+- Length of `s` is up to `10^5`, so solution must be O(n).
+- `s` always has even length (minimum 2).
+- Each `s[i]` is `'0'` or `'1'`.
+
+**Edge Cases:**
+- All same: "0000" - already beautiful; 0 changes.
+- Alternate: "1010" - most different; each pair needs 1 change.
+- Chunked: Long runs: "00001111" - already beautiful or can minimize to two big blocks.
+- Minimum length: "10" (or "01") — must make both the same.
 
 ---
 
-## 3. **Optimal Algorithm**
+## 3. **Optimal Algorithm Explanation**
 
-### **Step 1: Precompute minimum semi-palindrome cost for all substrings**
+### **Observation**
 
-- For every substring `s[i...j]`, compute minimum number of changes to make it a semi-palindrome.
-  - Try all divisors `d` of `len = j-i+1` (where `1 ≤ d < len`) and, for each, group indices by modulo `d`.
-  - For each group, for positions `[g, g+d, g+2d, ...]`, make it a palindrome: cost is sum over (halfway pairs) of how many characters must be changed to match. Do this for every group.
-  - Take the minimum over all possible `d`.
+- A "beautiful" string is a concatenation of substrings, each of **even length** and **all same characters**.
+- A **minimal partition** is when you partition `s` into substrings of consecutive equal characters, each of even length.
 
-- Save these in a `cost[i][j]` table.
+### **Key Insight**
 
-### **Step 2: DP for optimal k-partition**
+No matter how we rearrange, the best we can do is **merge consecutive same-chars into as big even-length blocks as possible, possibly splitting at odd-lengths**.
 
-Let `dp[i][kk]` be the minimum total cost to break off the prefix `s[0..i]` into `kk` (non-empty) semi-palindromic partitions.
+But **at minimum**, if you consider the string in chunks of two (`s[0..1]`, `s[2..3]`, ...), each pair must be **same** (either "00" or "11"). If not, at least one change is necessary in the pair.
 
-- **Base case**:  
-  - `dp[-1][0] = 0` (empty string, zero parts, zero cost).
-- **DP step**:
-  - For each possible last segment length (ending at `i`, starting from `p`),  
-    `dp[i][kk] = min(dp[p-1][kk-1] + cost[p][i])`  for all `kk > 0` and `0 ≤ p ≤ i`.
+**Reason:**
+- If we split `s` into pairs (since s.length is even), and each pair matches, the string is beautiful (partition into size-2 substrings).
+- Otherwise, we must change one of the pair to match the other, which costs 1 per differing pair. It is **always optimal** to fix minimal-length pairs.
 
-- **Result**: `dp[n-1][k]`
+### **Algorithm (O(N))**
 
-### **Complexity**
+- Loop in steps of 2.
+- For each pair `s[i], s[i+1]`:
+  - If both equal: no change.
+  - If differ: need 1 change (make both `s[i]` or `s[i+1]`).
+- Sum up changes.
 
-- **Cost table**: O(N³/2)  (since up to N² substrings, and O(N) per semi-palindrome check since for divisor d you go through at most N/d ≤ N).
-- **DP**: O(k*N²) (since each dp[i][kk] looks back up to N places).
+This gives the minimum cost, because merging into longer blocks is not possible unless runs are already there, and you can't avoid the pairwise mismatch cost.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <string>
-#include <algorithm>
-using namespace std;
-
 class Solution {
 public:
-    int minChanges(string s, int k) {
+    int minChanges(string s) {
         int n = s.size();
-        // Precompute minimum cost for all substrings [l, r] to become semi-palindrome
-        vector<vector<int>> cost(n, vector<int>(n, INT_MAX));
-
-        for (int l = 0; l < n; ++l) {
-            for (int r = l; r < n; ++r) {
-                int len = r - l + 1;
-                int minCost = INT_MAX;
-                // Divisors d (1 ≤ d < len)
-                for (int d = 1; d < len; ++d) {
-                    if (len % d != 0) continue;
-                    int currCost = 0;
-                    // For each group, attempt to make it palindrome
-                    for (int g = 0; g < d; ++g) {
-                        int left = 0;
-                        int right = (len - g - 1) / d;
-                        // Collect group letters
-                        vector<char> group;
-                        for (int t = g; t < len; t += d) {
-                            group.push_back(s[l + t]);
-                        }
-                        int m = group.size();
-                        int changes = 0;
-                        for (int i = 0, j = m-1; i < j; ++i, --j) {
-                            if (group[i] != group[j]) ++changes;
-                        }
-                        currCost += changes;
-                    }
-                    minCost = min(minCost, currCost);
-                }
-                // Edge: If len == 1, no valid divisor
-                if (minCost == INT_MAX) minCost = 0;
-                cost[l][r] = minCost;
-            }
+        int changes = 0;
+        for (int i = 0; i < n; i += 2) {
+            if (s[i] != s[i+1]) changes++;
         }
-        // DP: dp[i][kk] = min cost for prefix [0...i], partitioned into kk substrings
-        vector<vector<int>> dp(n, vector<int>(k+1, INT_MAX));
-        // Base cases: 1 cut (all as one piece)
-        for (int i = 0; i < n; ++i) dp[i][1] = cost[0][i];
-
-        for (int i = 0; i < n; ++i) {
-            for (int kk = 2; kk <= k; ++kk) {
-                // Try splitting between p-1 | p...i
-                for (int p = kk-1; p <= i; ++p) {
-                    if (dp[p-1][kk-1] != INT_MAX) {
-                        dp[i][kk] = min(dp[i][kk], dp[p-1][kk-1] + cost[p][i]);
-                    }
-                }
-            }
-        }
-        return dp[n-1][k];
+        return changes;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained** (`s = "abcdef", k = 2`)
+## 5. **Example Explained**
 
-- Possible partitions:  
-  - `"a" + "bcdef"`  
-  - `"ab" + "cdef"`  
-  - `"abc" + "def"`  
-  - ...
+**Example: `s = "1001"`**
 
-The optimal: `"abc" + "def"`
+- Pairs: "10", "01"
+- "10": not same → 1 change (to "11" or "00")
+- "01": not same → 1 change (to "00" or "11")
 
-For both `"abc"` and `"def"`:
-- Substring length = 3, possible divisors: `1`
-- For d=1 : Whole string, must become palindrome: need to change `b` in `"abc"` to `a` or `c`, so min 1 change.
-- So, total = 1 (for "abc") + 1 (for "def") = 2.
+So, we need **2 changes**.
 
-**Output: 2**
+- e.g., change `s[1]` to '1' and `s[3]` to '0', resulting in "1100" (now partition as "11|00").
+
+**Answer: 2**
 
 ---
 
-## **Summary Table**
-
-| Substring   | Min semi-palindrome cost |
-|-------------|-------------------------|
-| "abc"       | 1                       |
-| "def"       | 1                       |
-
----
-
-**If you want even faster code, you can further optimize, but above handles all constraints robustly and clearly.**
+### **Thus, the minimal number of changes is simply the number of pairs with differing characters.**
