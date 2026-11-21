@@ -1,281 +1,199 @@
-Let's go step by step.
+Let's solve the "Find Subtree Sizes After Changes" LeetCode problem step by step.
 
 ---
 
-## 1. **Short Summary**
+## 1. **Summary**
 
-Given an array of positive integers, you may increase **any** element by **at most 1** (or leave it as is). After these modifications, select the **largest** possible group of elements such that if you sort the selected elements, they form a *consecutive* sequence (no gaps).  
-Find the MAXIMUM possible size of such a group.
+Given a rooted tree (rooted at 0), and a character string for node labels, for each `x` (from 1 to n-1), we look for the closest ancestor `y` with the same label as `x`, and if found, we "rewire" `x`'s parent to `y`. After applying all such changes **simultaneously**, compute the subtree size for every node in the **resulting** tree.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-### Constraints
-- `1 <= nums.length <= 100,000`
-- `1 <= nums[i] <= 1,000,000`
+- **Constraints**
+    - \( n \leq 10^5 \): Must use linear time and space.
+    - All operations must be O(n).
+    - Only lowercase letters: process per character.
+    - Tree changes must happen **simultaneously** for all nodes.
 
-### Edge Cases
-- **All elements equal:** Since you can increase some by 1, you could get a block of two consecutive numbers.
-- **Already consecutive:** Maybe you can stretch it to get a bigger block by carefully increasing.
-- **Sparse numbers:** May not get more than 1 or 2 consecutive, as they lie far apart.
-
----
-
-## 3. **Optimal Algorithm & Explanation**
-
-### **Observations**
-
-1. Each element `a` in `nums`, after modification, can be either `a` or `a+1`.
-2. When forming a group of consecutive numbers, you want as many as possible, and you can *choose* for every number which version (`a` or `a+1`) you use.
-3. For each value `x` that can be formed, you can "assign" the original number `a` to `x` if `x == a` or `x == a + 1`.
-
-### **Hint**
-
-For each target block `[L, L+k-1]`, you need to map each value in that block to a number in `nums` (possibly increased by 1). We want the largest block for which every value in it can be "produced" by an element of `nums` with at most +1 increase.
-
-### **Efficient Solution (Sliding Window on Frequency Array)**
-
-- For every number `a` in `nums`, record both `a` and `a+1` as possible targets.
-- Count frequency for each number from `1` to `max(nums) + 1`.
-- For every `start`, check how long of a consecutive block you can build, such that *for every number in that block, some `a` in `nums` could be assigned to it* (taking at most two elements from same `a`).
-- To do this efficiently, use a **moving window** and an array of counts.
-
-#### More Explicit Steps
-
-1. **For each number `a` in nums, mark `a` and `a+1` as counts in frequency map.**
-2. Iterate with a window `[l, r]`, where for every value in the window, `frequency[value]` (number of `a` in nums that can participate as `value` or `value-1`) should be at least `1`.
-3. When a value is missing, shift the window forward.
-4. Keep track of maximum window size.
-
-**Key:**  
-Since array can be large, use an **unordered_map** or a **vector** of size up to `max(nums)+2`.
+- **Edge Cases**
+    - All nodes have the same character.
+    - All characters are unique.
+    - Tree is a straight line (chain).
+    - Multiple levels of rewiring may target same parent letters.
 
 ---
 
-### **Pseudo-code Sketch**
+## 3. **Algorithm**
 
-```cpp
-// freq[x] = how many numbers in nums can become x (as a or a+1)
-for (int num : nums) {
-    freq[num]++;
-    freq[num + 1]++;
-}
+**Key Insight:**  
+The parent-changing operations must be considered **simultaneously**. This means that the search for the "closest ancestor with same label" is carried out on the **original tree**. Only after having determined the new parents for all nodes do we apply the rewiring.
 
-int maxConsec = 0;
-for (int l = lowest possible value; l <= highest; ++l) {
-    // Use two pointers l, r to make window [l, r]
-    For each window, check if freq[value in window] > 0 for all positions.
-    If yes, expand r. If not, move l forward.
-    Keep track of max window length.
-}
-```
+**Algorithm Steps:**
 
-But scanning every window naively is O(N^2), so we need to optimize.
+1. **Build Tree Representation:**  
+   Create adjacency lists for the original tree (from `parent[]`).
 
-#### **Better Approach: Sliding Window**
+2. **Find New Parents (per node):**
+   - For each `x` in 1..n-1, on the original tree, find the nearest ancestor y of x so that `s[y] == s[x]`.
+   - Can be done via DFS using a hash map `last_seen[ch] = node` as we traverse down the tree, and for each node, we record the currently "last seen" ancestor for each character label.
 
-If we sort `nums`, and for each number consider `num` and `num+1` as possible, then for any interval `[x, y]`:
-- Each required value in `[x, y]`, say `v`, must have at least one source in original `nums`, i.e., either a `num = v` (no modification), or `num = v-1` (with modification).
-- So the count of choices for `v` is `freq[v] + freq[v-1]` (if `v-1` is allowed).
+3. **Construct the New Tree:**
+   - For each node, if a "new parent" is found, wire up accordingly.
 
-But to ensure that each original number is only used once, it's best to encode:
+4. **Compute Subtree Sizes:**
+   - Do DFS from the root (node 0) in the new tree, calculate subtree size for each node.
 
-- For each `a` in nums, possible to use as `a` (no modification) or as `a+1` (modified).
+### **Efficient Implementation:**
 
-Sorting `nums` and using a sliding window, trying to form the interval `[nums[l], nums[r]]`, where for each element in that range, there is enough supply.
-
-But to do it efficiently, **sort nums, try both values for each (original or increased by 1), and slide a window selecting numbers (in any order) such that they can be assigned to a consecutive block.**
-
-#### **Clean Efficient Approach**
-
-1. **Sort the modified array**: For all elements, collect their value and their value+1; collect all those options in a list.
-2. **Sort that list**.
-3. **Use two pointers to find the largest consecutive block**: For any window where *(max - min + 1) == window size*, you've got consecutive values.
-
-However, this doesn't guarantee you can form the block, as duplicates might appear, so we need to use their original source position.
-
-**Alternative Efficient Solution (Count Approach):**
-
-1. **Count the frequency of each value** in `nums`.
-
-2. For each possible value as a starting point (`x`), count the consecutive integers you can "form" using `freq[x] + freq[x-1]`.
-
-But we still need to ensure that any value in block `[x, x+k-1]`, for each value `v`, there exists a `nums[i]` such that `nums[i] == v` or `nums[i] == v-1`.
-
-If we **greedily** assign each `nums[i]` to the rightmost possible value (either `nums[i]` or `nums[i]+1`), we can simulate that.
-
-**Best Known Solution:**  
-- Sort `nums`.
-- For each position, we know possible numbers are in `nums[i]` or `nums[i] + 1`.
-- For each value in the sorted nums, for a window `[i, j]`, check if the difference between largest after +1 of any in the window and the smallest in the window is at most window size - 1.
-
-#### **So, sort nums. Use sliding window: for window nums[l] .. nums[r], check if window can "cover" `[min(nums[l], nums[r])..max(nums[r], nums[r]+1)]` as a consecutive block, such that not more numbers in the block than elements in the window.**
-
-But most concise:
-
-- For each left `l`, move right `r` as far as possible such that `nums[r]` - `nums[l]` <= (r - l), i.e., by possibly raising some numbers by 1, you can fill EVERY number in between.
+- **Step 2 in detail:**  
+  - Traverse original tree by DFS.
+    - On entry to a node, record in `map<char,int>` the current node as the "last seen" for that char.
+    - For each child, before going in, we note the "last seen" value (except itself) to use as its new parent candidate.
+    - After visiting all children, backtrack by restoring the previous value.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
 
 ```cpp
 #include <vector>
-#include <algorithm>
-using namespace std;
-
-class Solution {
-public:
-    int maxSelectedElements(vector<int>& nums) {
-        sort(nums.begin(), nums.end());
-        int n = nums.size();
-        vector<int> arr;
-        // Each element can be nums[i] or nums[i]+1; collect all options
-        for (int v : nums) {
-            arr.push_back(v);
-            arr.push_back(v+1);
-        }
-        sort(arr.begin(), arr.end());
-        // Remove duplicates: as only one original per value is possible!
-        // Instead, we want to know max length of run of consecutive numbers,
-        // where the count of each is <= number of appearances among (nums[i], nums[i]+1).
-        // Actually, instead, for each value, count how many sources can produce it
-        // Using a frequency counter for all possible values among (nums[i], nums[i]+1)
-        // Using multiset, but better with map
-        unordered_map<int, int> freq;
-        for (int v : nums) {
-            freq[v]++;
-            freq[v + 1]++;
-        }
-        // Get the unique candidates
-        vector<int> keys;
-        for (auto& [key, _] : freq) keys.push_back(key);
-        sort(keys.begin(), keys.end());
-        int maxlen = 0;
-        // Sliding window: try all runs of consecutive values among keys,
-        // But can't use more elements than available in nums
-        int left = 0, sum = 0;
-        for (int right = 0; right < keys.size(); ++right) {
-            if (right == 0 || keys[right] == keys[right-1] + 1) {
-                sum += freq[keys[right]];
-            } else {
-                // Reset
-                left = right;
-                sum = freq[keys[right]];
-            }
-            // If sum exceeds nums.size(), we must shrink window
-            // Actually, sum counts how many options available for this run,
-            // but we cannot use more than one element for one option,
-            // and can't select more than n options.
-            // But in this task, for a consecutive block of length k,
-            // we must have at least one available source for each value.
-            maxlen = max(maxlen, right - left + 1);
-        }
-        return maxlen;
-    }
-};
-```
-
-### **Refined Solution (Sliding Window on Sorted nums and Greedy Use of +1)**
-
-This is the standard approach for "pick max number of elements to form consecutive block, where each can be increased by at most 1":
-
-```cpp
-#include <vector>
-#include <algorithm>
-using namespace std;
-
-class Solution {
-public:
-    int maxSelectedElements(vector<int>& nums) {
-        sort(nums.begin(), nums.end());
-        int res = 0;
-        // dp[v]: the max streak ending at value v
-        unordered_map<int, int> dp;
-        
-        for (int v : nums) {
-            // For v, can assign as v or as v+1
-            int cnt1 = dp.count(v-1) ? dp[v-1] : 0;
-            int cnt2 = dp.count(v) ? dp[v] : 0;
-            // If assign v as v: streak extends from v-1
-            dp[v] = max(dp[v], cnt1 + 1);
-            // If assign v as v+1: streak extends from v
-            dp[v+1] = max(dp[v+1], cnt2 + 1);
-            res = max({res, dp[v], dp[v+1]});
-        }
-        return res;
-    }
-};
-```
-
-**This passes in O(N log N) time!**
-
----
-
-## 5. **Example Explanation**
-
-### Example 1
-
-Input: `nums = [2, 1, 5, 1, 1]`
-
-- First, sort: `[1, 1, 1, 2, 5]`
-- For each, we can use original or original+1:
-
-  - 1: as 1 or 2
-  - 1: as 1 or 2
-  - 1: as 1 or 2
-  - 2: as 2 or 3
-  - 5: as 5 or 6
-
-- Let's try to maximize consecutive block:
-
-  - Use first 1 as 1
-  - Use second 1 as 2 (by +1)
-  - Use 2 as 3 (by +1)
-  - So we have `[1, 2, 3]` (size 3 consecutive)
-  - Cannot get 4, as only 5 or 6 remain.
-
-**Answer: 3**
-
----
-
-## **Summary Table**
-
-| Step | Action |
-|---|---|
-| 1 | Sort nums |
-| 2 | For each v in nums:<br>- dp[v] = max(dp[v], dp[v-1]+1)<br>- dp[v+1] = max(dp[v+1], dp[v]+1) |
-| 3 | Track max(dp[.]) |
-
----
-
-## **Final C++ Code**
-
-```cpp
-#include <vector>
-#include <algorithm>
+#include <string>
 #include <unordered_map>
+
 using namespace std;
 
 class Solution {
 public:
-    int maxSelectedElements(vector<int>& nums) {
-        sort(nums.begin(), nums.end());
-        unordered_map<int, int> dp;
-        int res = 0;
-        for (int v : nums) {
-            int d1 = dp.count(v-1) ? dp[v-1] + 1 : 1;
-            int d2 = dp.count(v) ? dp[v] + 1 : 1;
-            dp[v] = max(dp[v], d1);
-            dp[v+1] = max(dp[v+1], d2);
-            res = max({res, dp[v], dp[v+1]});
+    vector<int> findSubtreeSizesAfterChanges(vector<int>& parent, string s) {
+        int n = parent.size();
+        vector<vector<int>> tree(n);
+        for (int i = 1; i < n; ++i) {
+            tree[parent[i]].push_back(i);
         }
-        return res;
+        
+        // Step 1: Find new parents for each node
+        vector<int> new_parent(n, -1);
+        unordered_map<char,int> last_seen;  // maps character to latest ancestor with that char (including root)
+        
+        function<void(int)> dfs_new_parent = [&](int u) {
+            // Save & update
+            char c = s[u];
+            int prev = last_seen.count(c) ? last_seen[c] : -1;
+            last_seen[c] = u;
+            // For all children, set their new_parent if possible
+            for (int v : tree[u]) {
+                // For v, the closest ancestor (in path from root to u) with s[v]
+                if (last_seen.count(s[v]) && last_seen[s[v]] != v) {
+                    new_parent[v] = last_seen[s[v]];
+                }
+                dfs_new_parent(v);
+            }
+            // Restore
+            if (prev == -1) last_seen.erase(c);
+            else last_seen[c] = prev;
+        };
+        
+        dfs_new_parent(0);
+
+        // Step 2: Build new tree
+        vector<vector<int>> new_tree(n);
+        vector<int> indegree(n, 0);
+        for (int i = 1; i < n; ++i) {
+            int p = (new_parent[i] == -1) ? parent[i] : new_parent[i];
+            new_tree[p].push_back(i);
+            indegree[i]++;
+        }
+
+        // Step 3: DFS to calculate subtree sizes
+        vector<int> ans(n, 0);
+        function<int(int)> dfs_size = [&](int u) -> int {
+            int sz = 1;
+            for (int v : new_tree[u]) {
+                sz += dfs_size(v);
+            }
+            ans[u] = sz;
+            return sz;
+        };
+        dfs_size(0);
+
+        return ans;
     }
 };
 ```
 
 ---
 
-**This solution runs in O(N log N) time and passes all constraints.**
+## 5. **Example Walkthrough**
+
+Let's use Example 2:  
+**Input:** `parent = [-1,0,4,0,1]`, `s = "abbba"`
+
+#### **Original Tree:**
+```
+0
+|- 1
+   |- 4
+      |- 2
+|- 3
+```
+
+`s[0]=a, s[1]=b, s[2]=b, s[3]=b, s[4]=a`
+
+#### **Step 1: Find new parents for each node (DFS)**
+Process (in order):
+- For node 1: No ancestor with same char (`b`), so stay (original parent 0).
+- For node 2:
+    - Ancestors: 4 (a), 1 (b) -- first we reach via parent: 4->1. 1 is parent and has 'b', so 1 is closest ancestor with same char. So, new parent for 2 is 1.
+- For node 3: 
+    - Ancestor: 0 (a). No ancestor with 'b', so stays (parent 0).
+- For node 4:
+    - Ancestor: 1 (b), 0 (a). 0 has 'a', which is same as 4, so 0 is new parent for 4.
+
+- For each node, new parent is:
+    - 0: -1 (root)
+    - 1: -1 (no b above)
+    - 2: 1 (parent 4 becomes 1)
+    - 3: -1 (no b above)
+    - 4: 0 (parent 1 becomes 0)
+
+#### **Step 2: Build new tree**
+After all rewiring, new parent array is:
+- For each node i (i>0):
+    - If new_parent[i] >= 0, parent[i] = new_parent[i]; else keep original parent[i]
+- Result: [-1,0,1,0,0]
+- Connecting:
+    - 0: children [1,3,4]
+    - 1: child [2]
+    - 2: []
+    - 3: []
+    - 4: []
+
+#### **Step 3: Compute Sizes**
+Do DFS from 0:
+- 0: [1,3,4]
+  - 1: [2]
+    - 2: []
+  - 3: []
+  - 4: []
+
+Sizes:
+- 2: 1
+- 1: 1 (from 2) + 1 = 2
+- 3: 1
+- 4: 1
+- 0: 2 (1) + 1 (3) + 1 (4) + 1 = 5
+
+**Output:** `[5,2,1,1,1]`
+
+---
+
+## **Final Notes**
+
+- The core trick is to do the ancestor search efficiently via DFS and a "last seen" tracking.
+- Everything is O(n) in time/space.
+- Don't forget to "restore" state while unwinding the DFS since node labels may get "shadowed" down the tree.
+
+---
+
+**Happy to clarify or provide more illustrations as needed!**
