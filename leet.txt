@@ -1,199 +1,93 @@
-Let's solve the "Find Subtree Sizes After Changes" LeetCode problem step by step.
+Let's address your requirements step by step.
 
 ---
 
-## 1. **Summary**
+## 1. **Short Summary**
 
-Given a rooted tree (rooted at 0), and a character string for node labels, for each `x` (from 1 to n-1), we look for the closest ancestor `y` with the same label as `x`, and if found, we "rewire" `x`'s parent to `y`. After applying all such changes **simultaneously**, compute the subtree size for every node in the **resulting** tree.
+Given a string consisting only of 'a' and 'b', check if **all** `'a'` characters appear **before** any `'b'`. If any `'a'` appears **after** a `'b'`, return `false`. Otherwise, return `true`.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints**
-    - \( n \leq 10^5 \): Must use linear time and space.
-    - All operations must be O(n).
-    - Only lowercase letters: process per character.
-    - Tree changes must happen **simultaneously** for all nodes.
+- **Constraints:**
+  - 1 ≤ s.length ≤ 100
+  - s consists of only 'a' and 'b'
 
-- **Edge Cases**
-    - All nodes have the same character.
-    - All characters are unique.
-    - Tree is a straight line (chain).
-    - Multiple levels of rewiring may target same parent letters.
+- **Edge Cases:**
+  - The string contains all `'a'` or all `'b'`: Always valid, return `true`.
+  - The string is a single character: Always valid, return `true`.
+  - 'a' appears after a 'b' (e.g., "ba", "aabbbaa"): Invalid, return `false`.
 
 ---
 
-## 3. **Algorithm**
+## 3. **Optimal Algorithm**
 
-**Key Insight:**  
-The parent-changing operations must be considered **simultaneously**. This means that the search for the "closest ancestor with same label" is carried out on the **original tree**. Only after having determined the new parents for all nodes do we apply the rewiring.
+### **Key Insight**
+Once a `'b'` is found, there **must not** be any more `'a'` after it. If that happens, the order is violated.
 
-**Algorithm Steps:**
+### **Algorithm Steps**
+1. Iterate through the string.
+2. After you find a `'b'`, if you encounter any more `'a'`, **return false**.
+3. If no such violation is found, **return true**.
 
-1. **Build Tree Representation:**  
-   Create adjacency lists for the original tree (from `parent[]`).
+### **Time Complexity:** O(n), where n is the length of the string.
 
-2. **Find New Parents (per node):**
-   - For each `x` in 1..n-1, on the original tree, find the nearest ancestor y of x so that `s[y] == s[x]`.
-   - Can be done via DFS using a hash map `last_seen[ch] = node` as we traverse down the tree, and for each node, we record the currently "last seen" ancestor for each character label.
-
-3. **Construct the New Tree:**
-   - For each node, if a "new parent" is found, wire up accordingly.
-
-4. **Compute Subtree Sizes:**
-   - Do DFS from the root (node 0) in the new tree, calculate subtree size for each node.
-
-### **Efficient Implementation:**
-
-- **Step 2 in detail:**  
-  - Traverse original tree by DFS.
-    - On entry to a node, record in `map<char,int>` the current node as the "last seen" for that char.
-    - For each child, before going in, we note the "last seen" value (except itself) to use as its new parent candidate.
-    - After visiting all children, backtrack by restoring the previous value.
+#### **Alternative**
+You can check if the string contains the substring `"ba"`. If yes, return `false`; otherwise, `true`.  
+But to match the competitive programming requirement and be explicit, we go with the loop.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-#include <vector>
-#include <string>
-#include <unordered_map>
-
-using namespace std;
-
 class Solution {
 public:
-    vector<int> findSubtreeSizesAfterChanges(vector<int>& parent, string s) {
-        int n = parent.size();
-        vector<vector<int>> tree(n);
-        for (int i = 1; i < n; ++i) {
-            tree[parent[i]].push_back(i);
-        }
-        
-        // Step 1: Find new parents for each node
-        vector<int> new_parent(n, -1);
-        unordered_map<char,int> last_seen;  // maps character to latest ancestor with that char (including root)
-        
-        function<void(int)> dfs_new_parent = [&](int u) {
-            // Save & update
-            char c = s[u];
-            int prev = last_seen.count(c) ? last_seen[c] : -1;
-            last_seen[c] = u;
-            // For all children, set their new_parent if possible
-            for (int v : tree[u]) {
-                // For v, the closest ancestor (in path from root to u) with s[v]
-                if (last_seen.count(s[v]) && last_seen[s[v]] != v) {
-                    new_parent[v] = last_seen[s[v]];
-                }
-                dfs_new_parent(v);
+    bool checkString(string s) {
+        bool found_b = false;
+        for (char c : s) {
+            if (c == 'b') {
+                found_b = true;
+            } else if (found_b && c == 'a') {
+                // Found an 'a' after 'b'
+                return false;
             }
-            // Restore
-            if (prev == -1) last_seen.erase(c);
-            else last_seen[c] = prev;
-        };
-        
-        dfs_new_parent(0);
-
-        // Step 2: Build new tree
-        vector<vector<int>> new_tree(n);
-        vector<int> indegree(n, 0);
-        for (int i = 1; i < n; ++i) {
-            int p = (new_parent[i] == -1) ? parent[i] : new_parent[i];
-            new_tree[p].push_back(i);
-            indegree[i]++;
         }
-
-        // Step 3: DFS to calculate subtree sizes
-        vector<int> ans(n, 0);
-        function<int(int)> dfs_size = [&](int u) -> int {
-            int sz = 1;
-            for (int v : new_tree[u]) {
-                sz += dfs_size(v);
-            }
-            ans[u] = sz;
-            return sz;
-        };
-        dfs_size(0);
-
-        return ans;
+        return true;
     }
 };
 ```
 
 ---
 
-## 5. **Example Walkthrough**
+## 5. **Example Explained**
 
-Let's use Example 2:  
-**Input:** `parent = [-1,0,4,0,1]`, `s = "abbba"`
+**Example:**  
+Input: `s = "aaabbb"`
 
-#### **Original Tree:**
-```
-0
-|- 1
-   |- 4
-      |- 2
-|- 3
-```
+- Traverse from left:
+  - Index 0: 'a' (OK)
+  - Index 1: 'a' (OK)
+  - Index 2: 'a' (OK)
+  - Index 3: 'b' (first 'b' found, set flag)
+  - Index 4: 'b' (no issue, as 'a' not found after 'b')
+  - Index 5: 'b' (no issue)
 
-`s[0]=a, s[1]=b, s[2]=b, s[3]=b, s[4]=a`
-
-#### **Step 1: Find new parents for each node (DFS)**
-Process (in order):
-- For node 1: No ancestor with same char (`b`), so stay (original parent 0).
-- For node 2:
-    - Ancestors: 4 (a), 1 (b) -- first we reach via parent: 4->1. 1 is parent and has 'b', so 1 is closest ancestor with same char. So, new parent for 2 is 1.
-- For node 3: 
-    - Ancestor: 0 (a). No ancestor with 'b', so stays (parent 0).
-- For node 4:
-    - Ancestor: 1 (b), 0 (a). 0 has 'a', which is same as 4, so 0 is new parent for 4.
-
-- For each node, new parent is:
-    - 0: -1 (root)
-    - 1: -1 (no b above)
-    - 2: 1 (parent 4 becomes 1)
-    - 3: -1 (no b above)
-    - 4: 0 (parent 1 becomes 0)
-
-#### **Step 2: Build new tree**
-After all rewiring, new parent array is:
-- For each node i (i>0):
-    - If new_parent[i] >= 0, parent[i] = new_parent[i]; else keep original parent[i]
-- Result: [-1,0,1,0,0]
-- Connecting:
-    - 0: children [1,3,4]
-    - 1: child [2]
-    - 2: []
-    - 3: []
-    - 4: []
-
-#### **Step 3: Compute Sizes**
-Do DFS from 0:
-- 0: [1,3,4]
-  - 1: [2]
-    - 2: []
-  - 3: []
-  - 4: []
-
-Sizes:
-- 2: 1
-- 1: 1 (from 2) + 1 = 2
-- 3: 1
-- 4: 1
-- 0: 2 (1) + 1 (3) + 1 (4) + 1 = 5
-
-**Output:** `[5,2,1,1,1]`
+At **no point** is there an `'a'` after the `'b'`, so **return `true`**.
 
 ---
 
-## **Final Notes**
+**Summary Table:**
 
-- The core trick is to do the ancestor search efficiently via DFS and a "last seen" tracking.
-- Everything is O(n) in time/space.
-- Don't forget to "restore" state while unwinding the DFS since node labels may get "shadowed" down the tree.
+| String         | Output | Reason                                    |
+|----------------|--------|-------------------------------------------|
+| "aaabbb"       | true   | All a's before all b's                    |
+| "abab"         | false  | Found 'a' after first 'b'                 |
+| "bbb"          | true   | No 'a's, trivially valid                  |
+| "a"            | true   | Only one char, valid                      |
+| "ba"           | false  | 'a' appears after 'b'                     |
 
 ---
 
-**Happy to clarify or provide more illustrations as needed!**
+Let me know if you need further optimization or explanation!
