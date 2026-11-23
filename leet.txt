@@ -1,93 +1,116 @@
-Let's address your requirements step by step.
+Let's construct a comprehensive answer as requested.
 
 ---
 
 ## 1. **Short Summary**
 
-Given a string consisting only of 'a' and 'b', check if **all** `'a'` characters appear **before** any `'b'`. If any `'a'` appears **after** a `'b'`, return `false`. Otherwise, return `true`.
+We need to design a data structure that allows:
+- **O(1)** insertion of an integer to a stream.
+- **O(1)** query of the product of the last `k` numbers of the stream.
+
+Special consideration must be taken for when **zeros** are added since they reset the running product.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:**
-  - 1 ≤ s.length ≤ 100
-  - s consists of only 'a' and 'b'
+**Constraints:**
+- Numbers are in `[0, 100]`.
+- `k` can be up to 40,000.
+- Up to 40,000 operations.
+- Products always fit in 32-bit integer.
 
-- **Edge Cases:**
-  - The string contains all `'a'` or all `'b'`: Always valid, return `true`.
-  - The string is a single character: Always valid, return `true`.
-  - 'a' appears after a 'b' (e.g., "ba", "aabbbaa"): Invalid, return `false`.
+**Edge Cases:**
+- Adding zero: Any product spanning a zero must be zero.
+- Getting product for k larger than last zero’s position: must return 0.
+- Consecutive zeros, or only zeros: must work.
+- Must not overflow, but problems says it won’t.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-### **Key Insight**
-Once a `'b'` is found, there **must not** be any more `'a'` after it. If that happens, the order is violated.
+**Key idea:**  
+Maintain a prefix product array for efficient range product queries but **reset it** whenever a zero is added.
 
-### **Algorithm Steps**
-1. Iterate through the string.
-2. After you find a `'b'`, if you encounter any more `'a'`, **return false**.
-3. If no such violation is found, **return true**.
+### **Step-by-step:**
 
-### **Time Complexity:** O(n), where n is the length of the string.
+- Keep a vector `prefixProducts`, where `prefixProducts[i]` = product of stream[0, i-1].
+- Upon `add(num)`:
+    - If `num == 0`: reset the array to `{1}` (so future products are not contaminated).
+    - Else: Append `prefixProducts.back() * num`.
+- To retrieve product of last `k` numbers:
+    - If we've reset the array in the last `k` elements, it means there was a zero in this window → return 0.
+    - Else: Use the formula: 
+      `product = prefixProducts.back() / prefixProducts[N - k - 1]`  
+      where `N = prefixProducts.size() - 1`.
+    - Since no zero appeared in the last `k` elements (guaranteed by reset), this division is safe.
 
-#### **Alternative**
-You can check if the string contains the substring `"ba"`. If yes, return `false`; otherwise, `true`.  
-But to match the competitive programming requirement and be explicit, we go with the loop.
+**Why does this work with zeros?**  
+Because every time a zero is inserted, the array is reset. So if we're ever querying a product crossing that zero, the length of `prefixProducts` will be less than `k+1`.
+
+**Time Complexity:**  
+Both `add` and `getProduct` are **O(1)**.
 
 ---
 
 ## 4. **C++ Solution**
 
 ```cpp
-class Solution {
+class ProductOfNumbers {
+    vector<int> prefixProducts;
 public:
-    bool checkString(string s) {
-        bool found_b = false;
-        for (char c : s) {
-            if (c == 'b') {
-                found_b = true;
-            } else if (found_b && c == 'a') {
-                // Found an 'a' after 'b'
-                return false;
-            }
+    ProductOfNumbers() {
+        prefixProducts.push_back(1); // prefixProducts[0] = 1, as neutral element
+    }
+    
+    void add(int num) {
+        if (num == 0) {
+            // Reset on zero
+            prefixProducts.clear();
+            prefixProducts.push_back(1);
+        } else {
+            int prod = prefixProducts.back() * num;
+            prefixProducts.push_back(prod);
         }
-        return true;
+    }
+    
+    int getProduct(int k) {
+        int n = prefixProducts.size();
+        if (k >= n) return 0; // Zero appeared less than k steps ago
+        return prefixProducts.back() / prefixProducts[n - k - 1];
     }
 };
 ```
 
 ---
 
-## 5. **Example Explained**
+## 5. **Example Explanation**
 
-**Example:**  
-Input: `s = "aaabbb"`
+Consider this usage:
 
-- Traverse from left:
-  - Index 0: 'a' (OK)
-  - Index 1: 'a' (OK)
-  - Index 2: 'a' (OK)
-  - Index 3: 'b' (first 'b' found, set flag)
-  - Index 4: 'b' (no issue, as 'a' not found after 'b')
-  - Index 5: 'b' (no issue)
+```cpp
+ProductOfNumbers productOfNumbers = ProductOfNumbers();
+productOfNumbers.add(3);        // [3]
+productOfNumbers.add(0);        // [3, 0]
+productOfNumbers.add(2);        // [3, 0, 2]
+productOfNumbers.add(5);        // [3, 0, 2, 5]
+productOfNumbers.add(4);        // [3, 0, 2, 5, 4]
+productOfNumbers.getProduct(2); // product of [5, 4] = 5*4 = 20
+productOfNumbers.getProduct(3); // product of [2, 5, 4] = 2*5*4 = 40
+productOfNumbers.getProduct(4); // product of [0, 2, 5, 4] = 0*2*5*4 = 0
+productOfNumbers.add(8);        // [3,0,2,5,4,8]
+productOfNumbers.getProduct(2); // product of [4, 8] = 32
+```
 
-At **no point** is there an `'a'` after the `'b'`, so **return `true`**.
+**Why does this work?**  
+Take `getProduct(4)` after the last zero (which resets the prefix):
+- `prefixProducts = [1, 2, 10, 40]` (after [2,5,4])
+- Then add(8): `prefixProducts = [1, 2, 10, 40, 320]`
+- To get last 2: `prefixProducts[5] / prefixProducts[5-2] = 320 / 10 = 32`
+
+For a query that exceeds the number of insertions since last zero, it returns 0.
 
 ---
 
-**Summary Table:**
-
-| String         | Output | Reason                                    |
-|----------------|--------|-------------------------------------------|
-| "aaabbb"       | true   | All a's before all b's                    |
-| "abab"         | false  | Found 'a' after first 'b'                 |
-| "bbb"          | true   | No 'a's, trivially valid                  |
-| "a"            | true   | Only one char, valid                      |
-| "ba"           | false  | 'a' appears after 'b'                     |
-
----
-
-Let me know if you need further optimization or explanation!
+**This solution is proven, robust for zeros, and runs in O(1) time per operation.**
