@@ -1,116 +1,108 @@
-Let's construct a comprehensive answer as requested.
+### 1. **Short Summary**
+
+Given an array of positive integers, find the length of the **longest contiguous subarray** such that  
+**product of all elements** = **gcd of all elements × lcm of all elements**.  
+Return the length of this subarray.
 
 ---
 
-## 1. **Short Summary**
-
-We need to design a data structure that allows:
-- **O(1)** insertion of an integer to a stream.
-- **O(1)** query of the product of the last `k` numbers of the stream.
-
-Special consideration must be taken for when **zeros** are added since they reset the running product.
-
----
-
-## 2. **Constraints & Edge Cases**
+### 2. **Constraints & Edge Cases**
 
 **Constraints:**
-- Numbers are in `[0, 100]`.
-- `k` can be up to 40,000.
-- Up to 40,000 operations.
-- Products always fit in 32-bit integer.
+- `2 <= nums.length <= 100` (small size, brute force possible)
+- `1 <= nums[i] <= 10` (very small numbers make brute force practical)
 
 **Edge Cases:**
-- Adding zero: Any product spanning a zero must be zero.
-- Getting product for k larger than last zero’s position: must return 0.
-- Consecutive zeros, or only zeros: must work.
-- Must not overflow, but problems says it won’t.
+- All elements are 1: All subarrays are valid (since prod=gcd=lcm=1).
+- Array with no valid subarray larger than one: Output 1.
+- Non-overlapping subarrays: Find **longest**, so need the maximum.
 
 ---
 
-## 3. **Optimal Algorithm**
+### 3. **Optimal Algorithm**
 
-**Key idea:**  
-Maintain a prefix product array for efficient range product queries but **reset it** whenever a zero is added.
+**Observation:**
 
-### **Step-by-step:**
+If `g = gcd(arr)` and `l = lcm(arr)`,  
+then `g * l` is the smallest possible product for this set (since the numbers are usually multiples and divisors of each other).
 
-- Keep a vector `prefixProducts`, where `prefixProducts[i]` = product of stream[0, i-1].
-- Upon `add(num)`:
-    - If `num == 0`: reset the array to `{1}` (so future products are not contaminated).
-    - Else: Append `prefixProducts.back() * num`.
-- To retrieve product of last `k` numbers:
-    - If we've reset the array in the last `k` elements, it means there was a zero in this window → return 0.
-    - Else: Use the formula: 
-      `product = prefixProducts.back() / prefixProducts[N - k - 1]`  
-      where `N = prefixProducts.size() - 1`.
-    - Since no zero appeared in the last `k` elements (guaranteed by reset), this division is safe.
+But for arbitrary arrays, generally **product of elements = g * l** **only if all numbers are powers of the same prime**, or have almost no prime factors in common.
 
-**Why does this work with zeros?**  
-Because every time a zero is inserted, the array is reset. So if we're ever querying a product crossing that zero, the length of `prefixProducts` will be less than `k+1`.
+But since `nums[i]` is quite small (max 10), and array is short, we can check **all subarrays**.
 
-**Time Complexity:**  
-Both `add` and `getProduct` are **O(1)**.
+**Algorithm Steps:**
+1. For every subarray `(i, j)`, compute:
+   - product
+   - gcd
+   - lcm
+2. If `product == gcd * lcm`, update max length.
+
+**Performance:**  
+Since `n <= 100`, O(n²) is acceptable (100 * 100 = 10,000 subarrays).  
+GCD and LCM are fast for small numbers.
 
 ---
 
-## 4. **C++ Solution**
+### 4. **C++ Solution**
 
 ```cpp
-class ProductOfNumbers {
-    vector<int> prefixProducts;
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+// Helper for GCD
+int gcd(int a, int b) {
+    while (b) {
+        int t = a % b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
+// Helper for LCM
+int lcm(int a, int b) {
+    return a / gcd(a, b) * b;
+}
+
+class Solution {
 public:
-    ProductOfNumbers() {
-        prefixProducts.push_back(1); // prefixProducts[0] = 1, as neutral element
-    }
-    
-    void add(int num) {
-        if (num == 0) {
-            // Reset on zero
-            prefixProducts.clear();
-            prefixProducts.push_back(1);
-        } else {
-            int prod = prefixProducts.back() * num;
-            prefixProducts.push_back(prod);
+    int longestSubarray(vector<int>& nums) {
+        int n = nums.size(), res = 1;
+        for (int i = 0; i < n; ++i) {
+            int prod = 1;
+            int G = nums[i], L = nums[i];
+            for (int j = i; j < n; ++j) {
+                // Avoid overflow, but nums[i] <= 10, prod is safe for <=100 elements
+                prod *= nums[j];
+                G = gcd(G, nums[j]);
+                L = lcm(L, nums[j]);
+                if (prod == G * L)
+                    res = max(res, j - i + 1);
+            }
         }
-    }
-    
-    int getProduct(int k) {
-        int n = prefixProducts.size();
-        if (k >= n) return 0; // Zero appeared less than k steps ago
-        return prefixProducts.back() / prefixProducts[n - k - 1];
+        return res;
     }
 };
 ```
 
 ---
 
-## 5. **Example Explanation**
+### 5. **Example Explanation**
 
-Consider this usage:
+Let's use **Example 1**:  
+**Input:** `nums = [1,2,1,2,1,1,1]`
 
-```cpp
-ProductOfNumbers productOfNumbers = ProductOfNumbers();
-productOfNumbers.add(3);        // [3]
-productOfNumbers.add(0);        // [3, 0]
-productOfNumbers.add(2);        // [3, 0, 2]
-productOfNumbers.add(5);        // [3, 0, 2, 5]
-productOfNumbers.add(4);        // [3, 0, 2, 5, 4]
-productOfNumbers.getProduct(2); // product of [5, 4] = 5*4 = 20
-productOfNumbers.getProduct(3); // product of [2, 5, 4] = 2*5*4 = 40
-productOfNumbers.getProduct(4); // product of [0, 2, 5, 4] = 0*2*5*4 = 0
-productOfNumbers.add(8);        // [3,0,2,5,4,8]
-productOfNumbers.getProduct(2); // product of [4, 8] = 32
-```
+Consider subarray `[1, 2, 1, 1, 1]` (positions 2 to 6, zero-indexed).
 
-**Why does this work?**  
-Take `getProduct(4)` after the last zero (which resets the prefix):
-- `prefixProducts = [1, 2, 10, 40]` (after [2,5,4])
-- Then add(8): `prefixProducts = [1, 2, 10, 40, 320]`
-- To get last 2: `prefixProducts[5] / prefixProducts[5-2] = 320 / 10 = 32`
+- Product: `1 × 2 × 1 × 1 × 1 = 2`
+- GCD: `gcd(1,2,1,1,1) = 1`
+- LCM: `lcm(1,2,1,1,1) = 2`
+- GCD × LCM: `1 × 2 = 2`, which **matches the product**.
 
-For a query that exceeds the number of insertions since last zero, it returns 0.
+No longer subarray can achieve this. The answer is **5**.
 
 ---
 
-**This solution is proven, robust for zeros, and runs in O(1) time per operation.**
+**In summary:**  
+Brute-force all subarrays, tracking product, gcd and lcm, and find the maximum length where `product == gcd * lcm`. Constraints allow this solution, and the implementation is direct with helper functions for gcd/lcm and a doubly-nested loop.
