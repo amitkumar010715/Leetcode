@@ -1,108 +1,129 @@
-### 1. **Short Summary**
+## 1. Summary
 
-Given an array of positive integers, find the length of the **longest contiguous subarray** such that  
-**product of all elements** = **gcd of all elements × lcm of all elements**.  
-Return the length of this subarray.
+Given an array `nums`, **find the minimum length** of a subarray that appears **only once** (is unique). That is, no other subarray in `nums` is identical to it (same length and same elements). Return the minimal possible length with such a unique subarray.
 
 ---
 
-### 2. **Constraints & Edge Cases**
+## 2. Constraints & Edge Cases
 
-**Constraints:**
-- `2 <= nums.length <= 100` (small size, brute force possible)
-- `1 <= nums[i] <= 10` (very small numbers make brute force practical)
+- **Constraints:**
+  - `1 <= nums.length <= 100_000`
+  - `1 <= nums[i] <= 100_000`
 
-**Edge Cases:**
-- All elements are 1: All subarrays are valid (since prod=gcd=lcm=1).
-- Array with no valid subarray larger than one: Output 1.
-- Non-overlapping subarrays: Find **longest**, so need the maximum.
+- **Edge Cases:**
+  - All elements are the same (minimal unique subarray is the entire array).
+  - All elements are different (minimal unique subarray is length 1).
+  - The unique subarray is in the middle.
+  - Unique subarray only exists for higher lengths.
 
----
-
-### 3. **Optimal Algorithm**
-
-**Observation:**
-
-If `g = gcd(arr)` and `l = lcm(arr)`,  
-then `g * l` is the smallest possible product for this set (since the numbers are usually multiples and divisors of each other).
-
-But for arbitrary arrays, generally **product of elements = g * l** **only if all numbers are powers of the same prime**, or have almost no prime factors in common.
-
-But since `nums[i]` is quite small (max 10), and array is short, we can check **all subarrays**.
-
-**Algorithm Steps:**
-1. For every subarray `(i, j)`, compute:
-   - product
-   - gcd
-   - lcm
-2. If `product == gcd * lcm`, update max length.
-
-**Performance:**  
-Since `n <= 100`, O(n²) is acceptable (100 * 100 = 10,000 subarrays).  
-GCD and LCM are fast for small numbers.
+**Challenge:** Brute force (`O(N^2)`) is not feasible. Need efficient subarray hashing.
 
 ---
 
-### 4. **C++ Solution**
+## 3. Optimal Algorithm
+
+### Approach: **Rolling Hash + Binary Search**
+
+1. **Binary Search for Answer**: Since for increasing subarray length, number of unique possible subarrays decreases, we can binary search on subarray length `L` (from `1` to `N`).
+2. For a given `L`, use a rolling hash to hash all subarrays of length `L` (in O(N) per length). Use a map to count occurrences of each hash.
+3. If any subarray of length `L` is unique (occurs once), we try smaller `L` (minimize answer); else, try bigger `L`.
+4. Output minimum found `L`.
+
+- Rolling hash (Rabin-Karp style) is needed to efficiently hash and compare subarrays.
+- **Hash collisions**: To avoid, use two modulos (double hashing).
+
+---
+
+## 4. C++ Solution
 
 ```cpp
 #include <vector>
-#include <algorithm>
+#include <unordered_map>
 using namespace std;
-
-// Helper for GCD
-int gcd(int a, int b) {
-    while (b) {
-        int t = a % b;
-        a = b;
-        b = t;
-    }
-    return a;
-}
-
-// Helper for LCM
-int lcm(int a, int b) {
-    return a / gcd(a, b) * b;
-}
 
 class Solution {
 public:
-    int longestSubarray(vector<int>& nums) {
-        int n = nums.size(), res = 1;
-        for (int i = 0; i < n; ++i) {
-            int prod = 1;
-            int G = nums[i], L = nums[i];
-            for (int j = i; j < n; ++j) {
-                // Avoid overflow, but nums[i] <= 10, prod is safe for <=100 elements
-                prod *= nums[j];
-                G = gcd(G, nums[j]);
-                L = lcm(L, nums[j]);
-                if (prod == G * L)
-                    res = max(res, j - i + 1);
+    int smallestUniqueSubarray(vector<int>& nums) {
+        int n = nums.size();
+
+        // Preprocessing for Rolling Hash
+        // Use two bases/moduli for double hashing
+        typedef long long ll;
+        const int base1 = 100007, mod1 = 1e9+7;
+        const int base2 = 100021, mod2 = 1e9+9;
+        
+        // Precompute powers
+        vector<ll> pow1(n+1, 1), pow2(n+1, 1);
+        for(int i=1; i<=n; ++i) {
+            pow1[i] = (pow1[i-1] * base1) % mod1;
+            pow2[i] = (pow2[i-1] * base2) % mod2;
+        }
+        
+        // Build prefix hashes
+        vector<ll> ph1(n+1, 0), ph2(n+1, 0);
+        for(int i=0; i<n; ++i) {
+            ph1[i+1] = (ph1[i]*base1 + nums[i]) % mod1;
+            ph2[i+1] = (ph2[i]*base2 + nums[i]) % mod2;
+        }
+
+        // Function to compute rolling hashes for all subarrays of length len
+        auto has_unique = [&](int len) -> bool {
+            unordered_map< long long, int > freq;
+            for(int i=0; i+len<=n; ++i) {
+                // Get hash1 of nums[i...i+len-1]
+                ll h1 = (ph1[i+len] - ph1[i]*pow1[len]%mod1 + mod1) % mod1;
+                ll h2 = (ph2[i+len] - ph2[i]*pow2[len]%mod2 + mod2) % mod2;
+                // Combine hashes into one 64 bit key
+                ll key = (h1<<32) | h2;
+                freq[key]++;
+            }
+            for (auto& [k,v]: freq) {
+                if (v == 1)
+                    return true;
+            }
+            return false;
+        };
+
+        // Binary Search
+        int left = 1, right = n, answer = n;
+        while (left <= right) {
+            int mid = (left + right) / 2;
+            if (has_unique(mid)) {
+                answer = mid;
+                right = mid - 1;
+            } else {
+                left = mid + 1;
             }
         }
-        return res;
+        return answer;
     }
 };
 ```
 
 ---
 
-### 5. **Example Explanation**
+## 5. Example Explanation
 
-Let's use **Example 1**:  
-**Input:** `nums = [1,2,1,2,1,1,1]`
+**Example 3**
+```
+nums = [1,1,2,2,1]
+```
 
-Consider subarray `[1, 2, 1, 1, 1]` (positions 2 to 6, zero-indexed).
-
-- Product: `1 × 2 × 1 × 1 × 1 = 2`
-- GCD: `gcd(1,2,1,1,1) = 1`
-- LCM: `lcm(1,2,1,1,1) = 2`
-- GCD × LCM: `1 × 2 = 2`, which **matches the product**.
-
-No longer subarray can achieve this. The answer is **5**.
+- Subarrays of length 1: [1], [1], [2], [2], [1] => 1 appears 3 times, 2 appears 2 times: **no unique**
+- Subarrays of length 2: [1,1], [1,2], [2,2], [2,1]  
+  - Each of [1,1], [1,2], [2,2], [2,1] appears **once**.
+  
+So, subarrays of length 2 are all unique; **minimum unique subarray length = 2**.
 
 ---
 
-**In summary:**  
-Brute-force all subarrays, tracking product, gcd and lcm, and find the maximum length where `product == gcd * lcm`. Constraints allow this solution, and the implementation is direct with helper functions for gcd/lcm and a doubly-nested loop.
+**Summary**:
+- Use binary search on subarray length.
+- For each length, count subarray hashes using rolling hash; check if any hash is unique.
+- Answer is the smallest such length.
+
+---
+
+**Time Complexity:**
+- `O(N log N)` expected (each length costs `O(N)`, binary search on length: `O(log N)`).  
+- Space: `O(N)` for hashes per check and prefix hashes.
