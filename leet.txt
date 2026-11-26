@@ -1,129 +1,91 @@
-## 1. Summary
-
-Given an array `nums`, **find the minimum length** of a subarray that appears **only once** (is unique). That is, no other subarray in `nums` is identical to it (same length and same elements). Return the minimal possible length with such a unique subarray.
+Let's break down the solution as requested:
 
 ---
 
-## 2. Constraints & Edge Cases
+## 1. **Summary**
 
-- **Constraints:**
-  - `1 <= nums.length <= 100_000`
-  - `1 <= nums[i] <= 100_000`
+- Alice and Bob take turns removing stones from a pile of `n` stones.
+- Alice removes **exactly 10** stones on her first turn.
+- On each subsequent turn, **each player removes 1 less stone** than the previous opponent took.
+- If a player cannot make a legal move, they lose.
+- **Goal:** Given `n`, return `true` if Alice can win, otherwise `false`.
 
+---
+
+## 2. **Constraints & Edge Cases**
+
+- **Constraints:** `1 <= n <= 50`
 - **Edge Cases:**
-  - All elements are the same (minimal unique subarray is the entire array).
-  - All elements are different (minimal unique subarray is length 1).
-  - The unique subarray is in the middle.
-  - Unique subarray only exists for higher lengths.
-
-**Challenge:** Brute force (`O(N^2)`) is not feasible. Need efficient subarray hashing.
+  - If `n < 10`, Alice cannot take her first move — **she instantly loses**.
+  - If `n = 10`, Alice removes all stones in her first move — **she wins**.
+  - If there are not enough stones for the current required move, the player loses (the game ends).
 
 ---
 
-## 3. Optimal Algorithm
+## 3. **Optimal Algorithm**
 
-### Approach: **Rolling Hash + Binary Search**
+Let’s formalize how the game plays:
+- Alice starts with `remove = 10`
+- Bob must then remove `remove = 9`
+- Alice then must remove `remove = 8`, etc., until a player cannot remove enough stones.
 
-1. **Binary Search for Answer**: Since for increasing subarray length, number of unique possible subarrays decreases, we can binary search on subarray length `L` (from `1` to `N`).
-2. For a given `L`, use a rolling hash to hash all subarrays of length `L` (in O(N) per length). Use a map to count occurrences of each hash.
-3. If any subarray of length `L` is unique (occurs once), we try smaller `L` (minimize answer); else, try bigger `L`.
-4. Output minimum found `L`.
+For any `n`, simulate the game alternately:
+- On Alice's turn: if `n >= remove`, subtract `remove` from `n`, decrement `remove`, pass to Bob.
+- On Bob's turn: same thing, alternate.
+- If a player cannot remove enough stones (i.e., `n < remove`), they lose.
 
-- Rolling hash (Rabin-Karp style) is needed to efficiently hash and compare subarrays.
-- **Hash collisions**: To avoid, use two modulos (double hashing).
+Because `n <= 50`, simulating both players with a simple loop is optimal.
+
+**Implementation steps:**
+- Keep track of whose turn it is (`Alice` or `Bob`).
+- Reduce `n` by the required `remove` amount each time.
+- If `n < remove`, the current player loses — return the winner accordingly.
 
 ---
 
-## 4. C++ Solution
+## 4. **Clean C++ Solution**
 
 ```cpp
-#include <vector>
-#include <unordered_map>
-using namespace std;
-
 class Solution {
 public:
-    int smallestUniqueSubarray(vector<int>& nums) {
-        int n = nums.size();
-
-        // Preprocessing for Rolling Hash
-        // Use two bases/moduli for double hashing
-        typedef long long ll;
-        const int base1 = 100007, mod1 = 1e9+7;
-        const int base2 = 100021, mod2 = 1e9+9;
-        
-        // Precompute powers
-        vector<ll> pow1(n+1, 1), pow2(n+1, 1);
-        for(int i=1; i<=n; ++i) {
-            pow1[i] = (pow1[i-1] * base1) % mod1;
-            pow2[i] = (pow2[i-1] * base2) % mod2;
-        }
-        
-        // Build prefix hashes
-        vector<ll> ph1(n+1, 0), ph2(n+1, 0);
-        for(int i=0; i<n; ++i) {
-            ph1[i+1] = (ph1[i]*base1 + nums[i]) % mod1;
-            ph2[i+1] = (ph2[i]*base2 + nums[i]) % mod2;
-        }
-
-        // Function to compute rolling hashes for all subarrays of length len
-        auto has_unique = [&](int len) -> bool {
-            unordered_map< long long, int > freq;
-            for(int i=0; i+len<=n; ++i) {
-                // Get hash1 of nums[i...i+len-1]
-                ll h1 = (ph1[i+len] - ph1[i]*pow1[len]%mod1 + mod1) % mod1;
-                ll h2 = (ph2[i+len] - ph2[i]*pow2[len]%mod2 + mod2) % mod2;
-                // Combine hashes into one 64 bit key
-                ll key = (h1<<32) | h2;
-                freq[key]++;
-            }
-            for (auto& [k,v]: freq) {
-                if (v == 1)
-                    return true;
-            }
-            return false;
-        };
-
-        // Binary Search
-        int left = 1, right = n, answer = n;
-        while (left <= right) {
-            int mid = (left + right) / 2;
-            if (has_unique(mid)) {
-                answer = mid;
-                right = mid - 1;
+    bool stoneGame(int n) {
+        int remove = 10;
+        bool aliceTurn = true;
+        while (true) {
+            if (n >= remove) {
+                n -= remove;
+                remove--;
+                aliceTurn = !aliceTurn;
             } else {
-                left = mid + 1;
+                // Current player cannot move, so the OTHER player wins
+                return !aliceTurn; // If it's Alice's turn and can't move, Bob wins, so return false
             }
         }
-        return answer;
     }
 };
 ```
 
 ---
 
-## 5. Example Explanation
+## 5. **Example Explanation**
 
-**Example 3**
-```
-nums = [1,1,2,2,1]
-```
+**Example:** `n = 12`
 
-- Subarrays of length 1: [1], [1], [2], [2], [1] => 1 appears 3 times, 2 appears 2 times: **no unique**
-- Subarrays of length 2: [1,1], [1,2], [2,2], [2,1]  
-  - Each of [1,1], [1,2], [2,2], [2,1] appears **once**.
-  
-So, subarrays of length 2 are all unique; **minimum unique subarray length = 2**.
+- **Turn 1 (Alice):** Must remove 10. Remaining stones: `12 - 10 = 2`.
+- **Turn 2 (Bob):** Must remove 9. **But only 2 stones left!** Bob cannot move.
+- **Alice wins** (`true`).
 
 ---
 
-**Summary**:
-- Use binary search on subarray length.
-- For each length, count subarray hashes using rolling hash; check if any hash is unique.
-- Answer is the smallest such length.
+**Summary Table for reference (`n = 12`):**
+
+| Turn   | Player | Stones to Remove | Stones Left | Can Move? |
+|--------|--------|------------------|-------------|-----------|
+| 1      | Alice  | 10               | 2           | Yes       |
+| 2      | Bob    | 9                | 2           | **No**    |
+
+**Result:** Alice wins.
 
 ---
 
-**Time Complexity:**
-- `O(N log N)` expected (each length costs `O(N)`, binary search on length: `O(log N)`).  
-- Space: `O(N)` for hashes per check and prefix hashes.
+#### This method is both simple and efficient, given the small limit on `n`.
