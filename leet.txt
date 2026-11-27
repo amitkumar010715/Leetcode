@@ -1,66 +1,154 @@
-Let's break down the solution as requested:
+Let's address your requirements step by step:
 
 ---
 
 ## 1. **Summary**
 
-- Alice and Bob take turns removing stones from a pile of `n` stones.
-- Alice removes **exactly 10** stones on her first turn.
-- On each subsequent turn, **each player removes 1 less stone** than the previous opponent took.
-- If a player cannot make a legal move, they lose.
-- **Goal:** Given `n`, return `true` if Alice can win, otherwise `false`.
+Given several item types (each with a `factor` and a `price`), and a budget, you can purchase any number of copies of any items (unlimited stock).  
+Additionally, for **each type** you buy at least one copy of, you get **one** free copy of every *other* item whose `factor` is divisible by the purchased item's `factor`.  
+Your task is: **Maximize the sum of purchased + free copies** without exceeding the budget.
 
 ---
 
 ## 2. **Constraints & Edge Cases**
 
-- **Constraints:** `1 <= n <= 50`
-- **Edge Cases:**
-  - If `n < 10`, Alice cannot take her first move — **she instantly loses**.
-  - If `n = 10`, Alice removes all stones in her first move — **she wins**.
-  - If there are not enough stones for the current required move, the player loses (the game ends).
+- **`n <= 1000` items**: Can't try all subsets exactly, but `budget <= 1500` is small.
+- **Prices/Facts <= 1500**: All numbers relatively small.
+- **Budget** can be small/large compared to prices.
+- **Unlimited supply** of each item.
+- If you buy **multiple types**, free copies can "pile up" on some items *if multiple purchased items' factors divide another item's factor*.
+- Free copies are per type, *not* per copy.
+- Must carefully consider which items to buy with limited budget for best "reach".
+- A trivial case: just buying only the most cost-effective item type.
 
 ---
 
 ## 3. **Optimal Algorithm**
 
-Let’s formalize how the game plays:
-- Alice starts with `remove = 10`
-- Bob must then remove `remove = 9`
-- Alice then must remove `remove = 8`, etc., until a player cannot remove enough stones.
+### **Step-by-step Plan**
 
-For any `n`, simulate the game alternately:
-- On Alice's turn: if `n >= remove`, subtract `remove` from `n`, decrement `remove`, pass to Bob.
-- On Bob's turn: same thing, alternate.
-- If a player cannot remove enough stones (i.e., `n < remove`), they lose.
+#### **A. Preprocessing (Divisors graph)**
 
-Because `n <= 50`, simulating both players with a simple loop is optimal.
+- For each item `i`, build the list of other items (`j ≠ i`) where `factor[i]` divides `factor[j]`.
+- Let's call, for each `i`, this set its "divisible neighbors", `div_by[i]`.
 
-**Implementation steps:**
-- Keep track of whose turn it is (`Alice` or `Bob`).
-- Reduce `n` by the required `remove` amount each time.
-- If `n < remove`, the current player loses — return the winner accordingly.
+#### **B. Dynamic Programming (Knapsack)**
+
+- Let `dp[b]` be the **maximum total items** we can obtain with budget `b`.
+    - For each possible subset of items to buy at least one of, simulate what free copies would result.
+
+But, **2ⁿ subsets is infeasible!**
+
+#### **Observation:**
+
+- **Item purchases are independent**, and only buying a new *type* gives new "free copy" effects.
+- Since **unlimited supply**, buying >1 per type only increases the purchased count (not free copies from that item).
+- So, it's optimal to **buy either 0 or at least 1** of an item for the free copy effect **(the first is special)**; subsequent of the same just add to purchased count.
+
+#### **Alternate Knapsack**
+
+- For each distinct combination of "types" you buy at least one of, you'll:
+    - Get 1 free copy of each *other* item per divisor rule for each such base type you bought.
+    - All further budget (after buying 1 of each chosen type) can be used to buy any further copies at will.
+
+But, again, too many combinations.
+
+#### **Efficient DP**
+
+- **Try buying 1 copy of any possible subset of types,** and with the remaining budget buy as many more (copies of any item) as you can, greedily (cheapest per item).
+- For combos of size `k`, picking k types, base cost is `sum(type.price for each in subset)`. For each, get all free copies for divisibility.
+- After buying one copy of selected k types, use remaining budget on as many items as possible (best is to buy cheapest items with unlimited freq).
+
+But with up to 1000 types, this is not feasible for all subsets.
+
+#### **Greedy + DP per budget**
+
+- For every item, try two strategies:
+    1. **Only buy copies of a single item** (no free copies): just `budget // price[i]`.
+    2. **Buy one copy of item i (to trigger its "free copy to others") + use the rest of budget to buy as many (cheapest) items as possible.**
+    3. **For every pair/trio, etc., of item types, buy one of each, trigger all free copies, and use the rest of budget for more.** (But enumerate only k=2,3 for small k.)
+
+But after exploration and analysis, it's clear that, given the `budget` is small (`<=1500`), and `n` is up to 1000, a modified **0/1 Knapsack** for "whether to buy at least one of each type", then for each possible spending on this, finish off remaining budget with "complete knapsack" (buying more copies) **to maximize total count** is feasible and optimal.
+
+### **Algorithm Steps**
+
+1. **Precompute "free gifts":**  
+   For each index `i`, build `give[i] = list of j (j ≠ i, factor[i] divides factor[j])`.
+
+2. **0/1-Knapsack:**
+   For each item, consider whether to buy it (at least 1) or not. For `n` up to 1000 and budget 1500, this is feasible:
+   - Let `dp[b]` be the maximum total items (so far) obtainable with budget b where we may have bought *at least one* of some types.
+   - For each item i, try for every possible budget (starting high to low, since 0/1):
+     - If `b >= price[i]`, buying one:
+         - For each `give[i]`, total gifts increases by 1 for each possible recipient.
+         - So, `dp[b] = max(dp[b], dp[b-price[i]] + 1 + len(give[i]) )`
+     - Not buying is just `dp[b] = dp[b]`.
+   - **At the end, for each dp[b],** we can use left-over budget to "fill up" further using the *cheapest* item's price (since extra copies don't trigger more gifts).
+
+3. **Combine gifts (multi-buy):**
+   - For each `b`, the total count from `dp[b]` is number of acquired items (from exactly bought one of some set) + free gifts for all the buys + whatever else we can fit with extra budget (using any items, even if already bought one).
+   - So, for each budget b, once we've picked a subset of types (implied by the dp transitions), we can use the *remaining* budget to buy additional copies (best to buy as many as possible of the cheapest item).
+
+4. **Edge Case:** Only buy multiple of a single item, don't trigger any "free" gifts.
+
+Finally, pick the maximum across all possible split/total.
 
 ---
 
-## 4. **Clean C++ Solution**
+## 4. **C++ Solution**
+
+Here's a clean, efficient implementation:
 
 ```cpp
+#include <vector>
+#include <algorithm>
+using namespace std;
+
 class Solution {
 public:
-    bool stoneGame(int n) {
-        int remove = 10;
-        bool aliceTurn = true;
-        while (true) {
-            if (n >= remove) {
-                n -= remove;
-                remove--;
-                aliceTurn = !aliceTurn;
-            } else {
-                // Current player cannot move, so the OTHER player wins
-                return !aliceTurn; // If it's Alice's turn and can't move, Bob wins, so return false
+    int maximumItems(vector<vector<int>>& items, int budget) {
+        int n = items.size();
+        vector<int> factor, price;
+        for (auto& it : items) {
+            factor.push_back(it[0]);
+            price.push_back(it[1]);
+        }
+
+        // Precompute gift map
+        vector<vector<int>> gifts(n);
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                if (i != j && factor[j] % factor[i] == 0)
+                    gifts[i].push_back(j);
+
+        int min_price = *min_element(price.begin(), price.end());
+        int res = 0;
+        
+        // dp[b]: For budget b, max items we can get by buying each item at most once (to get free gifts)
+        vector<int> dp(budget + 1, 0);
+
+        // Try to "buy or not buy" for each type (classic 0/1 knapsack for 'buy at least one')
+        for (int i = 0; i < n; ++i) {
+            // Go from high budget to low to avoid overlap
+            for (int b = budget; b >= price[i]; --b) {
+                int add = 1 + gifts[i].size(); // One purchased, rest free
+                dp[b] = max(dp[b], dp[b - price[i]] + add);
             }
         }
+
+        // For each possible way we spent part of the budget on base buys, use leftover for as many as possible of the cheapest
+        for (int b = 0; b <= budget; ++b) {
+            int leftover = (budget - b) / min_price;
+            res = max(res, dp[b] + leftover);
+        }
+
+        // Edge case: buy only many of a single item (never get gifts)
+        for (int i = 0; i < n; ++i) {
+            int cand = budget / price[i];
+            res = max(res, cand);
+        }
+
+        return res;
     }
 };
 ```
@@ -69,23 +157,57 @@ public:
 
 ## 5. **Example Explanation**
 
-**Example:** `n = 12`
+### **Example 2**
 
-- **Turn 1 (Alice):** Must remove 10. Remaining stones: `12 - 10 = 2`.
-- **Turn 2 (Bob):** Must remove 9. **But only 2 stones left!** Bob cannot move.
-- **Alice wins** (`true`).
+```
+items = [[2,4],[3,2],[4,1],[6,4],[12,4]], budget = 8
+```
+
+Let’s process:
+
+- Items: 0:[2,4], 1:[3,2], 2:[4,1], 3:[6,4], 4:[12,4]
+
+#### **Divisor Gifts Table**
+
+- Buy type 0 (factor 2): gives 1 free to types whose factor is multiple of 2 (types 2,3,4 -- as 4,6,12 all divisible by 2), but not itself.
+- Buy type 1 (factor 3): gives 1 free to types 3,4 (factors 6,12).
+- Buy type 2 (factor 4): gives 1 free to type 4 (factor 12).
+- Types 3,4: giving to no others.
+
+#### **We try buying 1 each of types 0,1,2:**
+
+- Cost: 4+2+1=7, budget remains 1.
+- Number of purchased = 3.
+- Gifts:
+    - From type 0: free to 2,3,4 (so one each, total 3).
+    - From type 1: free to 3,4 (so one each, total 2).
+    - From type 2: free to 4 (one).
+    - So free copies: type2(1), type3(1+1=2), type4(1+1+1=3). But it's cumulative, meaning each buying path independently gives those.
+    - But **add up all gifts**, regardless of overlaps.
+    - So, total free = 3+2+1=6.
+
+- Can we use left-over 1 coin? Cheapest price is 1 (item2), buy one more, total purchases = 4, total gifts = 6, total = 10.
+
+#### **The optimal is 10, matching the sample.**
 
 ---
 
-**Summary Table for reference (`n = 12`):**
+## **Summary Table**
 
-| Turn   | Player | Stones to Remove | Stones Left | Can Move? |
-|--------|--------|------------------|-------------|-----------|
-| 1      | Alice  | 10               | 2           | Yes       |
-| 2      | Bob    | 9                | 2           | **No**    |
-
-**Result:** Alice wins.
+| Step | Description |
+|------|-------------|
+| 1 | Precompute gift/free-copy relationships |
+| 2 | 0/1-Knapsack for "one buy per item" to maximize purchased+gifts for every partial budget |
+| 3 | For every dp[budget_spent], buy as many cheapest items with leftover |
+| 4 | Final answer: maximum over all combinations + buying only one item type in bulk |
 
 ---
 
-#### This method is both simple and efficient, given the small limit on `n`.
+## **What does this approach avoid?**
+- No brute-forcing all subsets (not feasible here).
+- Never over-counts gifts: always only from "bought" distinct types, gifts given just once per pair (`i -> j`).
+- Leaves room for spending remaining coins for more purchases efficiently.
+
+---
+
+**If you need Python code or more detailed walk-through for a different example, let me know!**
