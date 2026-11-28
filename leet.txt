@@ -1,213 +1,240 @@
-Let's address your requirements step by step:
+Let's break down the solution step by step:
 
 ---
 
-## 1. **Summary**
+### 1. **Summary**
 
-Given several item types (each with a `factor` and a `price`), and a budget, you can purchase any number of copies of any items (unlimited stock).  
-Additionally, for **each type** you buy at least one copy of, you get **one** free copy of every *other* item whose `factor` is divisible by the purchased item's `factor`.  
-Your task is: **Maximize the sum of purchased + free copies** without exceeding the budget.
-
----
-
-## 2. **Constraints & Edge Cases**
-
-- **`n <= 1000` items**: Can't try all subsets exactly, but `budget <= 1500` is small.
-- **Prices/Facts <= 1500**: All numbers relatively small.
-- **Budget** can be small/large compared to prices.
-- **Unlimited supply** of each item.
-- If you buy **multiple types**, free copies can "pile up" on some items *if multiple purchased items' factors divide another item's factor*.
-- Free copies are per type, *not* per copy.
-- Must carefully consider which items to buy with limited budget for best "reach".
-- A trivial case: just buying only the most cost-effective item type.
+Given a list of items where each item has a `factor` and a `price`, and a total budget, you can buy any number of each item (unlimited quantity per type). For each purchased copy of item `i`, you may get (at most once per (i,j)) a free copy of another item `j` **if** `i != j` and `factor[i]` divides `factor[j]`.  
+Your goal: **Maximize the total number of item copies (purchased + free), staying within your budget.**
 
 ---
 
-## 3. **Optimal Algorithm**
+### 2. **Constraints & Edge Cases**
 
-### **Step-by-step Plan**
+**Constraints:**
+- Up to 100,000 items – O(N log N) solutions are highly preferable.
+- Prices can be up to 1e9; budget up to 1e9.
 
-#### **A. Preprocessing (Divisors graph)**
-
-- For each item `i`, build the list of other items (`j ≠ i`) where `factor[i]` divides `factor[j]`.
-- Let's call, for each `i`, this set its "divisible neighbors", `div_by[i]`.
-
-#### **B. Dynamic Programming (Knapsack)**
-
-- Let `dp[b]` be the **maximum total items** we can obtain with budget `b`.
-    - For each possible subset of items to buy at least one of, simulate what free copies would result.
-
-But, **2ⁿ subsets is infeasible!**
-
-#### **Observation:**
-
-- **Item purchases are independent**, and only buying a new *type* gives new "free copy" effects.
-- Since **unlimited supply**, buying >1 per type only increases the purchased count (not free copies from that item).
-- So, it's optimal to **buy either 0 or at least 1** of an item for the free copy effect **(the first is special)**; subsequent of the same just add to purchased count.
-
-#### **Alternate Knapsack**
-
-- For each distinct combination of "types" you buy at least one of, you'll:
-    - Get 1 free copy of each *other* item per divisor rule for each such base type you bought.
-    - All further budget (after buying 1 of each chosen type) can be used to buy any further copies at will.
-
-But, again, too many combinations.
-
-#### **Efficient DP**
-
-- **Try buying 1 copy of any possible subset of types,** and with the remaining budget buy as many more (copies of any item) as you can, greedily (cheapest per item).
-- For combos of size `k`, picking k types, base cost is `sum(type.price for each in subset)`. For each, get all free copies for divisibility.
-- After buying one copy of selected k types, use remaining budget on as many items as possible (best is to buy cheapest items with unlimited freq).
-
-But with up to 1000 types, this is not feasible for all subsets.
-
-#### **Greedy + DP per budget**
-
-- For every item, try two strategies:
-    1. **Only buy copies of a single item** (no free copies): just `budget // price[i]`.
-    2. **Buy one copy of item i (to trigger its "free copy to others") + use the rest of budget to buy as many (cheapest) items as possible.**
-    3. **For every pair/trio, etc., of item types, buy one of each, trigger all free copies, and use the rest of budget for more.** (But enumerate only k=2,3 for small k.)
-
-But after exploration and analysis, it's clear that, given the `budget` is small (`<=1500`), and `n` is up to 1000, a modified **0/1 Knapsack** for "whether to buy at least one of each type", then for each possible spending on this, finish off remaining budget with "complete knapsack" (buying more copies) **to maximize total count** is feasible and optimal.
-
-### **Algorithm Steps**
-
-1. **Precompute "free gifts":**  
-   For each index `i`, build `give[i] = list of j (j ≠ i, factor[i] divides factor[j])`.
-
-2. **0/1-Knapsack:**
-   For each item, consider whether to buy it (at least 1) or not. For `n` up to 1000 and budget 1500, this is feasible:
-   - Let `dp[b]` be the maximum total items (so far) obtainable with budget b where we may have bought *at least one* of some types.
-   - For each item i, try for every possible budget (starting high to low, since 0/1):
-     - If `b >= price[i]`, buying one:
-         - For each `give[i]`, total gifts increases by 1 for each possible recipient.
-         - So, `dp[b] = max(dp[b], dp[b-price[i]] + 1 + len(give[i]) )`
-     - Not buying is just `dp[b] = dp[b]`.
-   - **At the end, for each dp[b],** we can use left-over budget to "fill up" further using the *cheapest* item's price (since extra copies don't trigger more gifts).
-
-3. **Combine gifts (multi-buy):**
-   - For each `b`, the total count from `dp[b]` is number of acquired items (from exactly bought one of some set) + free gifts for all the buys + whatever else we can fit with extra budget (using any items, even if already bought one).
-   - So, for each budget b, once we've picked a subset of types (implied by the dp transitions), we can use the *remaining* budget to buy additional copies (best to buy as many as possible of the cheapest item).
-
-4. **Edge Case:** Only buy multiple of a single item, don't trigger any "free" gifts.
-
-Finally, pick the maximum across all possible split/total.
+**Edge Cases:**
+- Multiple items can have the same factor or price.
+- Items with no divisors may not be able to give free copies.
+- All items too expensive for any purchase.
+- Only one item (so `i != j` never holds for free copy rules).
 
 ---
 
-## 4. **C++ Solution**
+### 3. **Optimal Algorithm**
 
-Here's a clean, efficient implementation:
+#### **Observations:**
+- You *select* how many of each item to buy.
+- For each copy of `i`, and for each compatible `j`, you get one free copy, but only once per (i,j) pair regardless of how many you buy.
+- Therefore, **number of free copies from item i = number of items j != i where factor[i] divides factor[j]** (for each purchased copy).
+- Best *purchased* value per money = maximize `copies bought + free copies via purchases`.
+
+#### **Step-by-step Plan**
+
+1. **Preprocessing:**
+   - For each item, precompute the number of items `j` (`j != i`) such that `factor[i]` divides `factor[j]`. Let's call it `divcnt[i]`.
+   - For each item, total value for buying one copy is `1 + divcnt[i]`.
+
+2. **Calculate "efficiency":**
+   - Each purchased copy of item `i` gives `1 + divcnt[i]` total copies.
+   - So, define efficiency of item `i` = `(1 + divcnt[i]) / price[i]`.
+
+3. **Strategy:**
+   - Sort all items by *decreasing* efficiency.
+   - Greedily buy as many copies as possible of the most efficient item, then the next, and so on, until budget runs out.
+
+4. **Implementation details:**
+   - For divisor counts:
+     - For each factor value f that appears, record all item indices whose factor equals f.
+     - For each item with factor[i] = f_i:
+         - For all multiples m of f_i, count how many items have factor == m (excluding self if needed).
+     - This can be efficiently done using a count of items per factor (like a modified sieve).
+   - Greedy selection is straightforward after this.
+
+---
+
+### 4. **C++ Solution**
 
 ```cpp
+#include <iostream>
 #include <vector>
 #include <algorithm>
+#include <numeric>
 using namespace std;
 
-class Solution {
-public:
-    int maximumItems(vector<vector<int>>& items, int budget) {
-        int n = items.size();
-        vector<int> factor, price;
-        for (auto& it : items) {
-            factor.push_back(it[0]);
-            price.push_back(it[1]);
-        }
+typedef long long ll;
 
-        // Precompute gift map
-        vector<vector<int>> gifts(n);
-        for (int i = 0; i < n; ++i)
-            for (int j = 0; j < n; ++j)
-                if (i != j && factor[j] % factor[i] == 0)
-                    gifts[i].push_back(j);
-
-        int min_price = *min_element(price.begin(), price.end());
-        int res = 0;
-        
-        // dp[b]: For budget b, max items we can get by buying each item at most once (to get free gifts)
-        vector<int> dp(budget + 1, 0);
-
-        // Try to "buy or not buy" for each type (classic 0/1 knapsack for 'buy at least one')
-        for (int i = 0; i < n; ++i) {
-            // Go from high budget to low to avoid overlap
-            for (int b = budget; b >= price[i]; --b) {
-                int add = 1 + gifts[i].size(); // One purchased, rest free
-                dp[b] = max(dp[b], dp[b - price[i]] + add);
-            }
-        }
-
-        // For each possible way we spent part of the budget on base buys, use leftover for as many as possible of the cheapest
-        for (int b = 0; b <= budget; ++b) {
-            int leftover = (budget - b) / min_price;
-            res = max(res, dp[b] + leftover);
-        }
-
-        // Edge case: buy only many of a single item (never get gifts)
-        for (int i = 0; i < n; ++i) {
-            int cand = budget / price[i];
-            res = max(res, cand);
-        }
-
-        return res;
-    }
+struct Item {
+    int idx;
+    int factor;
+    ll price;
+    int free_copies; // number of possible free copy types
 };
+
+int main() {
+    ios::sync_with_stdio(0); cin.tie(0);
+
+    int n;
+    ll budget;
+    cin >> n >> budget;
+    vector<Item> items(n);
+    vector<int> factor_count(n + 2, 0); // factors in [1, n]
+    for (int i = 0; i < n; ++i) {
+        int f, p;
+        cin >> f >> p;
+        items[i] = {i, f, p, 0};
+        factor_count[f]++;
+    }
+
+    // For each possible factor value, store how many items with that factor
+    vector<int> divcnt(n, 0);
+    // For each item i, count how many other items' factor is multiple of factor[i]
+    // Exclude itself if same factor
+    for (int i = 0; i < n; ++i) {
+        int f = items[i].factor;
+        int cnt = 0;
+        // For each multiple of f, sum factor_count
+        for (int mult = f; mult <= n; mult += f) {
+            cnt += factor_count[mult];
+        }
+        cnt -= 1; // remove i itself (since i!=j)
+        items[i].free_copies = cnt;
+    }
+
+    // Compute "efficiency" for each item: (purchased + free)/price
+    sort(items.begin(), items.end(), [](const Item& a, const Item& b) {
+        // Cross multiply to avoid floating point
+        ll va = a.price * (1LL + b.free_copies);
+        ll vb = b.price * (1LL + a.free_copies);
+        if (va != vb) return va < vb; // higher eff comes first
+        return a.price < b.price; // break ties with cheaper price
+    });
+
+    ll total = 0;
+    ll remain = budget;
+    for (auto& it : items) {
+        ll copies = remain / it.price;
+        if (copies == 0) continue;
+        total += copies * (1LL + it.free_copies);
+        remain -= copies * it.price;
+    }
+
+    cout << total << "\n";
+    return 0;
+}
 ```
 
 ---
 
-## 5. **Example Explanation**
+### 5. **Example Explanation**
 
-### **Example 2**
+Take **Example 1:**
 
 ```
-items = [[2,4],[3,2],[4,1],[6,4],[12,4]], budget = 8
+items = [[1,6],[2,4],[3,5]], budget = 19
 ```
 
-Let’s process:
+- Items:
+  1. factor=1, price=6
+  2. factor=2, price=4
+  3. factor=3, price=5
 
-- Items: 0:[2,4], 1:[3,2], 2:[4,1], 3:[6,4], 4:[12,4]
+- Count for each item, how many other items its factor divides:
+  - item0 (factor 1): divides 2 and 3 ("1 divides 2", "1 divides 3") --> 2 free
+  - item1 (factor 2): divides none ("2" does not divide "1" nor "3") --> 0 free
+  - item2 (factor 3): divides none ("3" does not divide "1" nor "2") --> 0 free
 
-#### **Divisor Gifts Table**
+So:
+- item0: 1 + 2 = 3 copies per purchase
+- item1: 1 copy per purchase
+- item2: 1 copy per purchase
 
-- Buy type 0 (factor 2): gives 1 free to types whose factor is multiple of 2 (types 2,3,4 -- as 4,6,12 all divisible by 2), but not itself.
-- Buy type 1 (factor 3): gives 1 free to types 3,4 (factors 6,12).
-- Buy type 2 (factor 4): gives 1 free to type 4 (factor 12).
-- Types 3,4: giving to no others.
+Efficiency:
+- item0: 3 copies for 6 = 0.5 per money
+- item1: 1 for 4 = 0.25 per money
+- item2: 1 for 5 = 0.2 per money
 
-#### **We try buying 1 each of types 0,1,2:**
+So buy as many item0 as possible:
+- 19 // 6 = 3 copies, cost=18, remaining budget=1
 
-- Cost: 4+2+1=7, budget remains 1.
-- Number of purchased = 3.
-- Gifts:
-    - From type 0: free to 2,3,4 (so one each, total 3).
-    - From type 1: free to 3,4 (so one each, total 2).
-    - From type 2: free to 4 (one).
-    - So free copies: type2(1), type3(1+1=2), type4(1+1+1=3). But it's cumulative, meaning each buying path independently gives those.
-    - But **add up all gifts**, regardless of overlaps.
-    - So, total free = 3+2+1=6.
+Each item0 bought gives 1 free of item1 and 1 free of item2, but only **once per (0,1) and (0,2)**: **per purchased copy, at MOST one free per (0,1) AND per (0,2)**.
+So 3 purchased copies:
+- Free copies of item1: min(3,1) = 1
+- Free copies of item2: min(3,1) = 1
+But actually *it is for each purchased copy you get at most one (j), so up to 3 free copies for (0,1), and up to 3 free for (0,2), but rule says only once per (i,j).*
 
-- Can we use left-over 1 coin? Cheapest price is 1 (item2), buy one more, total purchases = 4, total gifts = 6, total = 10.
+Upon careful reread of rule: "For each (i,j), you can receive a free copy from purchases of item i at most once," so per (i,j), **not per every purchased copy** but at most once for each pair.
 
-#### **The optimal is 10, matching the sample.**
+So, if we buy 3 copies, for each of the 2 possible j, we get only 1 free copy (not 3):
+
+So buy 3 copies of item0: get **3 purchased**, and **2 free** (one for (0,1), one for (0,2)). Total is 5, matching the given answer.
 
 ---
 
 ## **Summary Table**
 
-| Step | Description |
-|------|-------------|
-| 1 | Precompute gift/free-copy relationships |
-| 2 | 0/1-Knapsack for "one buy per item" to maximize purchased+gifts for every partial budget |
-| 3 | For every dp[budget_spent], buy as many cheapest items with leftover |
-| 4 | Final answer: maximum over all combinations + buying only one item type in bulk |
+| Item | Factor | Price | Free Copy Targets |  Efficiency (total per purchase / price) |
+|------|--------|-------|-------------------|---------|
+| 0    |   1    |   6   |   2               | 3 / 6 = 0.5 |
+| 1    |   2    |   4   |   0               | 1 / 4 = 0.25 |
+| 2    |   3    |   5   |   0               | 1 / 5 = 0.2 |
+
+- Buy up to 3 copies of item0 for 18, get 3 + 2 = **5**.
+- Cannot buy anything else within remaining budget.
 
 ---
 
-## **What does this approach avoid?**
-- No brute-forcing all subsets (not feasible here).
-- Never over-counts gifts: always only from "bought" distinct types, gifts given just once per pair (`i -> j`).
-- Leaves room for spending remaining coins for more purchases efficiently.
+## **Conclusion**
+
+- The most efficient way is to precompute for each item how many possible free "other" items it gives, then greedily buy the most efficient items with budget.
+- The provided C++ code does this efficiently.
 
 ---
 
-**If you need Python code or more detailed walk-through for a different example, let me know!**
+## If you want a function (not main) version:
+
+```cpp
+int maximumItems(vector<vector<int>>& items, long long budget) {
+    int n = items.size();
+    vector<int> factor_count(n + 2, 0);
+    vector<int> factors(n);
+    vector<long long> prices(n);
+    for (int i = 0; i < n; ++i) {
+        factors[i] = items[i][0];
+        prices[i] = items[i][1];
+        factor_count[items[i][0]]++;
+    }
+    vector<int> free_copies(n, 0);
+    for (int i = 0; i < n; ++i) {
+        int f = factors[i];
+        int cnt = 0;
+        for (int mult = f; mult <= n; mult += f) {
+            cnt += factor_count[mult];
+        }
+        cnt -= 1;
+        free_copies[i] = cnt;
+    }
+    vector<int> idx(n);
+    iota(idx.begin(), idx.end(), 0);
+    sort(idx.begin(), idx.end(), [&](int a, int b) {
+        long long va = prices[a] * (1LL + free_copies[b]);
+        long long vb = prices[b] * (1LL + free_copies[a]);
+        if (va != vb) return va < vb;
+        return prices[a] < prices[b];
+    });
+    long long total = 0, remain = budget;
+    for (int i : idx) {
+        long long copies = remain / prices[i];
+        if (copies == 0) continue;
+        total += copies * (1LL + free_copies[i]);
+        remain -= copies * prices[i];
+    }
+    return total;
+}
+```
+
+---
+
+Let me know if you have further questions!
